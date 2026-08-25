@@ -21,7 +21,39 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ================================================================================
-  DEUTSCHER HAFTUNGSAUSSCHLUSS & RECHTLICHER HINWEIS (DISCLAIMER NACH DEUTSCHEM RECHT)
+  LEGAL DISCLAIMER & LIMITATION OF LIABILITY (ENGLISH)
+================================================================================
+
+1. Provided Free of Charge ("As-Is"):
+   This software is provided as an open-source project entirely free of charge on an
+   "as-is" and "as-available" basis. Under applicable law (including Section 521 of the
+   German Civil Code / BGB for gratuitous provision), the liability of the author/developer
+   (noskillz / hellforgex) is strictly limited to intentional misconduct (Vorsatz) and
+   gross negligence (grobe Fahrlässigkeit). Any liability for slight/ordinary negligence
+   is expressly excluded to the fullest extent permitted by law.
+
+2. Sole Risk and Personal Responsibility:
+   The use of this software—particularly modules for executing local shell commands
+   (PowerShell), file system modifications (writing, modifying, deleting), system diagnostics,
+   and remote server management (SSH/PuTTY/Plink)—is undertaken solely at the user's own
+   risk. The user assumes full and exclusive responsibility for all instructions, scripts,
+   and commands executed by themselves or by connected AI models/autonomous agents.
+
+3. Exclusion of Consequential Damages:
+   The author/developer shall not be liable for any direct, indirect, incidental, special,
+   consequential, or punitive damages, including but not limited to loss of data, hardware
+   damage, system crashes, downtime, security breaches, unauthorized third-party access,
+   or economic losses arising out of the installation, configuration, execution, or network
+   exposure (via Tailscale, Cloudflare, ngrok, port forwarding, or custom proxy) of this software.
+
+4. Network and Tunnel Security Responsibility:
+   The user is solely responsible for properly securing any network connectivity, tunnel
+   endpoints, and access points (e.g. via token authentication, VPNs, or firewalls). Exposing
+   the server to the public internet without proper authentication is done strictly at the
+   user's own risk.
+
+================================================================================
+  DEUTSCHER HAFTUNGSAUSSCHLUSS & RECHTLICHER HINWEIS (§ 521 BGB)
 ================================================================================
 
 1. Unentgeltliche Bereitstellung (§ 521 BGB):

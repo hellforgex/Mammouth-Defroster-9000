@@ -5,7 +5,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-blue)
 ![Vibecoded](https://img.shields.io/badge/Vibecoded%20By-noskillz%20⚡-purple)
 ![Security](https://img.shields.io/badge/Security-Bearer%20Token%20%2B%20DPAPI%20%2B%20Sandbox-green)
-![License](https://img.shields.io/badge/License-MIT%20%2B%20%C2%A7%20521%20BGB-orange)
+![License](https://img.shields.io/badge/License-MIT%20%2B%20Legal%20Disclaimer-orange)
 ![FastMCP](https://img.shields.io/badge/MCP-FastMCP%203.4%2B-purple)
 ![Interface](https://img.shields.io/badge/UI-CustomTkinter%20Dark%20Theme-blueviolet)
 
@@ -26,109 +26,126 @@
 
 ---
 
-## ⚖️ Rechtlicher Haftungsausschluss (Disclaimer nach deutschem Recht)
+## ⚖️ Legal Disclaimer & Limitation of Liability
 
 > [!IMPORTANT]
-> **Bitte vor der Nutzung aufmerksam lesen:**
+> **Please read carefully before using this software:**
 >
-> 1. **Unentgeltliche Bereitstellung (§ 521 BGB)**:  
->    Diese Software wird als Open-Source-Projekt vollkommen unentgeltlich und im aktuellen Entwicklungsstadium (*„as is“*) zur Verfügung gestellt. Gemäß **§ 521 BGB** ist die gesetzliche Haftung des Entwicklers / Urhebers (**noskillz / hellforgex**) auf **Vorsatz und grobe Fahrlässigkeit** beschränkt. Eine Haftung für einfache/leichte Fahrlässigkeit ist im gesetzlich zulässigen Rahmen ausgeschlossen.
+> 1. **Provided Free of Charge ("As-Is") / § 521 BGB**:  
+>    This software is provided as an open-source project entirely free of charge on an **"as-is"** and **"as-available"** basis without warranties of any kind. Under applicable law (including Section 521 of the German Civil Code / BGB for gratuitous provision), the liability of the author/developer (**noskillz / hellforgex**) is strictly limited to intentional misconduct (*Vorsatz*) and gross negligence (*grobe Fahrlässigkeit*). Any liability for ordinary/slight negligence is expressly excluded to the fullest extent permitted by law.
 >
-> 2. **Nutzung auf eigene Gefahr & Eigenverantwortung**:  
->    Die Nutzung sämtlicher Funktionen dieser Software – insbesondere der Module zur Ausführung lokaler **PowerShell-Befehle**, zur **Dateimanipulation (Schreiben, Ersetzen, Löschen)**, zur **Systemdiagnose** sowie zur Steuerung von **Remote-SSH-Servern (PuTTY/Plink)** – erfolgt auf **ausschließliches, eigenes Risiko** des Anwenders. Der Anwender trägt die alleinige Verantwortung für alle Aktionen und Befehle, die er oder angebundene KI-Modelle / Agenten ausführen lassen.
+> 2. **Sole Risk and User Responsibility**:  
+>    The execution of all functions in this software—particularly modules executing local **PowerShell commands**, **file system modifications (write, replace, delete)**, **system diagnostics**, and **remote SSH/VPS server interactions (PuTTY/Plink/PSCP)**—is undertaken solely at the user's own risk. The user assumes full and exclusive responsibility for all instructions, commands, and operations triggered by themselves or by connected AI models/autonomous agents.
 >
-> 3. **Ausschluss von Folgeschäden und Datenverlust**:  
->    Der Urheber haftet ausdrücklich **nicht** für Schäden an Soft- oder Hardware, Datenverlust, Betriebsunterbrechungen, Serverausfälle, Sicherheitsvorfälle oder wirtschaftliche Folgeschäden, die durch die Installation, Konfiguration, Ausführung oder Netzwerk-Freigabe dieser Software entstehen.
+> 3. **Exclusion of Consequential Damages & Data Loss**:  
+>    The author/developer shall not be liable for any direct, indirect, incidental, consequential, special, or exemplary damages, including but not limited to loss of data, hardware damage, operating system crashes, service outages, security incidents, unauthorized third-party access, or financial losses resulting from the installation, execution, or network exposure of this software.
 >
-> 4. **Netzwerk- und Tunnelsicherheit**:  
->    Der Anwender ist eigenverantwortlich dafür zuständig, den Server über sichere Netzwerke (wie Tailscale VPN, geschützte Tunnels oder aktive Token-Authentifizierung) abzusichern. Der Betrieb des Servers auf öffentlich erreichbaren IP-Adressen oder Tunnels ohne Authentifizierung geschieht auf alleinige Gefahr des Betreibers.
+> 4. **Network & Tunnel Security**:  
+>    The user is solely responsible for properly securing any network connectivity, tunnel endpoints, and exposure modes (e.g. via Tailscale VPN, private networks, firewalls, or token authentication). Exposing this server to the public internet without proper authentication is done strictly at the user's own peril.
+
+<details>
+<summary>🇩🇪 <b>Rechtlicher Haftungsausschluss auf Deutsch (§ 521 BGB) — Hier aufklappen</b></summary>
+
+> **1. Unentgeltliche Bereitstellung (§ 521 BGB)**:  
+> Diese Software wird als Open-Source-Projekt vollkommen unentgeltlich und im aktuellen Entwicklungsstadium (*„as is“*) zur Verfügung gestellt. Gemäß **§ 521 BGB** ist die gesetzliche Haftung des Entwicklers / Urhebers (**noskillz / hellforgex**) auf **Vorsatz und grobe Fahrlässigkeit** beschränkt. Eine Haftung für einfache/leichte Fahrlässigkeit ist im gesetzlich zulässigen Rahmen ausgeschlossen.
+>
+> **2. Nutzung auf eigene Gefahr & Eigenverantwortung**:  
+> Die Nutzung sämtlicher Funktionen dieser Software – insbesondere der Module zur Ausführung lokaler **PowerShell-Befehle**, zur **Dateimanipulation (Schreiben, Ersetzen, Löschen)**, zur **Systemdiagnose** sowie zur Steuerung von **Remote-SSH-Servern (PuTTY/Plink)** – erfolgt auf **ausschließliches, eigenes Risiko** des Anwenders. Der Anwender trägt die alleinige Verantwortung für alle Aktionen und Befehle, die er oder angebundene KI-Modelle / Agenten ausführen lassen.
+>
+> **3. Ausschluss von Folgeschäden und Datenverlust**:  
+> Der Urheber haftet ausdrücklich **nicht** für Schäden an Soft- oder Hardware, Datenverlust, Betriebsunterbrechungen, Serverausfälle, Sicherheitsvorfälle oder wirtschaftliche Folgeschäden, die durch die Installation, Konfiguration, Ausführung oder Netzwerk-Freigabe dieser Software entstehen.
+>
+> **4. Netzwerk- und Tunnelsicherheit**:  
+> Der Anwender ist eigenverantwortlich dafür zuständig, den Server über sichere Netzwerke (wie Tailscale VPN, geschützte Tunnels oder aktive Token-Authentifizierung) abzusichern. Der Betrieb des Servers auf öffentlich erreichbaren IP-Adressen oder Tunnels ohne Authentifizierung geschieht auf alleinige Gefahr des Betreibers.
+</details>
 
 ---
 
 ## 🌟 Highlights & Features
 
-Mammouth Control Center gibt deinen Mammouth AI-Assistenten sicheren, modularen Zugriff auf deine lokale Windows-Umgebung, Remote-Server und Hintergrund-Dienste.
+Mammouth Control Center gives your Mammouth AI assistants secure, controlled access to your local Windows environment, remote servers, and background automation daemons.
 
-- 🔒 **Gehärtete Sicherheits-Architektur**:
-  - **API-Token Authentifizierung**: Optionaler Bearer-Token / Query-Token Schutz (`Authorization: Bearer <token>` oder `?token=...`).
-  - **Striktes CORS-Hardening**: Beschränkt auf `mammouth.ai`-Domains und lokale Entwicklung (keine Wildcard `*`).
-  - **Workspace Path-Sandboxing**: Dateizugriffe sind auf das autorisierte Verzeichnis (`./workspace`) eingesperrt; Systempfade (`C:\Windows`, `Startup` etc.) sind blockiert.
-  - **Windows DPAPI Passwort-Verschlüsselung**: SSH-Passwörter in `hosts.json` werden über die native Windows Data Protection API verschlüsselt.
-  - **SSRF-Schutzfilter**: Verhindert das Abrufen interner IP-Bereiche, Loopbacks und Cloud-Metadata-Services im Web-Scraper.
-  - **PowerShell-Sanitization**: Whitelist-Validierung bei Windows-Event-Log Diagnosen.
-- 🖥️ **Moderne Windows 11 Desktop GUI**: Dark-Mode Dashboard mit Live-Status, 1-Klick Start/Stop, Log-Stream und kopierbaren Endpoints.
-- ⚡ **Modulare Skill-Toggles**: 7 Werkzeug-Sets einzeln per Schalter aktivierbar (Memory, Kanban, File Ops, PowerShell, SSH, Hardware-Monitor, Web).
-- 🌐 **Flexible Tunnel- & Endpoint-Wahl**:
-  - **Tailscale Funnel**: Zero-Config Auto-Discovery & öffentliche HTTPS-Domain (`https://<node>.ts.net/sse`).
-  - **Cloudflare Tunnel**: Kostenlose Quick-Tunnels via `trycloudflare.com` oder Custom Domains.
-  - **ngrok Tunnel**: Instant HTTP-Tunnel mit lokaler API-Erkennung (`127.0.0.1:4040`).
-  - **Direct IP / LAN**: Direkte Verbindung via `127.0.0.1` oder lokaler Netzwerk-IP (`192.168.x.x`).
-  - **Custom Domain**: Eigene Reverse-Proxies (Nginx, Caddy, Traefik).
-- 🔀 **Wählbare Routen-Pfade**: Umschalten zwischen `/sse`, `/mcp`, `/messages` oder `/`.
-- 🔑 **Integrierter SSH-Host-Manager**: Schnelles Verwalten von Linux-VPS & Servern für PuTTY, Plink und SCP ohne JSON-Bearbeitung.
-- 📦 **1-Klick EXE-Builder**: `build_exe.bat` erstellt eine eigenständige Windows-Anwendung.
+- 🔒 **Hardened Security Architecture**:
+  - **API Token Authentication**: Optional Bearer token / query auth (`Authorization: Bearer <token>` or `?token=...`).
+  - **CORS Protection**: Restricted specifically to `mammouth.ai` domains and local development origins (no open wildcard `*`).
+  - **Workspace Path Sandboxing**: File operations are jailed to an authorized workspace directory to prevent system file tampering or traversal attacks.
+  - **Windows DPAPI Password Encryption**: SSH passwords stored in `hosts.json` are encrypted using the native Windows Data Protection API bound to your Windows user account.
+  - **SSRF Filter**: Web scraper blocks private IP networks, loopbacks, and cloud metadata services.
+  - **Safe Defaults**: High-privilege tools (PowerShell execution) are disabled by default in templates.
+- 🖥️ **Modern Windows 11 Desktop UI**: Beautiful dark-mode dashboard with real-time status indicators, 1-click token-ready endpoint copy, and live console logs.
+- ⚡ **Modular Skill Toggles**: Granularly enable or disable individual toolsets directly from the GUI (Memory, Kanban, File Ops, PowerShell, SSH, System Monitor, Web).
+- 🌐 **Flexible Network & Tunnel Providers**:
+  - **Tailscale Funnel**: Zero-config auto-detection and public HTTPS domain (`https://<node>.ts.net/sse`).
+  - **Cloudflare Tunnel**: Quick free tunnels via `trycloudflare.com` or custom Cloudflare domains.
+  - **ngrok Tunnel**: Instant public HTTP tunnel support with local API auto-discovery.
+  - **Direct IP / LAN**: Connect directly via Localhost (`127.0.0.1`) or local network LAN IP (`192.168.x.x`).
+  - **Custom Domain**: Use your own reverse proxy (Nginx, Caddy, Traefik).
+- 🔀 **Custom Route Endpoints**: Select between `/sse`, `/mcp`, `/messages`, or `/` root paths.
+- 🔑 **Integrated SSH Host Manager**: Add, edit, and test remote Linux VPS/servers for PuTTY, Plink commands, and SCP file synchronization without touching JSON files.
+- 📦 **Standalone EXE Packaging**: 1-click build script (`build_exe.bat`) to package the entire Control Center into an `.exe` for any Windows machine.
 
 ---
 
-## 🛠️ Enthaltene MCP Toolsets (Skills)
+## 🛠️ Included MCP Toolsets (Skills)
 
-| Skill / Modul | Sicherheitsstufe | Hauptfunktionen | Beispiel-Tools |
+| Skill / Module | Security Level | Key Capabilities | Example Tools |
 | :--- | :---: | :--- | :--- |
-| 🧠 **Persistent Memory** | 🟢 Sicher | SQLite Cross-Session Wissensspeicher mit Suchfunktion & Kategorien | `memory_save`, `memory_recall`, `memory_list`, `memory_get` |
-| 📋 **Task & Kanban Board** | 🟢 Sicher | SQLite Task- & Projektverwaltung (`todo`, `in_progress`, `done`, `blocked`) | `task_create`, `task_update`, `task_list`, `task_delete` |
-| 📁 **File & Code Operations** | 🔒 Sandboxed | Zeilenweises Lesen, Ripgrep-Suche, Chunk-Ersetzung innerhalb des Workspaces | `file_read`, `file_write`, `file_replace_chunk`, `file_search_text`, `directory_tree` |
-| 💻 **PowerShell Execution** | ⚠️ Hohe Rechte | Synchrone Befehle & Hintergrund-Prozesse mit Echtzeit-Logs | `command_run`, `process_start_background`, `process_get_output`, `process_kill_background` |
-| 🔑 **PuTTY & SSH Management** | 🔒 DPAPI-Verschlüsselt | Remote-Befehle via Plink, SCP Dateitransfer, interaktives PuTTY-Fenster | `ssh_exec_command`, `ssh_open_putty_window`, `ssh_transfer_file`, `ssh_list_saved_hosts` |
-| 📊 **System & Diagnostics** | 🟢 Sicher | CPU, RAM, Datenträger, GPU-Details, Top-Prozesse, Windows Event Logs | `system_get_specs`, `system_get_processes`, `system_get_gpu_info`, `system_get_event_logs` |
-| 🌐 **Web Scraper & Tools** | 🛡️ SSRF-Geschützt | Webseiten-Text-/Markdown-Extraktor mit privater IP-Sperre & Status-Check | `web_fetch_url`, `web_check_status` |
+| 🧠 **Persistent Memory** | 🟢 Safe | SQLite cross-session knowledge storage with keyword search & categories | `memory_save`, `memory_recall`, `memory_list`, `memory_get` |
+| 📋 **Task & Kanban Board** | 🟢 Safe | SQLite-backed task & project tracker (`todo`, `in_progress`, `done`) | `task_create`, `task_update`, `task_list`, `task_delete` |
+| 📁 **File & Code Operations** | 🔒 Sandboxed | Line slicing, ripgrep search, chunk replacement within authorized workspace | `file_read`, `file_write`, `file_replace_chunk`, `file_search_text`, `directory_tree` |
+| 💻 **PowerShell Execution** | ⚠️ High Privilege | Sync command execution & background daemon process manager with live logs | `command_run`, `process_start_background`, `process_get_output`, `process_kill_background` |
+| 🔑 **PuTTY & SSH Management** | 🔒 DPAPI Encrypted | Remote execution via Plink, SCP file transfers, PuTTY GUI launch, registry sessions | `ssh_exec_command`, `ssh_open_putty_window`, `ssh_transfer_file`, `ssh_list_saved_hosts` |
+| 📊 **System & Diagnostics** | 🟢 Safe | CPU, RAM, Disk usage, GPU details, top process listing, Windows Event Logs | `system_get_specs`, `system_get_processes`, `system_get_gpu_info`, `system_get_event_logs` |
+| 🌐 **Web Scraper & Tools** | 🛡️ SSRF Protected | URL fetcher with HTML-to-markdown text cleaning, private IP blocking & endpoint ping | `web_fetch_url`, `web_check_status` |
 
 ---
 
-## 🚀 Schnellstart
+## 🚀 Quickstart
 
-### Voraussetzungen
-- Windows 10 oder 11
-- Python 3.10+ (oder [uv Package Manager](https://docs.astral.sh/uv/) — empfohlen)
-- Optional: [Tailscale](https://tailscale.com/), [cloudflared](https://github.com/cloudflare/cloudflared) oder [ngrok](https://ngrok.com/).
+### Prerequisites
+- Windows 10 or 11
+- Python 3.10+ (or [uv package manager](https://docs.astral.sh/uv/) — recommended)
+- Optional tunnel CLI tools: [Tailscale](https://tailscale.com/), [cloudflared](https://github.com/cloudflare/cloudflared), or [ngrok](https://ngrok.com/).
 
 ---
 
-### Option A: Starten via Python / `uv` (Empfohlen)
+### Option A: Launching via Python / `uv` (Recommended)
 
-1. Repository klonen:
+1. Clone or extract the repository:
    ```bash
    git clone https://github.com/hellforgex/Mammouth-MCP-Control-Center.git
    cd Mammouth-MCP-Control-Center
    ```
 
-2. Doppelklick auf **`start_gui.bat`**  
-   *(oder `uv run gui.py` / `python gui.py` in der Konsole ausführen)*
+2. Double-click **`start_gui.bat`**  
+   *(or run `uv run gui.py` / `python gui.py` in your terminal)*
 
 ---
 
-### Option B: Standalone Windows EXE erstellen
+### Option B: Building a Standalone Windows EXE
 
-1. Doppelklick auf **`build_exe.bat`**
-2. Die fertige Datei liegt in `dist\MammouthControlCenter\MammouthControlCenter.exe`.
+1. Double-click **`build_exe.bat`**
+2. The compiled application will be generated in `dist\MammouthControlCenter\MammouthControlCenter.exe`.
+3. You can now distribute the folder or create a shortcut on your Desktop!
 
 ---
 
-## 🔗 Verbindung mit Mammouth.ai
+## 🔗 Connecting to Mammouth.ai
 
-1. Öffne das **Mammouth Control Center**, wähle deinen gewünschten **Exposure Mode** (z. B. Tailscale Funnel) und klicke auf **`▶ Start Server`**.
-2. Klicke auf **`📋 Copy`** neben der berechneten **Endpoint URL** (z. B. `https://<node>.ts.net/sse`).
+1. Open **Mammouth Control Center**, choose your preferred **Exposure Mode** (e.g. Tailscale Funnel) and click **`▶ Start Server`**.
+2. Click the **`📋 Copy`** button next to the calculated **Endpoint URL** (e.g. `https://<node>.ts.net/sse`).
 3. In **[Mammouth.ai](https://mammouth.ai)**:
-   - Gehe auf **Settings** → **Custom MCP Servers** (oder Tools).
-   - Klicke auf **Add MCP Server**:
+   - Navigate to **Settings** → **Custom MCP Servers** (or Tools).
+   - Click **Add MCP Server**:
      - **Name**: `Mammouth Powerhouse`
      - **Type**: `SSE` (Server-Sent Events)
-     - **URL**: Füge deine kopierte URL ein (`https://.../sse`).
-   - Klicke auf **Save / Connect**.
-4. Starte einen neuen Chat mit Mammouth!
+     - **URL**: Paste your copied URL (`https://.../sse`).
+   - Click **Save / Connect**.
+4. Start a new chat with Mammouth! The AI can now run diagnostics, edit files, manage remote servers, and retain long-term memory across sessions.
 
 ---
 
-## 📂 Projektstruktur
+## 📂 Project Structure
 
 ```
 mammouth-control-center/
@@ -150,13 +167,13 @@ mammouth-control-center/
 ├── build_exe.bat            # PyInstaller one-click builder
 ├── requirements.txt         # Pip dependency manifest
 ├── pyproject.toml           # Project metadata
-├── LICENSE                  # MIT License & § 521 BGB Haftungsausschluss
+├── LICENSE                  # MIT License & Bilingual Liability Disclaimer
 ├── .gitignore               # Git security & cache filter
-└── README.md                # Dokumentation, Haftungsausschluss & noskillz Manifesto
+└── README.md                # Documentation, Bilingual Disclaimer & noskillz Manifesto
 ```
 
 ---
 
-## 📄 Lizenz & Rechtliches
+## 📄 License
 MIT License. Copyright (c) 2026 **noskillz** ([hellforgex](https://github.com/hellforgex)).  
-Gilt in Verbindung mit dem obenstehenden **Rechtlichen Haftungsausschluss nach § 521 BGB**.
+Governed by the **Legal Disclaimer & Limitation of Liability** / **§ 521 BGB Haftungsausschluss** above.
