@@ -151,10 +151,14 @@
    - Navigate to **Settings** → **Custom MCP Servers**.
    - Click **Add MCP Server**:
      - **Name**: `Mammouth Defroster 9000`
-     - **Type**: `HTTP` / `Streamable HTTP` (or `SSE`)
+     - **Type**: `HTTP` / `Streamable HTTP` *(Recommended)*
      - **URL**: Paste your copied endpoint (`https://.../mcp?token=...`).
    - Click **Save / Connect**.
 4. Start a new chat! Mammouth will immediately authenticate, discover, and utilize your 32 defrosted tools.
+
+> [!TIP]
+> **Why `/mcp` (Streamable HTTP) instead of `/sse`?**  
+> We strongly recommend using the default **`/mcp`** route. Standard SSE streams can drop URL query parameters (`?token=<token>`) on subsequent JSON-RPC message calls. `/mcp` handles authentication cleanly and reliably on every single request until the Mammouth.ai team adds a dedicated Bearer Token field in their custom MCP UI! 😉
 
 ---
 
