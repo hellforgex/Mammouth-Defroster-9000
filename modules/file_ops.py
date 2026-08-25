@@ -165,7 +165,7 @@ def file_search_text(
             return [{"error": f"Invalid regex: {e}"}]
             
     try:
-        for root, _, files in os.walk(directory_path):
+        for root, _, files in os.walk(directory_path, followlinks=False):
             if any(part in root.split(os.sep) for part in ['.git', 'node_modules', '__pycache__', '.venv', 'venv']):
                 continue
                 

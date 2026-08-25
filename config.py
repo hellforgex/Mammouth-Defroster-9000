@@ -1,4 +1,5 @@
 import json
+import copy
 import socket
 import secrets
 from pathlib import Path
@@ -88,14 +89,14 @@ def get_lan_ip() -> str:
 def load_config() -> Dict[str, Any]:
     """Load configuration from config.json with fallback to default values."""
     if not CONFIG_FILE.exists():
-        cfg = DEFAULT_CONFIG.copy()
+        cfg = copy.deepcopy(DEFAULT_CONFIG)
         cfg["server"]["api_token"] = generate_secure_token()
         save_config(cfg)
         return cfg
         
     try:
         data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        merged = DEFAULT_CONFIG.copy()
+        merged = copy.deepcopy(DEFAULT_CONFIG)
         if "server" in data:
             merged["server"].update(data["server"])
         if "modules" in data:
@@ -112,7 +113,7 @@ def load_config() -> Dict[str, Any]:
             
         return merged
     except Exception:
-        cfg = DEFAULT_CONFIG.copy()
+        cfg = copy.deepcopy(DEFAULT_CONFIG)
         cfg["server"]["api_token"] = generate_secure_token()
         return cfg
 

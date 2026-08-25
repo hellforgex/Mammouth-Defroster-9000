@@ -9,6 +9,8 @@ __pycache__/
 process_logs/
 hosts.json
 config.json
+auth_audit.log
+workspace/
 
 # Virtual Environments
 .venv/

@@ -86,8 +86,21 @@ def system_get_event_logs(log_name: str = "System", entry_type: str = "Error", c
         entry_type: 'Error', 'Warning', or 'Information'.
         count: Max records to return (default 10).
     """
+    # Sanitize inputs to prevent PowerShell injection
+    allowed_logs = {"system", "application", "security"}
+    allowed_types = {"error", "warning", "information"}
+    
+    if log_name.lower().strip() not in allowed_logs:
+        return [{"error": f"Invalid log_name '{log_name}'. Allowed: System, Application, Security"}]
+    if entry_type.lower().strip() not in allowed_types:
+        return [{"error": f"Invalid entry_type '{entry_type}'. Allowed: Error, Warning, Information"}]
+    
+    safe_count = max(1, min(int(count), 100))
+    safe_log = log_name.strip().capitalize()
+    safe_type = entry_type.strip().capitalize()
+    
     try:
-        ps_cmd = f"Get-EventLog -LogName '{log_name}' -EntryType '{entry_type}' -Newest {count} | Select-Object TimeGenerated, Source, EventID, Message | ConvertTo-Json"
+        ps_cmd = f"Get-EventLog -LogName '{safe_log}' -EntryType '{safe_type}' -Newest {safe_count} | Select-Object TimeGenerated, Source, EventID, Message | ConvertTo-Json"
         proc = subprocess.run(["powershell.exe", "-NoProfile", "-Command", ps_cmd], capture_output=True, text=True, timeout=15)
         if proc.returncode == 0 and proc.stdout.strip():
             import json

@@ -286,11 +286,20 @@ def build_app():
         async with mcp._lifespan_manager(), streamable_http_app.session_manager.run():
             yield
 
+    # Hardened CORS: only allow Mammouth.ai domains and local development
+    allowed_origins = cfg_server.get("allowed_origins", [
+        "https://mammouth.ai",
+        "https://app.mammouth.ai",
+        "http://localhost",
+        "http://127.0.0.1",
+    ])
+
     middleware = [
         Middleware(
             CORSMiddleware,
-            allow_origins=["*"],
-            allow_methods=["*"],
+            allow_origins=allowed_origins,
+            allow_origin_regex=r"https://[a-zA-Z0-9-]+\.mammouth\.ai$",
+            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
             allow_headers=["*"],
             allow_credentials=True,
         ),
