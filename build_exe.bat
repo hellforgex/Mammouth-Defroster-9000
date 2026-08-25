@@ -65,6 +65,8 @@ if %ERRORLEVEL% equ 0 (
 echo.
 echo [3/3] Copying runtime templates to distribution...
 if exist "dist\MammouthDefroster9000" (
+    if not exist "dist\MammouthDefroster9000\assets" mkdir "dist\MammouthDefroster9000\assets"
+    copy /y "assets\*" "dist\MammouthDefroster9000\assets\" >nul 2>nul
     copy /y "config.example.json" "dist\MammouthDefroster9000\" >nul 2>nul
     copy /y "hosts.example.json" "dist\MammouthDefroster9000\" >nul 2>nul
     copy /y "README.md" "dist\MammouthDefroster9000\" >nul 2>nul

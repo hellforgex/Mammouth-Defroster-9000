@@ -1,20 +1,28 @@
 import os
 import sys
+import io
 import re
 import json
 import time
 import shutil
-import socket
+import logging
+import asyncio
 import threading
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
+
+# Ensure stdout and stderr exist in PyInstaller --windowed mode
+if sys.stdout is None:
+    sys.stdout = io.StringIO()
+if sys.stderr is None:
+    sys.stderr = io.StringIO()
 
 import customtkinter as ctk
-import tkinter as tk
 from tkinter import messagebox, filedialog
 import ctypes
 from PIL import Image, ImageTk
+import uvicorn
 
 # Set Windows AppUserModelID for distinct taskbar icon grouping
 if os.name == 'nt':
@@ -23,17 +31,81 @@ if os.name == 'nt':
     except Exception:
         pass
 
-from config import get_app_dir, load_config, save_config, get_lan_ip, generate_secure_token, CONFIG_FILE
+from config import get_app_dir, load_config, save_config, get_lan_ip, generate_secure_token
 
 # Add project directory to sys.path
 BASE_DIR = get_app_dir()
 sys.path.insert(0, str(BASE_DIR))
+
+def get_asset_path(rel_path: str) -> Path:
+    """Resolve asset path whether running in development or PyInstaller frozen mode."""
+    if getattr(sys, 'frozen', False):
+        if hasattr(sys, '_MEIPASS'):
+            p = Path(sys._MEIPASS) / rel_path
+            if p.exists():
+                return p
+        exe_dir = Path(sys.executable).parent
+        for candidate in [exe_dir / "_internal" / rel_path, exe_dir / rel_path]:
+            if candidate.exists():
+                return candidate
+    return Path(__file__).resolve().parent / rel_path
+
+import server
 
 # Appearance setup
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
+
+
+class GUILogHandler(logging.Handler):
+    """Routes Uvicorn and ASGI server logs to GUI log window."""
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.callback(msg)
+        except Exception:
+            pass
+
+
+class ServerThread(threading.Thread):
+    """Runs FastMCP / Uvicorn server in a dedicated background thread."""
+    def __init__(self, host: str, port: int, log_callback):
+        super().__init__(daemon=True)
+        self.host = host
+        self.port = port
+        self.log_callback = log_callback
+        self.app = server.build_app()
+        self.config = uvicorn.Config(
+            app=self.app,
+            host=self.host,
+            port=self.port,
+            log_level="info",
+            loop="asyncio"
+        )
+        self.server = uvicorn.Server(config=self.config)
+
+    def run(self):
+        handler = GUILogHandler(self.log_callback)
+        handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+        for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+            lg = logging.getLogger(logger_name)
+            lg.handlers = [handler]
+            lg.setLevel(logging.INFO)
+            lg.propagate = False
+
+        try:
+            asyncio.run(self.server.serve())
+        except Exception as e:
+            self.log_callback(f"Server error: {e}")
+
+    def stop(self):
+        self.server.should_exit = True
 
 
 def get_tailscale_public_domain(tailscale_path: str = r"C:\Program Files\Tailscale\tailscale.exe") -> Optional[str]:
@@ -211,28 +283,32 @@ class MammouthControlCenter(ctk.CTk):
         self._set_app_icons()
 
         self.config_data = load_config()
-        self.server_process: Optional[subprocess.Popen] = None
+        self.server_thread: Optional[ServerThread] = None
         self.tunnel_process: Optional[subprocess.Popen] = None
-        self.server_thread: Optional[threading.Thread] = None
         self.tunnel_thread: Optional[threading.Thread] = None
-        self.log_stream_active = False
+        self.cached_tailscale_domain: Optional[str] = None
         self.dynamic_tunnel_url: Optional[str] = None
 
         self._build_ui()
+        self._update_tailscale_domain_bg()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _set_app_icons(self):
         """Configure Windows taskbar and titlebar icons."""
-        ico_file = BASE_DIR / "assets" / "icon.ico"
+        ico_file = get_asset_path("assets/icon.ico")
         if not ico_file.exists():
-            ico_file = BASE_DIR / "icon.ico"
+            ico_file = get_asset_path("icon.ico")
         if ico_file.exists():
             try:
                 self.iconbitmap(str(ico_file))
+                if os.name == 'nt':
+                    self.wm_iconbitmap(str(ico_file))
             except Exception:
                 pass
 
-        png_file = BASE_DIR / "assets" / "icon.png"
+        png_file = get_asset_path("assets/icon.png")
+        if not png_file.exists():
+            png_file = get_asset_path("icon.png")
         if png_file.exists():
             try:
                 self.tk_icon = ImageTk.PhotoImage(Image.open(png_file))
@@ -250,7 +326,9 @@ class MammouthControlCenter(ctk.CTk):
         title_box.pack(side="left", padx=20, pady=10)
         
         # Load Graphic Mammoth Icon
-        png_file = BASE_DIR / "assets" / "icon.png"
+        png_file = get_asset_path("assets/icon.png")
+        if not png_file.exists():
+            png_file = get_asset_path("icon.png")
         if png_file.exists():
             try:
                 pil_logo = Image.open(png_file)
@@ -405,19 +483,29 @@ class MammouthControlCenter(ctk.CTk):
         self._refresh_all_endpoint_labels()
         self._log(f"Switched endpoint route path to: {choice}")
 
+    def _update_tailscale_domain_bg(self):
+        """Asynchronously fetch Tailscale domain in background without blocking UI."""
+        def worker():
+            cfg = self.config_data.get("server", {})
+            dom = get_tailscale_public_domain(cfg.get("tailscale_path", ""))
+            if dom:
+                self.cached_tailscale_domain = dom
+                self.after(0, self._refresh_all_endpoint_labels)
+        threading.Thread(target=worker, daemon=True).start()
+
     def _calculate_active_endpoint_url(self) -> str:
         cfg = self.config_data.get("server", {})
         mode = cfg.get("tunnel_mode", "Tailscale Funnel")
-        path = cfg.get("endpoint_path", "/sse")
+        path = cfg.get("endpoint_path", "/mcp")
         port = cfg.get("port", 8000)
         token = cfg.get("api_token", "") if cfg.get("enforce_auth", True) else ""
         query = f"?token={token}" if token else ""
 
         if mode == "Tailscale Funnel":
-            ts_domain = get_tailscale_public_domain(cfg.get("tailscale_path", ""))
+            ts_domain = self.cached_tailscale_domain
             if ts_domain:
                 return f"{ts_domain}{path}{query}"
-            return f"http://127.0.0.1:{port}{path}{query} (Tailscale not connected)"
+            return f"http://127.0.0.1:{port}{path}{query} (Connecting to Tailscale...)"
 
         elif mode == "Cloudflare Tunnel":
             if self.dynamic_tunnel_url:
@@ -452,7 +540,7 @@ class MammouthControlCenter(ctk.CTk):
     def _calculate_local_endpoint_url(self) -> str:
         cfg = self.config_data.get("server", {})
         port = cfg.get("port", 8000)
-        path = cfg.get("endpoint_path", "/sse")
+        path = cfg.get("endpoint_path", "/mcp")
         token = cfg.get("api_token", "") if cfg.get("enforce_auth", True) else ""
         query = f"?token={token}" if token else ""
         return f"http://127.0.0.1:{port}{path}{query}"
@@ -865,10 +953,13 @@ class MammouthControlCenter(ctk.CTk):
     # SERVER & TUNNEL RUNNER LIFECYCLE
     # ---------------------------------------------------------
     def toggle_server(self):
-        if self.server_process is None:
+        if self.server_thread is None:
             self._start_server()
         else:
             self._stop_server()
+
+    def _safe_log_from_thread(self, msg: str):
+        self.after(0, lambda: self._log(msg))
 
     def _start_server(self):
         cfg = load_config()
@@ -924,37 +1015,18 @@ class MammouthControlCenter(ctk.CTk):
                 else:
                     self._log("Notice: 'ngrok' not found in PATH.")
 
-        # 2. Launch FastMCP server
+        # 2. Launch FastMCP server in-process thread
         auth_str = "Token-Protected" if cfg.get("server", {}).get("enforce_auth", True) else "Open"
         self._log(f"Launching FastMCP Server on http://{host}:{port} ({auth_str}, Exposure: {mode})...")
-        if getattr(sys, 'frozen', False):
-            cmd = [sys.executable, "--server", "--host", host, "--port", str(port)]
-        else:
-            cmd = [sys.executable, str(BASE_DIR / "server.py"), "--host", host, "--port", str(port)]
         
         try:
-            self.server_process = subprocess.Popen(
-                cmd,
-                cwd=str(BASE_DIR),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                encoding="utf-8",
-                errors="replace",
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
-            )
+            self.server_thread = ServerThread(host, port, self._safe_log_from_thread)
+            self.server_thread.start()
 
             self.status_badge.configure(text="● Server Running", text_color="#10B981")
             self.btn_toggle_server.configure(text="⏹ Stop Server", fg_color="#EF4444", hover_color="#DC2626")
-
-            # Start background reader thread
-            self.log_stream_active = True
-            self.server_thread = threading.Thread(target=self._stream_server_logs, daemon=True)
-            self.server_thread.start()
-
             self._refresh_all_endpoint_labels()
-            self._log("FastMCP Server process started.")
+            self._log("FastMCP Server started successfully.")
 
         except Exception as e:
             self._log(f"Failed to start server: {e}")
@@ -964,7 +1036,7 @@ class MammouthControlCenter(ctk.CTk):
         """Poll ngrok local inspection API on 127.0.0.1:4040 to discover dynamic public URL."""
         import httpx
         for _ in range(12):
-            if not self.server_process:
+            if not self.server_thread:
                 break
             time.sleep(1)
             try:
@@ -1002,42 +1074,15 @@ class MammouthControlCenter(ctk.CTk):
         self._log(f"Tunnel online & URL discovered: {self.dynamic_tunnel_url}")
         self._refresh_all_endpoint_labels()
 
-    def _stream_server_logs(self):
-        if not self.server_process or not self.server_process.stdout:
-            return
-        for line in iter(self.server_process.stdout.readline, ""):
-            if not self.log_stream_active:
-                break
-            if line:
-                cleaned = line.rstrip()
-                self.after(0, lambda msg=cleaned: self._log(msg))
-        if self.server_process:
-            try:
-                self.server_process.stdout.close()
-            except Exception:
-                pass
-        self.after(0, self._on_server_exited)
-
-    def _on_server_exited(self):
-        if self.server_process is not None and self.server_process.poll() is not None:
-            self.server_process = None
-            self.status_badge.configure(text="● Server Stopped", text_color="#EF4444")
-            self.btn_toggle_server.configure(text="▶ Start Server", fg_color="#10B981", hover_color="#059669")
-            self._log("Server process terminated.")
-
     def _stop_server(self):
         self._log("Stopping FastMCP Server & Tunnels...")
-        self.log_stream_active = False
 
-        if self.server_process:
+        if self.server_thread:
             try:
-                if os.name == 'nt':
-                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.server_process.pid)], capture_output=True)
-                else:
-                    self.server_process.terminate()
+                self.server_thread.stop()
             except Exception as e:
-                self._log(f"Error terminating server: {e}")
-            self.server_process = None
+                self._log(f"Error stopping server: {e}")
+            self.server_thread = None
 
         if self.tunnel_process:
             try:
@@ -1054,7 +1099,7 @@ class MammouthControlCenter(ctk.CTk):
         self._log("FastMCP Server stopped.")
 
     def _on_close(self):
-        if self.server_process:
+        if self.server_thread or self.tunnel_process:
             self._stop_server()
         self.destroy()
 
@@ -1065,20 +1110,4 @@ def main():
 
 
 if __name__ == "__main__":
-    if "--server" in sys.argv:
-        import argparse
-        import uvicorn
-        import server
-        
-        parser = argparse.ArgumentParser(description="Mammouth Defroster Server")
-        parser.add_argument("--server", action="store_true")
-        parser.add_argument("--host", default=None)
-        parser.add_argument("--port", type=int, default=None)
-        args, _ = parser.parse_known_args()
-        
-        cfg_srv = load_config().get("server", {})
-        srv_host = args.host or cfg_srv.get("host", "127.0.0.1")
-        srv_port = args.port or int(cfg_srv.get("port", 8000))
-        uvicorn.run(server.app, host=srv_host, port=srv_port, log_level="info")
-    else:
-        main()
+    main()
