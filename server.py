@@ -9,10 +9,14 @@
 # ///
 import os
 import sys
+import time
+import secrets
 import argparse
+import threading
 import urllib.parse
 from pathlib import Path
-from typing import AsyncGenerator
+from datetime import datetime
+from typing import AsyncGenerator, Dict, Set
 from contextlib import asynccontextmanager
 
 from fastmcp import FastMCP
@@ -116,17 +120,45 @@ if active_capabilities:
     mcp.instructions = "Advanced Windows 11 & DevOps Agent MCP Server.\nActive capabilities:\n" + "\n".join(active_capabilities)
 
 # ==========================================
-# SECURITY & AUTHENTICATION MIDDLEWARE
+# SECURITY & AUTHENTICATION
 # ==========================================
 
+# Active authenticated session cache (session_id -> expiration timestamp)
+AUTHENTICATED_SESSIONS: Dict[str, float] = {}
+SESSION_LOCK = threading.Lock()
+
+def record_authenticated_session(session_id: str, ttl_seconds: float = 86400.0):
+    if not session_id:
+        return
+    with SESSION_LOCK:
+        now = time.time()
+        # Clean expired
+        expired = [sid for sid, exp in AUTHENTICATED_SESSIONS.items() if exp < now]
+        for sid in expired:
+            del AUTHENTICATED_SESSIONS[sid]
+        AUTHENTICATED_SESSIONS[session_id] = now + ttl_seconds
+
+def is_session_authenticated(session_id: str) -> bool:
+    if not session_id:
+        return False
+    with SESSION_LOCK:
+        exp = AUTHENTICATED_SESSIONS.get(session_id)
+        if exp is not None:
+            if time.time() < exp:
+                return True
+            else:
+                del AUTHENTICATED_SESSIONS[session_id]
+        return False
+
+
 class AuthenticationMiddleware:
-    """Enforces Bearer token and Query token validation for incoming requests."""
+    """Enforces Bearer token, URL query token, or active SSE session validation."""
     def __init__(self, app: ASGIApp):
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] == "http":
-            # Allow CORS preflight requests
+            # Always allow CORS preflight
             if scope.get("method") == "OPTIONS":
                 await self.app(scope, receive, send)
                 return
@@ -136,31 +168,62 @@ class AuthenticationMiddleware:
             expected_token = current_cfg.get("api_token", "").strip()
 
             if enforce_auth and expected_token:
-                # 1. Check Authorization header
+                path = scope.get("path", "")
+                query_string = scope.get("query_string", b"").decode("latin1")
+                params = urllib.parse.parse_qs(query_string)
+                session_id = params.get("session_id", [""])[0]
+
+                # Check 1: Authorization Header
                 raw_headers = dict(scope.get("headers", []))
                 auth_header = raw_headers.get(b"authorization", b"").decode("latin1").strip()
-                
                 token_valid = False
+
                 if auth_header.startswith("Bearer "):
-                    provided_token = auth_header[len("Bearer "):].strip()
-                    if provided_token == expected_token:
+                    provided = auth_header[len("Bearer "):].strip()
+                    if secrets.compare_digest(provided, expected_token):
                         token_valid = True
 
-                # 2. Check query string parameter (?token=... or ?api_key=...)
+                # Check 2: Query token (?token=... or ?api_key=...)
                 if not token_valid:
-                    query_string = scope.get("query_string", b"").decode("latin1")
-                    params = urllib.parse.parse_qs(query_string)
                     query_token = params.get("token", [""])[0] or params.get("api_key", [""])[0]
-                    if query_token and query_token == expected_token:
+                    if query_token and secrets.compare_digest(query_token, expected_token):
                         token_valid = True
 
+                # Check 3: Active authenticated SSE session (for POST /messages from verified SSE client)
+                if not token_valid and session_id:
+                    if is_session_authenticated(session_id):
+                        token_valid = True
+
+                # If token was valid and a session_id exists, remember this session
+                if token_valid and session_id:
+                    record_authenticated_session(session_id)
+
                 if not token_valid:
+                    print(f"[AUTH BLOCKED] Unauthorized request to {scope.get('method')} {path} (Query: {query_string})")
                     response = JSONResponse(
-                        {"error": "Unauthorized", "message": "Invalid or missing API authentication token. Include 'Authorization: Bearer <token>' or '?token=<token>'."},
+                        {
+                            "error": "Unauthorized",
+                            "message": "Invalid or missing API authentication token. Include '?token=<token>' in your URL or 'Authorization: Bearer <token>' in headers."
+                        },
                         status_code=401
                     )
                     await response(scope, receive, send)
                     return
+
+            # Intercept outgoing response for /sse to extract and register session_id
+            if scope.get("path") == "/sse":
+                async def custom_send(message):
+                    if message.get("type") == "http.response.body":
+                        body = message.get("body", b"").decode("utf-8", errors="ignore")
+                        if "session_id=" in body:
+                            match = urllib.parse.parse_qs(urllib.parse.urlparse(body.split("data: ")[-1].strip()).query)
+                            sid = match.get("session_id", [""])[0]
+                            if sid:
+                                record_authenticated_session(sid)
+                    await send(message)
+
+                await self.app(scope, receive, custom_send)
+                return
 
         await self.app(scope, receive, send)
 
@@ -188,7 +251,8 @@ class LoggingAndNormalizationMiddleware:
                     body_chunks.append(msg.get("body", b""))
                     if not msg.get("more_body", False):
                         full_body = b"".join(body_chunks).decode("utf-8", errors="replace")
-                        print(f"[MCP INCOMING] {scope.get('method')} {scope.get('path')} Body: {full_body[:300]}")
+                        if full_body.strip():
+                            print(f"[MCP INCOMING] {scope.get('method')} {scope.get('path')} Body: {full_body[:300]}")
                 return msg
 
             async def send_with_logging(msg):
@@ -222,20 +286,11 @@ def build_app():
         async with mcp._lifespan_manager(), streamable_http_app.session_manager.run():
             yield
 
-    # Specific CORS origins - no insecure wildcard "*"
-    allowed_origins = cfg_server.get("allowed_origins", [
-        "https://mammouth.ai",
-        "https://app.mammouth.ai",
-        "http://localhost",
-        "http://127.0.0.1"
-    ])
-
     middleware = [
         Middleware(
             CORSMiddleware,
-            allow_origins=allowed_origins,
-            allow_origin_regex=r"https://.*\.mammouth\.ai",
-            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+            allow_origins=["*"],
+            allow_methods=["*"],
             allow_headers=["*"],
             allow_credentials=True,
         ),
