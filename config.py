@@ -4,7 +4,7 @@ import copy
 import socket
 import secrets
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 
 def get_app_dir() -> Path:
     """Return root directory where config, DBs, and runtime files reside (handles PyInstaller)."""

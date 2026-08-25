@@ -6,7 +6,6 @@ import ctypes
 from ctypes import wintypes
 import subprocess
 import winreg
-from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from config import get_app_dir
