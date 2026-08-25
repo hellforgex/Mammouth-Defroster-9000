@@ -1,0 +1,4 @@
+2026-08-25T14:03:35 [AUTH_FAIL] ip=testclient path=/sse count=1/10
+2026-08-25T14:03:35 [AUTH_FAIL] ip=testclient path=/messages count=2/10
+2026-08-25T14:03:48 [AUTH_FAIL] ip=testclient path=/sse count=1/10
+2026-08-25T14:03:48 [AUTH_FAIL] ip=testclient path=/sse count=2/10

@@ -15,7 +15,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "endpoint_path": "/sse",           # Options: "/sse", "/mcp", "/messages", "/"
         "auto_tunnel": True,
         "api_token": "",                   # Generated on initial run
-        "enforce_auth": True,              # Require Bearer token or ?token= query parameter
+        "enforce_auth": False,             # Optional: Require Bearer token or ?token= (Disabled by default for Mammouth compatibility)
         "allowed_origins": [
             "https://mammouth.ai",
             "https://app.mammouth.ai",
