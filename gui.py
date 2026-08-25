@@ -181,7 +181,7 @@ class HostDialog(ctk.CTkToplevel):
 class MammouthControlCenter(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Mammouth AI — MCP Control Center (Hardened)")
+        self.title("Mammouth Defroster 9000 🦣❄️🔥 (noskillz edition)")
         self.geometry("1020x760")
         self.minsize(920, 680)
 
@@ -205,14 +205,14 @@ class MammouthControlCenter(ctk.CTk):
         title_box = ctk.CTkFrame(header, fg_color="transparent")
         title_box.pack(side="left", padx=20, pady=10)
         
-        lbl_icon = ctk.CTkLabel(title_box, text="🦣", font=ctk.CTkFont(size=30))
+        lbl_icon = ctk.CTkLabel(title_box, text="🦣🔥", font=ctk.CTkFont(size=30))
         lbl_icon.pack(side="left", padx=(0, 10))
 
         title_text_box = ctk.CTkFrame(title_box, fg_color="transparent")
         title_text_box.pack(side="left")
-        lbl_title = ctk.CTkLabel(title_text_box, text="Mammouth Control Center", font=ctk.CTkFont(size=20, weight="bold"))
+        lbl_title = ctk.CTkLabel(title_text_box, text="Mammouth Defroster 9000", font=ctk.CTkFont(size=20, weight="bold"))
         lbl_title.pack(anchor="w")
-        lbl_subtitle = ctk.CTkLabel(title_text_box, text="FastMCP Server & DevOps Toolset for Windows 11 (Token-Secured)", font=ctk.CTkFont(size=12), text_color="#94A3B8")
+        lbl_subtitle = ctk.CTkLabel(title_text_box, text="Thawing 10,000 years of frozen automation power for Mammouth.ai (noskillz edition)", font=ctk.CTkFont(size=12), text_color="#94A3B8")
         lbl_subtitle.pack(anchor="w")
 
         # Top Right Controls: Status badge & Toggle Server Button

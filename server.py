@@ -44,8 +44,8 @@ active_capabilities = []
 
 # Initialize FastMCP Server
 mcp = FastMCP(
-    name="Mammouth-Powerhouse-MCP",
-    instructions="Advanced Windows 11, Automation & DevOps MCP Server for Mammouth.ai."
+    name="Mammouth-Defroster-9000",
+    instructions="Mammouth Defroster 9000: Advanced Windows 11, Automation & DevOps MCP Server for Mammouth.ai. (noskillz edition)"
 )
 
 # 1. Memory Module
@@ -322,7 +322,7 @@ if __name__ == "__main__":
     port = args.port or int(os.environ.get("PORT") or cfg_server.get("port", 8000))
     
     auth_status = "ENABLED (Token Protected)" if cfg_server.get("enforce_auth", True) else "DISABLED (Open)"
-    print(f"Starting Mammouth-Powerhouse MCP Server on http://{host}:{port}...")
+    print(f"Starting Mammouth Defroster 9000 on http://{host}:{port}...")
     print(f"Security: Authentication={auth_status}, Workspace Sandbox={cfg_server.get('enforce_workspace_sandbox', True)}")
     print(f"Active modules ({len(active_capabilities)}): {[k for k, v in cfg.get('modules', {}).items() if v.get('enabled')]}")
     uvicorn.run(app, host=host, port=port, log_level="info")

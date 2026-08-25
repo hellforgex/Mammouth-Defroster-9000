@@ -1,10 +1,11 @@
-# 🦣 Mammouth Control Center & MCP Server for Windows 11
+# 🦣 Mammouth Defroster 9000 ❄️🔥
 
-> **Enterprise-Grade Desktop Control Center and FastMCP Server with Hardened Security, Modular DevOps & System Automation Toolsets for [Mammouth.ai](https://mammouth.ai).**
+> **Thawing 10,000 years of frozen Windows automation power for [Mammouth.ai](https://mammouth.ai). An enterprise-grade, vibecoded FastMCP control center by noskillz.**
 
 ![Platform](https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-blue)
 ![Vibecoded](https://img.shields.io/badge/Vibecoded%20By-noskillz%20⚡-purple)
 ![Security](https://img.shields.io/badge/Security-Bearer%20Token%20%2B%20DPAPI%20%2B%20Sandbox-green)
+![Status](https://img.shields.io/badge/Defroster%20State-100%25%20THAWED%20%F0%9F%94%A5-orange)
 ![License](https://img.shields.io/badge/License-MIT%20%2B%20Legal%20Disclaimer-orange)
 ![FastMCP](https://img.shields.io/badge/MCP-FastMCP%203.4%2B-purple)
 ![Interface](https://img.shields.io/badge/UI-CustomTkinter%20Dark%20Theme-blueviolet)
@@ -47,7 +48,7 @@
 
 ## 🌟 Highlights & Features
 
-Mammouth Control Center gives your Mammouth AI assistants secure, controlled access to your local Windows environment, remote servers, and background automation daemons.
+**Mammouth Defroster 9000** gives your Mammouth AI assistants secure, controlled access to your local Windows environment, remote servers, and background automation daemons.
 
 - 🔒 **Hardened Security Architecture**:
   - **API Token Authentication**: Optional Bearer token / query auth (`Authorization: Bearer <token>` or `?token=...`).
@@ -56,7 +57,7 @@ Mammouth Control Center gives your Mammouth AI assistants secure, controlled acc
   - **Windows DPAPI Password Encryption**: SSH passwords stored in `hosts.json` are encrypted using the native Windows Data Protection API bound to your Windows user profile.
   - **SSRF Filter**: Web scraper blocks private IP networks, loopbacks, and cloud metadata services.
   - **Safe Defaults**: High-privilege tools (PowerShell execution) are disabled by default in template configurations.
-- 🖥️ **Modern Windows 11 Desktop UI**: Beautiful dark-mode dashboard with real-time status indicators, 1-click token-ready endpoint copy, and live console logs.
+- 🖥️ **Modern Windows 11 Desktop Cockpit**: Beautiful dark-mode dashboard with real-time status indicators, 1-click token-ready endpoint copy, and live console logs.
 - ⚡ **Modular Skill Toggles**: Granularly enable or disable individual toolsets directly from the GUI (Memory, Kanban, File Ops, PowerShell, SSH, System Monitor, Web).
 - 🌐 **Flexible Network & Tunnel Providers**:
   - **Tailscale Funnel**: Zero-config auto-detection and public HTTPS domain (`https://<node>.ts.net/sse`).
@@ -66,11 +67,11 @@ Mammouth Control Center gives your Mammouth AI assistants secure, controlled acc
   - **Custom Domain**: Use your own reverse proxy (Nginx, Caddy, Traefik).
 - 🔀 **Custom Route Endpoints**: Select between `/sse`, `/mcp`, `/messages`, or `/` root paths.
 - 🔑 **Integrated SSH Host Manager**: Add, edit, and test remote Linux VPS/servers for PuTTY, Plink commands, and SCP file synchronization without touching JSON files.
-- 📦 **Standalone EXE Packaging**: 1-click build script (`build_exe.bat`) to package the entire Control Center into an `.exe` for any Windows machine.
+- 📦 **Standalone EXE Packaging**: 1-click build script (`build_exe.bat`) to package the entire Defroster into an `.exe` for any Windows machine.
 
 ---
 
-## 🛠️ Included MCP Toolsets (Skills)
+## 🛠️ Included MCP Toolsets (32 Defrosted Tools)
 
 | Skill / Module | Security Level | Key Capabilities | Example Tools |
 | :--- | :---: | :--- | :--- |
@@ -109,19 +110,19 @@ Mammouth Control Center gives your Mammouth AI assistants secure, controlled acc
 ### Option B: Building a Standalone Windows EXE
 
 1. Double-click **`build_exe.bat`**
-2. The compiled application will be generated in `dist\MammouthControlCenter\MammouthControlCenter.exe`.
+2. The compiled application will be generated in `dist\MammouthDefroster9000\MammouthDefroster9000.exe`.
 3. You can now distribute the folder or create a shortcut on your Desktop!
 
 ---
 
 ## 🔗 Connecting to Mammouth.ai
 
-1. Open **Mammouth Control Center**, choose your preferred **Exposure Mode** (e.g. Tailscale Funnel) and click **`▶ Start Server`**.
+1. Open **Mammouth Defroster 9000**, choose your preferred **Exposure Mode** (e.g. Tailscale Funnel) and click **`▶ Start Server`**.
 2. Click the **`📋 Copy`** button next to the calculated **Endpoint URL** (e.g. `https://<node>.ts.net/sse`).
 3. In **[Mammouth.ai](https://mammouth.ai)**:
    - Navigate to **Settings** → **Custom MCP Servers** (or Tools).
    - Click **Add MCP Server**:
-     - **Name**: `Mammouth Powerhouse`
+     - **Name**: `Mammouth Defroster 9000`
      - **Type**: `SSE` (Server-Sent Events)
      - **URL**: Paste your copied URL (`https://.../sse`).
    - Click **Save / Connect**.
@@ -146,7 +147,7 @@ mammouth-control-center/
 ├── config.example.json      # Hardened template configuration
 ├── hosts.example.json       # Template SSH hosts configuration
 ├── server.py                # FastMCP server with Auth & CORS middleware
-├── gui.py                   # CustomTkinter Windows 11 Desktop GUI
+├── gui.py                   # CustomTkinter Windows 11 Desktop Cockpit
 ├── start_gui.bat            # Quick launcher script
 ├── build_exe.bat            # PyInstaller one-click builder
 ├── requirements.txt         # Pip dependency manifest
