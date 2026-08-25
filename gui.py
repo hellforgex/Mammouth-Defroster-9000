@@ -731,6 +731,7 @@ class MammouthControlCenter(ctk.CTk):
                             [ng_bin, "http", str(port)],
                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                         )
+                        threading.Thread(target=self._poll_ngrok_api, daemon=True).start()
                     except Exception as e:
                         self._log(f"ngrok start warning: {e}")
                 else:
@@ -768,6 +769,27 @@ class MammouthControlCenter(ctk.CTk):
             self._log(f"Failed to start server: {e}")
             messagebox.showerror("Server Launch Error", str(e))
 
+    def _poll_ngrok_api(self):
+        """Poll ngrok local inspection API on 127.0.0.1:4040 to discover dynamic public URL."""
+        import httpx
+        for _ in range(12):
+            if not self.server_process:
+                break
+            time.sleep(1)
+            try:
+                with httpx.Client(timeout=1.5) as client:
+                    resp = client.get("http://127.0.0.1:4040/api/tunnels")
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        for t in data.get("tunnels", []):
+                            pub = t.get("public_url", "")
+                            if pub:
+                                self.dynamic_tunnel_url = pub
+                                self.after(0, self._on_dynamic_tunnel_discovered)
+                                return
+            except Exception:
+                pass
+
     def _stream_tunnel_logs(self):
         """Read tunnel stdout to detect quick tunnel URLs (e.g. trycloudflare.com)."""
         if not self.tunnel_process or not self.tunnel_process.stdout:
@@ -786,7 +808,7 @@ class MammouthControlCenter(ctk.CTk):
                 pass
 
     def _on_dynamic_tunnel_discovered(self):
-        self._log(f"Cloudflare Tunnel online: {self.dynamic_tunnel_url}")
+        self._log(f"Tunnel online & URL discovered: {self.dynamic_tunnel_url}")
         self._refresh_all_endpoint_labels()
 
     def _stream_server_logs(self):
