@@ -1,0 +1,46 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "auto_tailscale": true,
+    "tailscale_path": "C:\\Program Files\\Tailscale\\tailscale.exe",
+    "custom_public_url": ""
+  },
+  "modules": {
+    "memory": {
+      "enabled": true,
+      "name": "Persistent Long-Term Memory",
+      "description": "SQLite cross-session memory storage (save, recall, list, get, delete)."
+    },
+    "tasks_kanban": {
+      "enabled": true,
+      "name": "Task & Kanban Board",
+      "description": "Persistent task tracking and project management (todo, in_progress, done)."
+    },
+    "file_ops": {
+      "enabled": true,
+      "name": "File & Code Operations",
+      "description": "Read, write, search files (grep-like), replace code chunks, and directory trees."
+    },
+    "shell_processes": {
+      "enabled": true,
+      "name": "PowerShell & Background Daemons",
+      "description": "Execute synchronous commands and manage long-running background tasks."
+    },
+    "putty_ssh": {
+      "enabled": true,
+      "name": "PuTTY & SSH Host Manager",
+      "description": "Remote shell execution, PuTTY GUI launch, SCP file transfers, and host manager."
+    },
+    "system_monitor": {
+      "enabled": true,
+      "name": "System & Hardware Diagnostics",
+      "description": "Hardware specs (CPU, RAM, Disks), GPU info, process listing, and Windows Event Logs."
+    },
+    "web_tools": {
+      "enabled": true,
+      "name": "Web Scraper & URL Tools",
+      "description": "Fetch and extract clean markdown/text from webpages, and check endpoint status."
+    }
+  }
+}
