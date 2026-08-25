@@ -21,64 +21,38 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ================================================================================
-  LEGAL DISCLAIMER & LIMITATION OF LIABILITY (ENGLISH)
+  LEGAL DISCLAIMER & LIMITATION OF LIABILITY
 ================================================================================
 
-1. Provided Free of Charge ("As-Is"):
+1. Gratuitous Provision ("As-Is" / Section 521 BGB):
    This software is provided as an open-source project entirely free of charge on an
-   "as-is" and "as-available" basis. Under applicable law (including Section 521 of the
-   German Civil Code / BGB for gratuitous provision), the liability of the author/developer
-   (noskillz / hellforgex) is strictly limited to intentional misconduct (Vorsatz) and
-   gross negligence (grobe Fahrlässigkeit). Any liability for slight/ordinary negligence
-   is expressly excluded to the fullest extent permitted by law.
+   "as-is" and "as-available" basis. Pursuant to applicable statutory law governing
+   gratuitous software provision (including Section 521 of the German Civil Code / BGB),
+   the liability of the author and developer (noskillz / hellforgex) is strictly
+   limited to intentional misconduct (Vorsatz) and gross negligence (grobe Fahrlässigkeit).
+   Any liability for ordinary, slight, or simple negligence is expressly excluded to the
+   fullest extent permissible under governing law.
 
-2. Sole Risk and Personal Responsibility:
-   The use of this software—particularly modules for executing local shell commands
-   (PowerShell), file system modifications (writing, modifying, deleting), system diagnostics,
-   and remote server management (SSH/PuTTY/Plink)—is undertaken solely at the user's own
-   risk. The user assumes full and exclusive responsibility for all instructions, scripts,
-   and commands executed by themselves or by connected AI models/autonomous agents.
+2. Sole Risk and Operator Responsibility:
+   The execution and utilization of all capabilities provided by this software—including,
+   without limitation, modules executing local command-line / PowerShell instructions,
+   file system manipulations (reading, writing, replacing, deleting), system hardware
+   diagnostics, and remote SSH / VPS server operations (PuTTY / Plink / PSCP)—are
+   undertaken strictly and solely at the user's own risk. The operator retains sole,
+   exclusive responsibility for all commands, scripts, actions, and side effects initiated
+   by themselves or triggered by connected artificial intelligence models and autonomous agents.
 
-3. Exclusion of Consequential Damages:
-   The author/developer shall not be liable for any direct, indirect, incidental, special,
-   consequential, or punitive damages, including but not limited to loss of data, hardware
-   damage, system crashes, downtime, security breaches, unauthorized third-party access,
-   or economic losses arising out of the installation, configuration, execution, or network
-   exposure (via Tailscale, Cloudflare, ngrok, port forwarding, or custom proxy) of this software.
+3. Exclusion of Consequential, Incidental, and Financial Damages:
+   Under no circumstances shall the author or developer be held liable for any direct,
+   indirect, incidental, special, exemplary, punitive, or consequential damages, including
+   but not limited to data loss, corrupted storage, operating system damage, hardware failure,
+   downtime, loss of business or profits, unauthorized third-party access, security incidents,
+   or network compromise arising out of the installation, configuration, execution, or
+   network exposure (via Tailscale, Cloudflare, ngrok, port forwarding, or custom proxy)
+   of this software.
 
-4. Network and Tunnel Security Responsibility:
-   The user is solely responsible for properly securing any network connectivity, tunnel
-   endpoints, and access points (e.g. via token authentication, VPNs, or firewalls). Exposing
-   the server to the public internet without proper authentication is done strictly at the
-   user's own risk.
-
-================================================================================
-  DEUTSCHER HAFTUNGSAUSSCHLUSS & RECHTLICHER HINWEIS (§ 521 BGB)
-================================================================================
-
-1. Unentgeltliche Bereitstellung (§ 521 BGB):
-   Diese Software wird als Open-Source-Projekt vollkommen unentgeltlich zur Verfügung
-   gestellt. Gemäß § 521 BGB ist die Haftung des Entwicklers / Urhebers (noskillz /
-   hellforgex) auf Vorsatz und grobe Fahrlässigkeit beschränkt. Die Haftung für
-   leichte Fahrlässigkeit ist im gesetzlich zulässigen Rahmen vollständig ausgeschlossen.
-
-2. Nutzung auf eigene Gefahr und Eigenverantwortung:
-   Die Nutzung dieser Software, insbesondere der Module zur Ausführung von Shell-
-   Befehlen (PowerShell), zur Dateimanipulation, zu Systemdiagnosen und zum Zugriff auf
-   entfernte Server (SSH/PuTTY), erfolgt auf ausschließliches und eigenes Risiko des
-   Anwenders. Der Anwender trägt die alleinige Verantwortung für sämtliche Befehle,
-   Skripte oder Aktionen, die durch ihn oder durch verbundene KI-Modelle / Agenten
-   ausgeführt werden.
-
-3. Ausschluss von Folgeschäden:
-   Der Entwickler haftet nicht für direkte oder indirekte Schäden, Folgeschäden,
-   Datenverlust, Systemabstürze, Hardware-Beschädigungen, Ausfallzeiten, Sicherheits-
-   vorfälle, unberechtigte Zugriffe Dritter oder sonstige wirtschaftliche Einbußen,
-   die aus der Installation, Konfiguration, Ausführung oder Netzwerk-Freigabe (z. B. via
-   Tailscale, Cloudflare, ngrok oder Portweiterleitung) dieser Software resultieren.
-
-4. Sicherheitsverantwortung bei Netzwerk-Exposition:
-   Der Anwender ist eigenverantwortlich für die Absicherung der Netzwerkverbindung
-   (z. B. durch Token-Authentifizierung, VPNs oder Firewalls). Wer den Server ohne
-   ausreichende Sicherheitsvorkehrungen im öffentlichen Internet betreibt, trägt die
-   volle Verantwortung für hieraus entstehende Sicherheitsrisiken.
+4. Network and Endpoint Security:
+   The user is solely responsible for implementing adequate security controls across all
+   network interfaces and tunnel endpoints (such as VPN isolation, firewall policies, and
+   token authentication). Operating this server on publicly routable networks without
+   authentication is performed strictly at the user's sole risk and discretion.

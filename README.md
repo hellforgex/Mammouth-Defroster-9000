@@ -16,7 +16,7 @@
 >
 > **WELCOME TO THE RAW AGENTIC POWERHOUSE.**
 >
-> This software is **100% pure vibe-coded** by **noskillz** for maximum speed, sovereign Windows 11 DevOps supremacy, and zero-compromise automation.
+> This software is **100% pure vibe-coded** by **noskillz** for maximum execution speed, sovereign Windows 11 DevOps supremacy, and zero-compromise automation.
 >
 > 🦣 **With great agentic power comes absolute responsibility:**
 > - You are handing an autonomous AI assistant real keys to your operating system: PowerShell execution, sandboxed file modifications, hardware diagnostics, and remote SSH servers.
@@ -29,35 +29,19 @@
 ## ⚖️ Legal Disclaimer & Limitation of Liability
 
 > [!IMPORTANT]
-> **Please read carefully before using this software:**
+> **Please read carefully before deploying or operating this software:**
 >
-> 1. **Provided Free of Charge ("As-Is") / § 521 BGB**:  
->    This software is provided as an open-source project entirely free of charge on an **"as-is"** and **"as-available"** basis without warranties of any kind. Under applicable law (including Section 521 of the German Civil Code / BGB for gratuitous provision), the liability of the author/developer (**noskillz / hellforgex**) is strictly limited to intentional misconduct (*Vorsatz*) and gross negligence (*grobe Fahrlässigkeit*). Any liability for ordinary/slight negligence is expressly excluded to the fullest extent permitted by law.
+> 1. **Gratuitous Provision ("As-Is" / Statutory Basis)**:  
+>    This software is provided as an open-source project entirely free of charge on an **"as-is"** and **"as-available"** basis without warranties of any kind, either express or implied. Under governing statutory law for gratuitous software provision (including Section 521 of the German Civil Code / BGB), the legal liability of the author and developer (**noskillz / hellforgex**) is strictly limited to **intentional misconduct** (*Vorsatz*) and **gross negligence** (*grobe Fahrlässigkeit*). Any liability for ordinary, slight, or simple negligence is expressly excluded to the fullest extent permitted by applicable law.
 >
-> 2. **Sole Risk and User Responsibility**:  
->    The execution of all functions in this software—particularly modules executing local **PowerShell commands**, **file system modifications (write, replace, delete)**, **system diagnostics**, and **remote SSH/VPS server interactions (PuTTY/Plink/PSCP)**—is undertaken solely at the user's own risk. The user assumes full and exclusive responsibility for all instructions, commands, and operations triggered by themselves or by connected AI models/autonomous agents.
+> 2. **Sole Risk and Operator Responsibility**:  
+>    The execution and utilization of all functions within this software—specifically modules executing local **PowerShell commands**, **file system modifications (writing, modifying, deleting)**, **system diagnostics**, and **remote SSH/VPS server operations (PuTTY / Plink / PSCP)**—is undertaken strictly at the user's sole risk. The operator assumes full and exclusive liability for all actions, scripts, and operations initiated by themselves or triggered by connected AI models and autonomous agents.
 >
 > 3. **Exclusion of Consequential Damages & Data Loss**:  
->    The author/developer shall not be liable for any direct, indirect, incidental, consequential, special, or exemplary damages, including but not limited to loss of data, hardware damage, operating system crashes, service outages, security incidents, unauthorized third-party access, or financial losses resulting from the installation, execution, or network exposure of this software.
+>    The author/developer shall not be held liable for any direct, indirect, incidental, special, consequential, or punitive damages, including but not limited to loss of data, corrupted databases, hardware damage, operating system crashes, downtime, security breaches, unauthorized third-party access, or financial losses resulting from the installation, execution, or network exposure of this software.
 >
-> 4. **Network & Tunnel Security**:  
->    The user is solely responsible for properly securing any network connectivity, tunnel endpoints, and exposure modes (e.g. via Tailscale VPN, private networks, firewalls, or token authentication). Exposing this server to the public internet without proper authentication is done strictly at the user's own peril.
-
-<details>
-<summary>🇩🇪 <b>Rechtlicher Haftungsausschluss auf Deutsch (§ 521 BGB) — Hier aufklappen</b></summary>
-
-> **1. Unentgeltliche Bereitstellung (§ 521 BGB)**:  
-> Diese Software wird als Open-Source-Projekt vollkommen unentgeltlich und im aktuellen Entwicklungsstadium (*„as is“*) zur Verfügung gestellt. Gemäß **§ 521 BGB** ist die gesetzliche Haftung des Entwicklers / Urhebers (**noskillz / hellforgex**) auf **Vorsatz und grobe Fahrlässigkeit** beschränkt. Eine Haftung für einfache/leichte Fahrlässigkeit ist im gesetzlich zulässigen Rahmen ausgeschlossen.
->
-> **2. Nutzung auf eigene Gefahr & Eigenverantwortung**:  
-> Die Nutzung sämtlicher Funktionen dieser Software – insbesondere der Module zur Ausführung lokaler **PowerShell-Befehle**, zur **Dateimanipulation (Schreiben, Ersetzen, Löschen)**, zur **Systemdiagnose** sowie zur Steuerung von **Remote-SSH-Servern (PuTTY/Plink)** – erfolgt auf **ausschließliches, eigenes Risiko** des Anwenders. Der Anwender trägt die alleinige Verantwortung für alle Aktionen und Befehle, die er oder angebundene KI-Modelle / Agenten ausführen lassen.
->
-> **3. Ausschluss von Folgeschäden und Datenverlust**:  
-> Der Urheber haftet ausdrücklich **nicht** für Schäden an Soft- oder Hardware, Datenverlust, Betriebsunterbrechungen, Serverausfälle, Sicherheitsvorfälle oder wirtschaftliche Folgeschäden, die durch die Installation, Konfiguration, Ausführung oder Netzwerk-Freigabe dieser Software entstehen.
->
-> **4. Netzwerk- und Tunnelsicherheit**:  
-> Der Anwender ist eigenverantwortlich dafür zuständig, den Server über sichere Netzwerke (wie Tailscale VPN, geschützte Tunnels oder aktive Token-Authentifizierung) abzusichern. Der Betrieb des Servers auf öffentlich erreichbaren IP-Adressen oder Tunnels ohne Authentifizierung geschieht auf alleinige Gefahr des Betreibers.
-</details>
+> 4. **Network and Tunnel Security**:  
+>    The operator is solely responsible for properly configuring and securing all network interfaces, reverse proxies, and tunnel endpoints (e.g. via Tailscale VPN, private network isolation, firewalls, or token authentication). Exposing this server to the public internet without adequate authentication is performed entirely at the user's own peril.
 
 ---
 
@@ -68,16 +52,16 @@ Mammouth Control Center gives your Mammouth AI assistants secure, controlled acc
 - 🔒 **Hardened Security Architecture**:
   - **API Token Authentication**: Optional Bearer token / query auth (`Authorization: Bearer <token>` or `?token=...`).
   - **CORS Protection**: Restricted specifically to `mammouth.ai` domains and local development origins (no open wildcard `*`).
-  - **Workspace Path Sandboxing**: File operations are jailed to an authorized workspace directory to prevent system file tampering or traversal attacks.
-  - **Windows DPAPI Password Encryption**: SSH passwords stored in `hosts.json` are encrypted using the native Windows Data Protection API bound to your Windows user account.
+  - **Workspace Path Sandboxing**: File operations are jailed to an authorized workspace directory (`./workspace`) to prevent system file tampering or traversal attacks.
+  - **Windows DPAPI Password Encryption**: SSH passwords stored in `hosts.json` are encrypted using the native Windows Data Protection API bound to your Windows user profile.
   - **SSRF Filter**: Web scraper blocks private IP networks, loopbacks, and cloud metadata services.
-  - **Safe Defaults**: High-privilege tools (PowerShell execution) are disabled by default in templates.
+  - **Safe Defaults**: High-privilege tools (PowerShell execution) are disabled by default in template configurations.
 - 🖥️ **Modern Windows 11 Desktop UI**: Beautiful dark-mode dashboard with real-time status indicators, 1-click token-ready endpoint copy, and live console logs.
 - ⚡ **Modular Skill Toggles**: Granularly enable or disable individual toolsets directly from the GUI (Memory, Kanban, File Ops, PowerShell, SSH, System Monitor, Web).
 - 🌐 **Flexible Network & Tunnel Providers**:
   - **Tailscale Funnel**: Zero-config auto-detection and public HTTPS domain (`https://<node>.ts.net/sse`).
   - **Cloudflare Tunnel**: Quick free tunnels via `trycloudflare.com` or custom Cloudflare domains.
-  - **ngrok Tunnel**: Instant public HTTP tunnel support with local API auto-discovery.
+  - **ngrok Tunnel**: Instant public HTTP tunnel support with local API auto-discovery (`127.0.0.1:4040`).
   - **Direct IP / LAN**: Connect directly via Localhost (`127.0.0.1`) or local network LAN IP (`192.168.x.x`).
   - **Custom Domain**: Use your own reverse proxy (Nginx, Caddy, Traefik).
 - 🔀 **Custom Route Endpoints**: Select between `/sse`, `/mcp`, `/messages`, or `/` root paths.
@@ -91,7 +75,7 @@ Mammouth Control Center gives your Mammouth AI assistants secure, controlled acc
 | Skill / Module | Security Level | Key Capabilities | Example Tools |
 | :--- | :---: | :--- | :--- |
 | 🧠 **Persistent Memory** | 🟢 Safe | SQLite cross-session knowledge storage with keyword search & categories | `memory_save`, `memory_recall`, `memory_list`, `memory_get` |
-| 📋 **Task & Kanban Board** | 🟢 Safe | SQLite-backed task & project tracker (`todo`, `in_progress`, `done`) | `task_create`, `task_update`, `task_list`, `task_delete` |
+| 📋 **Task & Kanban Board** | 🟢 Safe | SQLite-backed task & project tracker (`todo`, `in_progress`, `done`, `blocked`) | `task_create`, `task_update`, `task_list`, `task_delete` |
 | 📁 **File & Code Operations** | 🔒 Sandboxed | Line slicing, ripgrep search, chunk replacement within authorized workspace | `file_read`, `file_write`, `file_replace_chunk`, `file_search_text`, `directory_tree` |
 | 💻 **PowerShell Execution** | ⚠️ High Privilege | Sync command execution & background daemon process manager with live logs | `command_run`, `process_start_background`, `process_get_output`, `process_kill_background` |
 | 🔑 **PuTTY & SSH Management** | 🔒 DPAPI Encrypted | Remote execution via Plink, SCP file transfers, PuTTY GUI launch, registry sessions | `ssh_exec_command`, `ssh_open_putty_window`, `ssh_transfer_file`, `ssh_list_saved_hosts` |
@@ -167,13 +151,13 @@ mammouth-control-center/
 ├── build_exe.bat            # PyInstaller one-click builder
 ├── requirements.txt         # Pip dependency manifest
 ├── pyproject.toml           # Project metadata
-├── LICENSE                  # MIT License & Bilingual Liability Disclaimer
+├── LICENSE                  # MIT License & Legal Disclaimer
 ├── .gitignore               # Git security & cache filter
-└── README.md                # Documentation, Bilingual Disclaimer & noskillz Manifesto
+└── README.md                # Documentation, Legal Disclaimer & noskillz Manifesto
 ```
 
 ---
 
 ## 📄 License
 MIT License. Copyright (c) 2026 **noskillz** ([hellforgex](https://github.com/hellforgex)).  
-Governed by the **Legal Disclaimer & Limitation of Liability** / **§ 521 BGB Haftungsausschluss** above.
+Governed by the **Legal Disclaimer & Limitation of Liability** above.
