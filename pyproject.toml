@@ -1,7 +1,7 @@
 [project]
-name = "mammouth-control-center"
-version = "1.0.0"
-description = "Mammouth AI Control Center & MCP Server for Windows 11"
+name = "mammouth-defroster-9000"
+version = "0.1.0"
+description = "Mammouth Defroster 9000: FastMCP Desktop Cockpit & Windows 11 DevOps Automation for Mammouth.ai"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

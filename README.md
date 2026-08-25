@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hellforgex/Mammouth-MCP-Control-Center/releases"><img src="https://img.shields.io/github/v/release/hellforgex/Mammouth-MCP-Control-Center?include_prereleases&label=Latest%20Release&color=blueviolet" alt="Release"></a>
+  <a href="https://github.com/hellforgex/Mammouth-Defroster-9000/releases"><img src="https://img.shields.io/github/v/release/hellforgex/Mammouth-Defroster-9000?include_prereleases&label=Latest%20Release&color=blueviolet" alt="Release"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-0078D6?logo=windows&logoColor=white" alt="Platform">
   <img src="https://img.shields.io/badge/Vibecoded%20By-noskillz%20⚡-8A2BE2" alt="Vibecoded">
   <img src="https://img.shields.io/badge/Security-DPAPI%20%2B%20Sandbox%20%2B%20SSRF%20Shield-10B981" alt="Security">
@@ -121,8 +121,8 @@
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/hellforgex/Mammouth-MCP-Control-Center.git
-   cd Mammouth-MCP-Control-Center
+   git clone https://github.com/hellforgex/Mammouth-Defroster-9000.git
+   cd Mammouth-Defroster-9000
    ```
 
 2. **Launch the Defroster**:
