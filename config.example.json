@@ -2,9 +2,15 @@
   "server": {
     "host": "127.0.0.1",
     "port": 8000,
-    "auto_tailscale": true,
+    "tunnel_mode": "Tailscale Funnel",
+    "endpoint_path": "/sse",
+    "auto_tunnel": true,
     "tailscale_path": "C:\\Program Files\\Tailscale\\tailscale.exe",
-    "custom_public_url": ""
+    "cloudflared_path": "cloudflared",
+    "ngrok_path": "ngrok",
+    "custom_public_url": "",
+    "cloudflare_custom_url": "",
+    "ngrok_custom_url": ""
   },
   "modules": {
     "memory": {

@@ -1,6 +1,7 @@
 import json
+import socket
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
 CONFIG_EXAMPLE_FILE = Path(__file__).parent / "config.example.json"
@@ -9,9 +10,15 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "server": {
         "host": "127.0.0.1",
         "port": 8000,
-        "auto_tailscale": True,
+        "tunnel_mode": "Tailscale Funnel",  # Options: "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"
+        "endpoint_path": "/sse",           # Options: "/sse", "/mcp", "/messages", "/"
+        "auto_tunnel": True,
         "tailscale_path": r"C:\Program Files\Tailscale\tailscale.exe",
-        "custom_public_url": ""
+        "cloudflared_path": "cloudflared",
+        "ngrok_path": "ngrok",
+        "custom_public_url": "",
+        "cloudflare_custom_url": "",
+        "ngrok_custom_url": ""
     },
     "modules": {
         "memory": {
@@ -51,6 +58,17 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         }
     }
 }
+
+def get_lan_ip() -> str:
+    """Detect local network LAN IP (e.g. 192.168.x.x or 10.x.x.x)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 def load_config() -> Dict[str, Any]:
     """Load configuration from config.json with fallback to default values."""

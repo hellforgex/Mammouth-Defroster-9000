@@ -1,8 +1,10 @@
 import os
 import sys
+import re
 import json
 import time
 import shutil
+import socket
 import threading
 import subprocess
 from pathlib import Path
@@ -16,7 +18,7 @@ from tkinter import messagebox, filedialog
 BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
 
-from config import load_config, save_config, CONFIG_FILE
+from config import load_config, save_config, get_lan_ip, CONFIG_FILE
 
 # Appearance setup
 ctk.set_appearance_mode("Dark")
@@ -180,13 +182,16 @@ class MammouthControlCenter(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Mammouth AI — MCP Control Center")
-        self.geometry("980x720")
-        self.minsize(880, 640)
+        self.geometry("1000x740")
+        self.minsize(900, 660)
 
         self.config_data = load_config()
         self.server_process: Optional[subprocess.Popen] = None
+        self.tunnel_process: Optional[subprocess.Popen] = None
         self.server_thread: Optional[threading.Thread] = None
+        self.tunnel_thread: Optional[threading.Thread] = None
         self.log_stream_active = False
+        self.dynamic_tunnel_url: Optional[str] = None
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -256,21 +261,53 @@ class MammouthControlCenter(ctk.CTk):
         card = ctk.CTkFrame(self.tab_dashboard, fg_color="#1E293B", corner_radius=8)
         card.pack(fill="x", padx=10, pady=(10, 10))
 
-        # Public Endpoint Row
+        # Mode Selection Bar inside Dashboard
+        mode_bar = ctk.CTkFrame(card, fg_color="transparent")
+        mode_bar.pack(fill="x", padx=15, pady=(10, 5))
+
+        ctk.CTkLabel(mode_bar, text="Exposure Mode:", font=ctk.CTkFont(size=13, weight="bold")).pack(side="left")
+        
+        tunnel_modes = ["Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"]
+        current_mode = self.config_data.get("server", {}).get("tunnel_mode", "Tailscale Funnel")
+        self.dash_mode_menu = ctk.CTkOptionMenu(
+            mode_bar,
+            values=tunnel_modes,
+            width=180,
+            command=self._on_dash_mode_changed
+        )
+        self.dash_mode_menu.set(current_mode)
+        self.dash_mode_menu.pack(side="left", padx=10)
+
+        # Endpoint Path Selector
+        ctk.CTkLabel(mode_bar, text="Path:", font=ctk.CTkFont(size=13, weight="bold")).pack(side="left", padx=(10, 5))
+        paths = ["/sse", "/mcp", "/messages", "/"]
+        current_path = self.config_data.get("server", {}).get("endpoint_path", "/sse")
+        self.dash_path_menu = ctk.CTkOptionMenu(
+            mode_bar,
+            values=paths,
+            width=110,
+            command=self._on_dash_path_changed
+        )
+        self.dash_path_menu.set(current_path)
+        self.dash_path_menu.pack(side="left")
+
+        # Primary Endpoint Row
         row1 = ctk.CTkFrame(card, fg_color="transparent")
-        row1.pack(fill="x", padx=15, pady=(10, 5))
-        ctk.CTkLabel(row1, text="🌐 Public SSE Endpoint:", font=ctk.CTkFont(size=13, weight="bold"), width=160, anchor="w").pack(side="left")
-        self.lbl_public_url = ctk.CTkLabel(row1, text=self._get_current_public_url(), font=ctk.CTkFont(size=13, weight="bold"), text_color="#38BDF8")
+        row1.pack(fill="x", padx=15, pady=(5, 5))
+        self.lbl_primary_title = ctk.CTkLabel(row1, text="🌐 Public SSE Endpoint:", font=ctk.CTkFont(size=13, weight="bold"), width=170, anchor="w")
+        self.lbl_primary_title.pack(side="left")
+        self.lbl_public_url = ctk.CTkLabel(row1, text=self._calculate_active_endpoint_url(), font=ctk.CTkFont(size=13, weight="bold"), text_color="#38BDF8")
         self.lbl_public_url.pack(side="left", padx=10)
         btn_copy_pub = ctk.CTkButton(row1, text="📋 Copy", width=70, height=26, command=lambda: self._copy_to_clipboard(self.lbl_public_url.cget("text")))
         btn_copy_pub.pack(side="right")
 
-        # Local Endpoint Row
+        # Localhost Endpoint Row
         row2 = ctk.CTkFrame(card, fg_color="transparent")
         row2.pack(fill="x", padx=15, pady=(5, 10))
-        ctk.CTkLabel(row2, text="💻 Local SSE Endpoint:", font=ctk.CTkFont(size=13, weight="bold"), width=160, anchor="w").pack(side="left")
+        ctk.CTkLabel(row2, text="💻 Localhost Endpoint:", font=ctk.CTkFont(size=13, weight="bold"), width=170, anchor="w").pack(side="left")
         port = self.config_data.get("server", {}).get("port", 8000)
-        self.lbl_local_url = ctk.CTkLabel(row2, text=f"http://127.0.0.1:{port}/sse", font=ctk.CTkFont(size=13), text_color="#94A3B8")
+        path = self.config_data.get("server", {}).get("endpoint_path", "/sse")
+        self.lbl_local_url = ctk.CTkLabel(row2, text=f"http://127.0.0.1:{port}{path}", font=ctk.CTkFont(size=13), text_color="#94A3B8")
         self.lbl_local_url.pack(side="left", padx=10)
         btn_copy_loc = ctk.CTkButton(row2, text="📋 Copy", width=70, height=26, command=lambda: self._copy_to_clipboard(self.lbl_local_url.cget("text")))
         btn_copy_loc.pack(side="right")
@@ -291,17 +328,68 @@ class MammouthControlCenter(ctk.CTk):
             fg_color="#0F172A"
         )
         self.log_textbox.pack(fill="both", expand=True, padx=10, pady=(2, 10))
-        self._log("System initialized. Click '▶ Start Server' to launch the FastMCP service.")
+        self._log("System initialized. Select your tunnel mode and click '▶ Start Server'.")
 
-    def _get_current_public_url(self) -> str:
-        custom = self.config_data.get("server", {}).get("custom_public_url", "").strip()
-        if custom:
-            return f"{custom.rstrip('/')}/sse"
-        ts_domain = get_tailscale_public_domain(self.config_data.get("server", {}).get("tailscale_path", ""))
-        if ts_domain:
-            return f"{ts_domain}/sse"
+    def _on_dash_mode_changed(self, choice: str):
+        self.config_data["server"]["tunnel_mode"] = choice
+        save_config(self.config_data)
+        self._refresh_all_endpoint_labels()
+        self._log(f"Switched exposure mode to: {choice}")
+
+    def _on_dash_path_changed(self, choice: str):
+        self.config_data["server"]["endpoint_path"] = choice
+        save_config(self.config_data)
+        self._refresh_all_endpoint_labels()
+        self._log(f"Switched endpoint route path to: {choice}")
+
+    def _calculate_active_endpoint_url(self) -> str:
+        cfg = self.config_data.get("server", {})
+        mode = cfg.get("tunnel_mode", "Tailscale Funnel")
+        path = cfg.get("endpoint_path", "/sse")
+        port = cfg.get("port", 8000)
+
+        if mode == "Tailscale Funnel":
+            ts_domain = get_tailscale_public_domain(cfg.get("tailscale_path", ""))
+            if ts_domain:
+                return f"{ts_domain}{path}"
+            return f"http://127.0.0.1:{port}{path} (Tailscale not connected)"
+
+        elif mode == "Cloudflare Tunnel":
+            if self.dynamic_tunnel_url:
+                return f"{self.dynamic_tunnel_url.rstrip('/')}{path}"
+            custom_cf = cfg.get("cloudflare_custom_url", "").strip()
+            if custom_cf:
+                return f"{custom_cf.rstrip('/')}{path}"
+            return f"https://[your-tunnel].trycloudflare.com{path} (Start server to activate)"
+
+        elif mode == "ngrok":
+            custom_ng = cfg.get("ngrok_custom_url", "").strip()
+            if custom_ng:
+                return f"{custom_ng.rstrip('/')}{path}"
+            return f"https://[your-domain].ngrok-free.app{path} (Start server to activate)"
+
+        elif mode == "Direct / LAN IP":
+            bind_host = cfg.get("host", "127.0.0.1")
+            lan_ip = get_lan_ip()
+            target_ip = lan_ip if bind_host in ["0.0.0.0", lan_ip] else "127.0.0.1"
+            return f"http://{target_ip}:{port}{path}"
+
+        elif mode == "Custom Domain":
+            custom = cfg.get("custom_public_url", "").strip()
+            if custom:
+                return f"{custom.rstrip('/')}{path}"
+            return f"http://127.0.0.1:{port}{path} (Enter custom URL in Settings)"
+
+        return f"http://127.0.0.1:{port}{path}"
+
+    def _refresh_all_endpoint_labels(self):
+        url = self._calculate_active_endpoint_url()
+        self.lbl_public_url.configure(text=url)
         port = self.config_data.get("server", {}).get("port", 8000)
-        return f"http://127.0.0.1:{port}/sse (Tailscale Funnel not detected)"
+        path = self.config_data.get("server", {}).get("endpoint_path", "/sse")
+        self.lbl_local_url.configure(text=f"http://127.0.0.1:{port}{path}")
+        mode = self.config_data.get("server", {}).get("tunnel_mode", "Tailscale Funnel")
+        self.lbl_primary_title.configure(text=f"🌐 {mode}:")
 
     def _log(self, text: str):
         timestamp = time.strftime("%H:%M:%S")
@@ -485,35 +573,61 @@ class MammouthControlCenter(ctk.CTk):
         group_net = ctk.CTkFrame(scroll, fg_color="#1E293B", corner_radius=8)
         group_net.pack(fill="x", pady=(0, 15), padx=5)
 
-        ctk.CTkLabel(group_net, text="⚙️ Network & Tunnel Settings", font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=15, pady=(12, 8))
+        ctk.CTkLabel(group_net, text="⚙️ Tunnel Provider & Exposure Settings", font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=15, pady=(12, 8))
 
         form = ctk.CTkFrame(group_net, fg_color="transparent")
         form.pack(fill="x", padx=15, pady=(0, 15))
 
+        # Tunnel Mode
+        ctk.CTkLabel(form, text="Tunnel Provider:").grid(row=0, column=0, sticky="w", pady=6)
+        tunnel_modes = ["Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"]
+        self.opt_tunnel_mode = ctk.CTkOptionMenu(form, values=tunnel_modes, width=240, command=self._on_settings_mode_changed)
+        self.opt_tunnel_mode.grid(row=0, column=1, sticky="w", padx=15, pady=6)
+        self.opt_tunnel_mode.set(self.config_data.get("server", {}).get("tunnel_mode", "Tailscale Funnel"))
+
+        # Endpoint Path
+        ctk.CTkLabel(form, text="Route Endpoint Path:").grid(row=1, column=0, sticky="w", pady=6)
+        paths = ["/sse", "/mcp", "/messages", "/"]
+        self.opt_endpoint_path = ctk.CTkOptionMenu(form, values=paths, width=240)
+        self.opt_endpoint_path.grid(row=1, column=1, sticky="w", padx=15, pady=6)
+        self.opt_endpoint_path.set(self.config_data.get("server", {}).get("endpoint_path", "/sse"))
+
         # Port
-        ctk.CTkLabel(form, text="Server Port:").grid(row=0, column=0, sticky="w", pady=6)
-        self.entry_port = ctk.CTkEntry(form, width=200)
-        self.entry_port.grid(row=0, column=1, sticky="w", padx=15, pady=6)
+        ctk.CTkLabel(form, text="Server Port:").grid(row=2, column=0, sticky="w", pady=6)
+        self.entry_port = ctk.CTkEntry(form, width=240)
+        self.entry_port.grid(row=2, column=1, sticky="w", padx=15, pady=6)
         self.entry_port.insert(0, str(self.config_data.get("server", {}).get("port", 8000)))
 
-        # Host
-        ctk.CTkLabel(form, text="Bind Host:").grid(row=1, column=0, sticky="w", pady=6)
-        self.entry_host = ctk.CTkEntry(form, width=200)
-        self.entry_host.grid(row=1, column=1, sticky="w", padx=15, pady=6)
-        self.entry_host.insert(0, str(self.config_data.get("server", {}).get("host", "127.0.0.1")))
+        # Bind Host
+        ctk.CTkLabel(form, text="Bind Host Address:").grid(row=3, column=0, sticky="w", pady=6)
+        lan_ip = get_lan_ip()
+        hosts_list = ["127.0.0.1", "0.0.0.0", lan_ip]
+        self.opt_host = ctk.CTkComboBox(form, values=hosts_list, width=240)
+        self.opt_host.grid(row=3, column=1, sticky="w", padx=15, pady=6)
+        self.opt_host.set(str(self.config_data.get("server", {}).get("host", "127.0.0.1")))
 
-        # Tailscale Auto Funnel
-        self.var_tailscale = ctk.BooleanVar(value=self.config_data.get("server", {}).get("auto_tailscale", True))
-        self.switch_tailscale = ctk.CTkSwitch(form, text="Auto-start Tailscale Funnel on launch", variable=self.var_tailscale)
-        self.switch_tailscale.grid(row=2, column=0, columnspan=2, sticky="w", pady=8)
+        # Auto Tunnel Toggle
+        self.var_auto_tunnel = ctk.BooleanVar(value=self.config_data.get("server", {}).get("auto_tunnel", True))
+        self.switch_auto_tunnel = ctk.CTkSwitch(form, text="Auto-start selected Tunnel provider on Server launch", variable=self.var_auto_tunnel)
+        self.switch_auto_tunnel.grid(row=4, column=0, columnspan=2, sticky="w", pady=8)
 
-        # Custom Public URL
-        ctk.CTkLabel(form, text="Custom Tunnel URL:").grid(row=3, column=0, sticky="w", pady=6)
-        self.entry_custom_url = ctk.CTkEntry(form, width=320, placeholder_text="e.g. https://my-tunnel.trycloudflare.com")
-        self.entry_custom_url.grid(row=3, column=1, sticky="w", padx=15, pady=6)
+        # Custom / Provider Domain Overrides
+        ctk.CTkLabel(form, text="Cloudflare Custom URL:").grid(row=5, column=0, sticky="w", pady=6)
+        self.entry_cf_url = ctk.CTkEntry(form, width=320, placeholder_text="e.g. https://mcp.mydomain.com")
+        self.entry_cf_url.grid(row=5, column=1, sticky="w", padx=15, pady=6)
+        self.entry_cf_url.insert(0, self.config_data.get("server", {}).get("cloudflare_custom_url", ""))
+
+        ctk.CTkLabel(form, text="ngrok Custom Domain:").grid(row=6, column=0, sticky="w", pady=6)
+        self.entry_ngrok_url = ctk.CTkEntry(form, width=320, placeholder_text="e.g. https://my-node.ngrok-free.app")
+        self.entry_ngrok_url.grid(row=6, column=1, sticky="w", padx=15, pady=6)
+        self.entry_ngrok_url.insert(0, self.config_data.get("server", {}).get("ngrok_custom_url", ""))
+
+        ctk.CTkLabel(form, text="Custom / Proxy Domain:").grid(row=7, column=0, sticky="w", pady=6)
+        self.entry_custom_url = ctk.CTkEntry(form, width=320, placeholder_text="e.g. https://my-reverse-proxy.com")
+        self.entry_custom_url.grid(row=7, column=1, sticky="w", padx=15, pady=6)
         self.entry_custom_url.insert(0, self.config_data.get("server", {}).get("custom_public_url", ""))
 
-        btn_save_settings = ctk.CTkButton(group_net, text="💾 Save Network Settings", fg_color="#10B981", hover_color="#059669", command=self._save_settings)
+        btn_save_settings = ctk.CTkButton(group_net, text="💾 Save Network & Endpoint Settings", fg_color="#10B981", hover_color="#059669", command=self._save_settings)
         btn_save_settings.pack(anchor="e", padx=15, pady=(0, 15))
 
         # Mammouth Integration Guide Group
@@ -523,16 +637,20 @@ class MammouthControlCenter(ctk.CTk):
         ctk.CTkLabel(guide_group, text="📖 How to connect with Mammouth.ai", font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=15, pady=(12, 8))
 
         guide_text = (
-            "1. Start the server using the '▶ Start Server' button in the header.\n"
-            "2. Click the '📋 Copy' button next to the Public SSE Endpoint URL.\n"
-            "3. Open your browser and go to Mammouth.ai (Settings -> Custom Tools / MCP Servers).\n"
-            "4. Add a new MCP Server:\n"
+            "1. Choose your exposure mode (Tailscale, Cloudflare, ngrok, Direct IP, or Custom Domain).\n"
+            "2. Start the server using the '▶ Start Server' button in the header.\n"
+            "3. Click the '📋 Copy' button next to the calculated Endpoint URL.\n"
+            "4. Open Mammouth.ai -> Settings -> Custom MCP Servers / Tools.\n"
+            "5. Add a new MCP Server:\n"
             "     • Name: Mammouth Powerhouse\n"
             "     • Server Type: SSE (or HTTP Streaming)\n"
-            "     • Endpoint URL: Paste the copied URL (e.g. https://your-node.ts.net/sse)\n"
-            "5. Save and start chatting! Mammouth AI can now execute tools, edit code, and query systems."
+            "     • Endpoint URL: Paste your copied URL\n"
+            "6. Save and start chatting! Mammouth AI will now use all active tools on your system."
         )
         ctk.CTkLabel(guide_group, text=guide_text, font=ctk.CTkFont(size=13), text_color="#CBD5E1", justify="left").pack(anchor="w", padx=15, pady=(0, 15))
+
+    def _on_settings_mode_changed(self, choice: str):
+        self.dash_mode_menu.set(choice)
 
     def _save_settings(self):
         try:
@@ -541,18 +659,23 @@ class MammouthControlCenter(ctk.CTk):
             port = 8000
 
         self.config_data["server"]["port"] = port
-        self.config_data["server"]["host"] = self.entry_host.get().strip() or "127.0.0.1"
-        self.config_data["server"]["auto_tailscale"] = self.var_tailscale.get()
+        self.config_data["server"]["host"] = self.opt_host.get().strip() or "127.0.0.1"
+        self.config_data["server"]["tunnel_mode"] = self.opt_tunnel_mode.get()
+        self.config_data["server"]["endpoint_path"] = self.opt_endpoint_path.get()
+        self.config_data["server"]["auto_tunnel"] = self.var_auto_tunnel.get()
+        self.config_data["server"]["cloudflare_custom_url"] = self.entry_cf_url.get().strip()
+        self.config_data["server"]["ngrok_custom_url"] = self.entry_ngrok_url.get().strip()
         self.config_data["server"]["custom_public_url"] = self.entry_custom_url.get().strip()
 
         save_config(self.config_data)
-        self.lbl_public_url.configure(text=self._get_current_public_url())
-        self.lbl_local_url.configure(text=f"http://127.0.0.1:{port}/sse")
-        self._log("Updated network settings in config.json.")
-        messagebox.showinfo("Saved", "Network settings saved successfully!")
+        self.dash_mode_menu.set(self.opt_tunnel_mode.get())
+        self.dash_path_menu.set(self.opt_endpoint_path.get())
+        self._refresh_all_endpoint_labels()
+        self._log("Updated network & endpoint settings in config.json.")
+        messagebox.showinfo("Saved", "Network and endpoint settings saved successfully!")
 
     # ---------------------------------------------------------
-    # SERVER RUNNER & LIFECYCLE
+    # SERVER & TUNNEL RUNNER LIFECYCLE
     # ---------------------------------------------------------
     def toggle_server(self):
         if self.server_process is None:
@@ -564,22 +687,57 @@ class MammouthControlCenter(ctk.CTk):
         cfg = load_config()
         port = cfg.get("server", {}).get("port", 8000)
         host = cfg.get("server", {}).get("host", "127.0.0.1")
-        auto_ts = cfg.get("server", {}).get("auto_tailscale", True)
-        ts_path = cfg.get("server", {}).get("tailscale_path", r"C:\Program Files\Tailscale\tailscale.exe")
+        mode = cfg.get("server", {}).get("tunnel_mode", "Tailscale Funnel")
+        auto_tunnel = cfg.get("server", {}).get("auto_tunnel", True)
 
-        # Auto-activate Tailscale Funnel if enabled
-        if auto_ts:
-            ts_bin = shutil.which("tailscale") or ts_path
-            if os.path.exists(ts_bin) or shutil.which("tailscale"):
-                self._log(f"Activating Tailscale Funnel on port {port}...")
-                try:
-                    subprocess.Popen([ts_bin, "funnel", "--bg", str(port)], creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-                except Exception as e:
-                    self._log(f"Tailscale Funnel warning: {e}")
+        # 1. Start Tunnel if required
+        if auto_tunnel:
+            if mode == "Tailscale Funnel":
+                ts_bin = shutil.which("tailscale") or cfg.get("server", {}).get("tailscale_path", r"C:\Program Files\Tailscale\tailscale.exe")
+                if os.path.exists(ts_bin) or shutil.which("tailscale"):
+                    self._log(f"Activating Tailscale Funnel on port {port}...")
+                    try:
+                        subprocess.Popen([ts_bin, "funnel", "--bg", str(port)], creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                    except Exception as e:
+                        self._log(f"Tailscale Funnel warning: {e}")
 
-        self._log(f"Launching FastMCP Server on http://{host}:{port}...")
-        
-        # Build command: use current python executable
+            elif mode == "Cloudflare Tunnel":
+                cf_bin = shutil.which("cloudflared") or cfg.get("server", {}).get("cloudflared_path", "cloudflared")
+                if shutil.which(cf_bin) or os.path.exists(cf_bin):
+                    self._log(f"Launching Cloudflare Quick Tunnel on port {port}...")
+                    try:
+                        self.tunnel_process = subprocess.Popen(
+                            [cf_bin, "tunnel", "--url", f"http://127.0.0.1:{port}"],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True,
+                            encoding="utf-8",
+                            errors="replace",
+                            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                        )
+                        self.tunnel_thread = threading.Thread(target=self._stream_tunnel_logs, daemon=True)
+                        self.tunnel_thread.start()
+                    except Exception as e:
+                        self._log(f"Cloudflare Tunnel start warning: {e}")
+                else:
+                    self._log("Notice: 'cloudflared' not found in PATH. Install cloudflared to use quick tunnels.")
+
+            elif mode == "ngrok":
+                ng_bin = shutil.which("ngrok") or cfg.get("server", {}).get("ngrok_path", "ngrok")
+                if shutil.which(ng_bin) or os.path.exists(ng_bin):
+                    self._log(f"Launching ngrok HTTP tunnel on port {port}...")
+                    try:
+                        self.tunnel_process = subprocess.Popen(
+                            [ng_bin, "http", str(port)],
+                            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                        )
+                    except Exception as e:
+                        self._log(f"ngrok start warning: {e}")
+                else:
+                    self._log("Notice: 'ngrok' not found in PATH.")
+
+        # 2. Launch FastMCP server
+        self._log(f"Launching FastMCP Server on http://{host}:{port} (Exposure: {mode})...")
         cmd = [sys.executable, str(BASE_DIR / "server.py"), "--host", host, "--port", str(port)]
         
         try:
@@ -603,13 +761,33 @@ class MammouthControlCenter(ctk.CTk):
             self.server_thread = threading.Thread(target=self._stream_server_logs, daemon=True)
             self.server_thread.start()
 
-            self.lbl_public_url.configure(text=self._get_current_public_url())
-            self.lbl_local_url.configure(text=f"http://127.0.0.1:{port}/sse")
-            self._log("FastMCP Server started successfully.")
+            self._refresh_all_endpoint_labels()
+            self._log("FastMCP Server process started.")
 
         except Exception as e:
             self._log(f"Failed to start server: {e}")
             messagebox.showerror("Server Launch Error", str(e))
+
+    def _stream_tunnel_logs(self):
+        """Read tunnel stdout to detect quick tunnel URLs (e.g. trycloudflare.com)."""
+        if not self.tunnel_process or not self.tunnel_process.stdout:
+            return
+        cf_pattern = re.compile(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com")
+        for line in iter(self.tunnel_process.stdout.readline, ""):
+            if line:
+                match = cf_pattern.search(line)
+                if match:
+                    self.dynamic_tunnel_url = match.group(0)
+                    self.after(0, self._on_dynamic_tunnel_discovered)
+        if self.tunnel_process:
+            try:
+                self.tunnel_process.stdout.close()
+            except Exception:
+                pass
+
+    def _on_dynamic_tunnel_discovered(self):
+        self._log(f"Cloudflare Tunnel online: {self.dynamic_tunnel_url}")
+        self._refresh_all_endpoint_labels()
 
     def _stream_server_logs(self):
         if not self.server_process or not self.server_process.stdout:
@@ -635,7 +813,7 @@ class MammouthControlCenter(ctk.CTk):
             self._log("Server process terminated.")
 
     def _stop_server(self):
-        self._log("Stopping FastMCP Server...")
+        self._log("Stopping FastMCP Server & Tunnels...")
         self.log_stream_active = False
 
         if self.server_process:
@@ -647,6 +825,16 @@ class MammouthControlCenter(ctk.CTk):
             except Exception as e:
                 self._log(f"Error terminating server: {e}")
             self.server_process = None
+
+        if self.tunnel_process:
+            try:
+                if os.name == 'nt':
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.tunnel_process.pid)], capture_output=True)
+                else:
+                    self.tunnel_process.terminate()
+            except Exception:
+                pass
+            self.tunnel_process = None
 
         self.status_badge.configure(text="● Server Stopped", text_color="#EF4444")
         self.btn_toggle_server.configure(text="▶ Start Server", fg_color="#10B981", hover_color="#059669")

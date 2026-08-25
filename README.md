@@ -15,8 +15,14 @@ Mammouth Control Center gives your Mammouth AI assistants direct, secure access 
 
 - 🖥️ **Modern Windows 11 Desktop UI**: Beautiful dark-mode dashboard with real-time status indicators, 1-click endpoint copy, and live console logs.
 - ⚡ **Modular Skill Toggles**: Granularly enable or disable individual toolsets directly from the GUI (Memory, Kanban, File Ops, PowerShell, SSH, System Monitor, Web).
+- 🌐 **Flexible Network & Tunnel Providers**:
+  - **Tailscale Funnel**: Zero-config auto-detection and public HTTPS domain (`https://<node>.ts.net/sse`).
+  - **Cloudflare Tunnel**: Quick free tunnels via `trycloudflare.com` or custom Cloudflare domains.
+  - **ngrok Tunnel**: Instant public HTTP tunnel support.
+  - **Direct IP / LAN**: Connect directly via Localhost (`127.0.0.1`) or local network LAN IP (`192.168.x.x`).
+  - **Custom Domain**: Use your own reverse proxy (Nginx, Caddy, Traefik).
+- 🔀 **Custom Route Endpoints**: Select between `/sse`, `/mcp`, `/messages`, or `/` root paths.
 - 🔑 **Integrated SSH Host Manager**: Add, edit, and test remote Linux VPS/servers for PuTTY, Plink commands, and SCP file synchronization without touching JSON files.
-- 🌐 **Automated Tailscale Funnel & Remote SSE**: Instant 1-click tunneling that securely exposes your MCP SSE endpoint (`https://<node>.ts.net/sse`) directly to Mammouth.ai in the cloud.
 - 📦 **Standalone EXE Packaging**: 1-click build script (`build_exe.bat`) to package the entire Control Center into an `.exe` for any Windows machine.
 
 ---
@@ -40,7 +46,7 @@ Mammouth Control Center gives your Mammouth AI assistants direct, secure access 
 ### Prerequisites
 - Windows 10 or 11
 - Python 3.10+ (or [uv package manager](https://docs.astral.sh/uv/) — recommended)
-- [Tailscale](https://tailscale.com/) (optional, for cloud access via Tailscale Funnel)
+- Optional tunnel CLI tools: [Tailscale](https://tailscale.com/), [cloudflared](https://github.com/cloudflare/cloudflared), or [ngrok](https://ngrok.com/).
 
 ---
 
@@ -67,8 +73,8 @@ Mammouth Control Center gives your Mammouth AI assistants direct, secure access 
 
 ## 🔗 Connecting to Mammouth.ai
 
-1. Open **Mammouth Control Center** and click **`▶ Start Server`**.
-2. Click the **`📋 Copy`** button next to the **Public SSE Endpoint** (e.g. `https://your-machine.tailnet.ts.net/sse`).
+1. Open **Mammouth Control Center**, choose your preferred **Exposure Mode** (e.g. Tailscale, Cloudflare, Direct IP, etc.) and click **`▶ Start Server`**.
+2. Click the **`📋 Copy`** button next to the calculated **Endpoint URL**.
 3. In **[Mammouth.ai](https://mammouth.ai)**:
    - Navigate to **Settings** → **Custom MCP Servers** (or Tools).
    - Click **Add MCP Server**:
@@ -85,8 +91,8 @@ Mammouth Control Center gives your Mammouth AI assistants direct, secure access 
 > [!WARNING]
 > This MCP server provides tools for executing local PowerShell commands, modifying files, and connecting to SSH servers.
 > 
-> - **Do not share your Public Funnel URL publicly.**
-> - Use **Tailscale** for end-to-end encrypted personal access.
+> - **Do not share your Public Funnel/Tunnel URL publicly.**
+> - Use **Tailscale** or private tunnels for end-to-end encrypted personal access.
 > - In the **Skills & Modules** tab, you can disable powerful modules (such as PowerShell or SSH) if they are not needed for a specific workflow.
 
 ---
@@ -104,7 +110,7 @@ mammouth-control-center/
 │   ├── putty_ssh.py         # PuTTY / Plink / PSCP remote tools
 │   ├── system_monitor.py    # Hardware & Windows diagnostics
 │   └── web_tools.py         # Web scraping & status checks
-├── config.py                # Configuration manager
+├── config.py                # Configuration manager & LAN IP detector
 ├── config.example.json      # Template configuration
 ├── hosts.example.json       # Template SSH hosts configuration
 ├── server.py                # FastMCP server with dynamic tool loader
