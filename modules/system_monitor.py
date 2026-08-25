@@ -69,19 +69,21 @@ def system_get_processes(limit: int = 20, sort_by: str = "memory") -> List[Dict[
 def system_get_gpu_info() -> Dict[str, Any]:
     """Get graphics controller / GPU details."""
     try:
-        cmd = "Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, VideoProcessor, AdapterRAM | ConvertTo-Json"
+        cmd = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Select-Object Name, DriverVersion, VideoProcessor, AdapterRAM | ConvertTo-Json"
         proc = subprocess.run(
             ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         )
-        if proc.returncode == 0 and proc.stdout.strip():
+        if proc.returncode == 0 and proc.stdout and proc.stdout.strip():
             import json
             return {"gpu_devices": json.loads(proc.stdout)}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"GPU detection failed: {type(e).__name__}"}
     return {"gpu": "Unknown / Not detected"}
 
 def system_get_event_logs(log_name: str = "System", entry_type: str = "Error", count: int = 10) -> List[Dict[str, Any]]:
@@ -106,18 +108,20 @@ def system_get_event_logs(log_name: str = "System", entry_type: str = "Error", c
     safe_type = entry_type.strip().capitalize()
     
     try:
-        ps_cmd = f"Get-EventLog -LogName '{safe_log}' -EntryType '{safe_type}' -Newest {safe_count} | Select-Object TimeGenerated, Source, EventID, Message | ConvertTo-Json"
+        ps_cmd = f"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-EventLog -LogName '{safe_log}' -EntryType '{safe_type}' -Newest {safe_count} -ErrorAction SilentlyContinue | Select-Object TimeGenerated, Source, EventID, Message | ConvertTo-Json"
         proc = subprocess.run(
             ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=15,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         )
-        if proc.returncode == 0 and proc.stdout.strip():
+        if proc.returncode == 0 and proc.stdout and proc.stdout.strip():
             import json
             data = json.loads(proc.stdout)
             return data if isinstance(data, list) else [data]
         return [{"message": "No event logs found matching criteria."}]
     except Exception as e:
-        return [{"error": str(e)}]
+        return [{"error": f"Event log query failed: {type(e).__name__}"}]
