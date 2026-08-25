@@ -23,11 +23,11 @@ if os.name == 'nt':
     except Exception:
         pass
 
-# Add project directory to sys.path
-BASE_DIR = Path(__file__).parent
-sys.path.insert(0, str(BASE_DIR))
+from config import get_app_dir, load_config, save_config, get_lan_ip, generate_secure_token, CONFIG_FILE
 
-from config import load_config, save_config, get_lan_ip, generate_secure_token, CONFIG_FILE
+# Add project directory to sys.path
+BASE_DIR = get_app_dir()
+sys.path.insert(0, str(BASE_DIR))
 
 # Appearance setup
 ctk.set_appearance_mode("Dark")
@@ -38,12 +38,25 @@ HOSTS_FILE = BASE_DIR / "hosts.json"
 
 def get_tailscale_public_domain(tailscale_path: str = r"C:\Program Files\Tailscale\tailscale.exe") -> Optional[str]:
     """Attempt to detect the machine's Tailscale domain name."""
-    ts_bin = shutil.which("tailscale") or tailscale_path
-    if not os.path.exists(ts_bin) and not shutil.which("tailscale"):
+    candidates = [
+        shutil.which("tailscale"),
+        tailscale_path,
+        r"C:\Program Files\Tailscale\tailscale.exe",
+        os.path.expandvars(r"%ProgramFiles%\Tailscale\tailscale.exe"),
+        os.path.expandvars(r"%LocalAppData%\Tailscale\tailscale.exe"),
+    ]
+    ts_bin = next((c for c in candidates if c and os.path.exists(c)), None)
+    if not ts_bin:
         return None
     try:
-        proc = subprocess.run([ts_bin, "status", "--json"], capture_output=True, text=True, timeout=3)
-        if proc.returncode == 0:
+        proc = subprocess.run(
+            [ts_bin, "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=4,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
             data = json.loads(proc.stdout)
             self_node = data.get("Self", {})
             dns_name = self_node.get("DNSName", "").rstrip(".")
@@ -914,7 +927,10 @@ class MammouthControlCenter(ctk.CTk):
         # 2. Launch FastMCP server
         auth_str = "Token-Protected" if cfg.get("server", {}).get("enforce_auth", True) else "Open"
         self._log(f"Launching FastMCP Server on http://{host}:{port} ({auth_str}, Exposure: {mode})...")
-        cmd = [sys.executable, str(BASE_DIR / "server.py"), "--host", host, "--port", str(port)]
+        if getattr(sys, 'frozen', False):
+            cmd = [sys.executable, "--server", "--host", host, "--port", str(port)]
+        else:
+            cmd = [sys.executable, str(BASE_DIR / "server.py"), "--host", host, "--port", str(port)]
         
         try:
             self.server_process = subprocess.Popen(
@@ -1049,4 +1065,20 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if "--server" in sys.argv:
+        import argparse
+        import uvicorn
+        import server
+        
+        parser = argparse.ArgumentParser(description="Mammouth Defroster Server")
+        parser.add_argument("--server", action="store_true")
+        parser.add_argument("--host", default=None)
+        parser.add_argument("--port", type=int, default=None)
+        args, _ = parser.parse_known_args()
+        
+        cfg_srv = load_config().get("server", {})
+        srv_host = args.host or cfg_srv.get("host", "127.0.0.1")
+        srv_port = args.port or int(cfg_srv.get("port", 8000))
+        uvicorn.run(server.app, host=srv_host, port=srv_port, log_level="info")
+    else:
+        main()

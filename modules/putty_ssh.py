@@ -9,7 +9,9 @@ import winreg
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
-HOSTS_FILE = Path(__file__).parent.parent / "hosts.json"
+from config import get_app_dir
+
+HOSTS_FILE = get_app_dir() / "hosts.json"
 
 # ==========================================
 # WINDOWS DPAPI PASSWORD ENCRYPTION

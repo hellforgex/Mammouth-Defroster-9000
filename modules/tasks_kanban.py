@@ -3,7 +3,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-DB_PATH = Path(__file__).parent.parent / "tasks.db"
+from config import get_app_dir
+
+DB_PATH = get_app_dir() / "tasks.db"
 
 def _get_db():
     conn = sqlite3.connect(DB_PATH)

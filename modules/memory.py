@@ -3,7 +3,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-DB_PATH = Path(__file__).parent.parent / "memory.db"
+from config import get_app_dir
+
+DB_PATH = get_app_dir() / "memory.db"
 
 def _get_db():
     conn = sqlite3.connect(DB_PATH)

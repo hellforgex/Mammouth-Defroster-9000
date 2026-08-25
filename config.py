@@ -1,3 +1,4 @@
+import sys
 import json
 import copy
 import socket
@@ -5,8 +6,15 @@ import secrets
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
-CONFIG_FILE = Path(__file__).parent / "config.json"
-CONFIG_EXAMPLE_FILE = Path(__file__).parent / "config.example.json"
+def get_app_dir() -> Path:
+    """Return root directory where config, DBs, and runtime files reside (handles PyInstaller)."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent
+
+APP_DIR = get_app_dir()
+CONFIG_FILE = APP_DIR / "config.json"
+CONFIG_EXAMPLE_FILE = APP_DIR / "config.example.json"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "server": {
@@ -23,7 +31,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "http://localhost",
             "http://127.0.0.1"
         ],
-        "workspace_root": str(Path(__file__).parent / "workspace"),
+        "workspace_root": str(APP_DIR / "workspace"),
         "enforce_workspace_sandbox": True,  # Prevent path traversal outside workspace
         "tailscale_path": r"C:\Program Files\Tailscale\tailscale.exe",
         "cloudflared_path": "cloudflared",

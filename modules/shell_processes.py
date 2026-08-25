@@ -5,7 +5,9 @@ import uuid
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
-LOGS_DIR = Path(__file__).parent.parent / "process_logs"
+from config import get_app_dir
+
+LOGS_DIR = get_app_dir() / "process_logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
 # In-memory registry of background processes
