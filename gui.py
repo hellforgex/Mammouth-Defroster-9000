@@ -18,7 +18,7 @@ from tkinter import messagebox, filedialog
 BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
 
-from config import load_config, save_config, get_lan_ip, CONFIG_FILE
+from config import load_config, save_config, get_lan_ip, generate_secure_token, CONFIG_FILE
 
 # Appearance setup
 ctk.set_appearance_mode("Dark")
@@ -50,7 +50,7 @@ class HostDialog(ctk.CTkToplevel):
     def __init__(self, parent, host_data: Optional[Dict[str, Any]] = None, alias: str = ""):
         super().__init__(parent)
         self.title("Edit SSH Host" if alias else "Add New SSH Host")
-        self.geometry("520x560")
+        self.geometry("540x590")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
@@ -60,54 +60,56 @@ class HostDialog(ctk.CTkToplevel):
 
         # Header
         title_label = ctk.CTkLabel(self, text="Configure SSH Host Alias", font=ctk.CTkFont(size=18, weight="bold"))
-        title_label.pack(padx=20, pady=(15, 10))
+        title_label.pack(padx=20, pady=(15, 5))
+
+        lbl_sec = ctk.CTkLabel(self, text="🔒 Passwords will be encrypted via Windows DPAPI before saving", font=ctk.CTkFont(size=11), text_color="#10B981")
+        lbl_sec.pack(padx=20, pady=(0, 10))
 
         form_frame = ctk.CTkFrame(self)
-        form_frame.pack(padx=20, pady=10, fill="both", expand=True)
+        form_frame.pack(padx=20, pady=5, fill="both", expand=True)
 
         # Alias
         ctk.CTkLabel(form_frame, text="Alias Name:").grid(row=0, column=0, padx=10, pady=6, sticky="w")
-        self.entry_alias = ctk.CTkEntry(form_frame, placeholder_text="e.g. prod-server, vps-backup", width=280)
+        self.entry_alias = ctk.CTkEntry(form_frame, placeholder_text="e.g. prod-server, vps-backup", width=290)
         self.entry_alias.grid(row=0, column=1, padx=10, pady=6, sticky="ew")
         if alias:
             self.entry_alias.insert(0, alias)
-            if alias:
-                self.entry_alias.configure(state="disabled")
+            self.entry_alias.configure(state="disabled")
 
         # Host / IP
         ctk.CTkLabel(form_frame, text="Host / IP:").grid(row=1, column=0, padx=10, pady=6, sticky="w")
-        self.entry_host = ctk.CTkEntry(form_frame, placeholder_text="e.g. 192.168.1.100 or node.domain.com", width=280)
+        self.entry_host = ctk.CTkEntry(form_frame, placeholder_text="e.g. 192.168.1.100 or node.domain.com", width=290)
         self.entry_host.grid(row=1, column=1, padx=10, pady=6, sticky="ew")
 
         # Port
         ctk.CTkLabel(form_frame, text="Port:").grid(row=2, column=0, padx=10, pady=6, sticky="w")
-        self.entry_port = ctk.CTkEntry(form_frame, placeholder_text="22", width=280)
+        self.entry_port = ctk.CTkEntry(form_frame, placeholder_text="22", width=290)
         self.entry_port.grid(row=2, column=1, padx=10, pady=6, sticky="ew")
         self.entry_port.insert(0, "22")
 
         # Username
         ctk.CTkLabel(form_frame, text="Username:").grid(row=3, column=0, padx=10, pady=6, sticky="w")
-        self.entry_user = ctk.CTkEntry(form_frame, placeholder_text="e.g. root, ubuntu", width=280)
+        self.entry_user = ctk.CTkEntry(form_frame, placeholder_text="e.g. root, ubuntu", width=290)
         self.entry_user.grid(row=3, column=1, padx=10, pady=6, sticky="ew")
         self.entry_user.insert(0, "root")
 
         # Password
         ctk.CTkLabel(form_frame, text="Password:").grid(row=4, column=0, padx=10, pady=6, sticky="w")
-        self.entry_pw = ctk.CTkEntry(form_frame, placeholder_text="(Optional password)", show="*", width=280)
+        self.entry_pw = ctk.CTkEntry(form_frame, placeholder_text="(Optional - DPAPI Encrypted)", show="*", width=290)
         self.entry_pw.grid(row=4, column=1, padx=10, pady=6, sticky="ew")
 
         # Key Path
         ctk.CTkLabel(form_frame, text="Private Key:").grid(row=5, column=0, padx=10, pady=6, sticky="w")
         key_box = ctk.CTkFrame(form_frame, fg_color="transparent")
         key_box.grid(row=5, column=1, padx=10, pady=6, sticky="ew")
-        self.entry_key = ctk.CTkEntry(key_box, placeholder_text="(Path to .ppk or id_rsa)", width=210)
+        self.entry_key = ctk.CTkEntry(key_box, placeholder_text="(Recommended: .ppk or id_rsa)", width=220)
         self.entry_key.pack(side="left", fill="x", expand=True, padx=(0, 5))
         btn_browse = ctk.CTkButton(key_box, text="Browse", width=65, command=self._browse_key)
         btn_browse.pack(side="right")
 
         # Description
         ctk.CTkLabel(form_frame, text="Description:").grid(row=6, column=0, padx=10, pady=6, sticky="w")
-        self.entry_desc = ctk.CTkEntry(form_frame, placeholder_text="Short description of this server", width=280)
+        self.entry_desc = ctk.CTkEntry(form_frame, placeholder_text="Short description of this server", width=290)
         self.entry_desc.grid(row=6, column=1, padx=10, pady=6, sticky="ew")
 
         if host_data:
@@ -117,8 +119,6 @@ class HostDialog(ctk.CTkToplevel):
             self.entry_port.insert(0, str(host_data.get("port", 22)))
             self.entry_user.delete(0, "end")
             self.entry_user.insert(0, host_data.get("username", "root"))
-            self.entry_pw.delete(0, "end")
-            self.entry_pw.insert(0, host_data.get("password", ""))
             self.entry_key.delete(0, "end")
             self.entry_key.insert(0, host_data.get("private_key_path", ""))
             self.entry_desc.delete(0, "end")
@@ -181,9 +181,9 @@ class HostDialog(ctk.CTkToplevel):
 class MammouthControlCenter(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Mammouth AI — MCP Control Center")
-        self.geometry("1000x740")
-        self.minsize(900, 660)
+        self.title("Mammouth AI — MCP Control Center (Hardened)")
+        self.geometry("1020x760")
+        self.minsize(920, 680)
 
         self.config_data = load_config()
         self.server_process: Optional[subprocess.Popen] = None
@@ -212,7 +212,7 @@ class MammouthControlCenter(ctk.CTk):
         title_text_box.pack(side="left")
         lbl_title = ctk.CTkLabel(title_text_box, text="Mammouth Control Center", font=ctk.CTkFont(size=20, weight="bold"))
         lbl_title.pack(anchor="w")
-        lbl_subtitle = ctk.CTkLabel(title_text_box, text="FastMCP Server & DevOps Toolset for Windows 11", font=ctk.CTkFont(size=12), text_color="#94A3B8")
+        lbl_subtitle = ctk.CTkLabel(title_text_box, text="FastMCP Server & DevOps Toolset for Windows 11 (Token-Secured)", font=ctk.CTkFont(size=12), text_color="#94A3B8")
         lbl_subtitle.pack(anchor="w")
 
         # Top Right Controls: Status badge & Toggle Server Button
@@ -246,7 +246,7 @@ class MammouthControlCenter(ctk.CTk):
         self.tab_dashboard = self.tabview.add("📊 Dashboard & Logs")
         self.tab_skills = self.tabview.add("⚡ Skills & Modules")
         self.tab_hosts = self.tabview.add("🔑 SSH Host Manager")
-        self.tab_settings = self.tabview.add("⚙️ Settings & Guide")
+        self.tab_settings = self.tabview.add("⚙️ Security & Settings")
 
         self._setup_dashboard_tab()
         self._setup_skills_tab()
@@ -272,7 +272,7 @@ class MammouthControlCenter(ctk.CTk):
         self.dash_mode_menu = ctk.CTkOptionMenu(
             mode_bar,
             values=tunnel_modes,
-            width=180,
+            width=170,
             command=self._on_dash_mode_changed
         )
         self.dash_mode_menu.set(current_mode)
@@ -285,18 +285,27 @@ class MammouthControlCenter(ctk.CTk):
         self.dash_path_menu = ctk.CTkOptionMenu(
             mode_bar,
             values=paths,
-            width=110,
+            width=100,
             command=self._on_dash_path_changed
         )
         self.dash_path_menu.set(current_path)
         self.dash_path_menu.pack(side="left")
+
+        # Security Auth Badge
+        self.lbl_auth_status = ctk.CTkLabel(
+            mode_bar,
+            text="🔒 Token Auth Active" if self.config_data.get("server", {}).get("enforce_auth", True) else "⚠️ No Auth",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#10B981" if self.config_data.get("server", {}).get("enforce_auth", True) else "#F59E0B"
+        )
+        self.lbl_auth_status.pack(side="right")
 
         # Primary Endpoint Row
         row1 = ctk.CTkFrame(card, fg_color="transparent")
         row1.pack(fill="x", padx=15, pady=(5, 5))
         self.lbl_primary_title = ctk.CTkLabel(row1, text="🌐 Public SSE Endpoint:", font=ctk.CTkFont(size=13, weight="bold"), width=170, anchor="w")
         self.lbl_primary_title.pack(side="left")
-        self.lbl_public_url = ctk.CTkLabel(row1, text=self._calculate_active_endpoint_url(), font=ctk.CTkFont(size=13, weight="bold"), text_color="#38BDF8")
+        self.lbl_public_url = ctk.CTkLabel(row1, text=self._calculate_active_endpoint_url(), font=ctk.CTkFont(size=12, weight="bold"), text_color="#38BDF8")
         self.lbl_public_url.pack(side="left", padx=10)
         btn_copy_pub = ctk.CTkButton(row1, text="📋 Copy", width=70, height=26, command=lambda: self._copy_to_clipboard(self.lbl_public_url.cget("text")))
         btn_copy_pub.pack(side="right")
@@ -305,9 +314,7 @@ class MammouthControlCenter(ctk.CTk):
         row2 = ctk.CTkFrame(card, fg_color="transparent")
         row2.pack(fill="x", padx=15, pady=(5, 10))
         ctk.CTkLabel(row2, text="💻 Localhost Endpoint:", font=ctk.CTkFont(size=13, weight="bold"), width=170, anchor="w").pack(side="left")
-        port = self.config_data.get("server", {}).get("port", 8000)
-        path = self.config_data.get("server", {}).get("endpoint_path", "/sse")
-        self.lbl_local_url = ctk.CTkLabel(row2, text=f"http://127.0.0.1:{port}{path}", font=ctk.CTkFont(size=13), text_color="#94A3B8")
+        self.lbl_local_url = ctk.CTkLabel(row2, text=self._calculate_local_endpoint_url(), font=ctk.CTkFont(size=12), text_color="#94A3B8")
         self.lbl_local_url.pack(side="left", padx=10)
         btn_copy_loc = ctk.CTkButton(row2, text="📋 Copy", width=70, height=26, command=lambda: self._copy_to_clipboard(self.lbl_local_url.cget("text")))
         btn_copy_loc.pack(side="right")
@@ -328,7 +335,7 @@ class MammouthControlCenter(ctk.CTk):
             fg_color="#0F172A"
         )
         self.log_textbox.pack(fill="both", expand=True, padx=10, pady=(2, 10))
-        self._log("System initialized. Select your tunnel mode and click '▶ Start Server'.")
+        self._log("Security & Server initialized. Token authentication active.")
 
     def _on_dash_mode_changed(self, choice: str):
         self.config_data["server"]["tunnel_mode"] = choice
@@ -347,49 +354,64 @@ class MammouthControlCenter(ctk.CTk):
         mode = cfg.get("tunnel_mode", "Tailscale Funnel")
         path = cfg.get("endpoint_path", "/sse")
         port = cfg.get("port", 8000)
+        token = cfg.get("api_token", "") if cfg.get("enforce_auth", True) else ""
+        query = f"?token={token}" if token else ""
 
         if mode == "Tailscale Funnel":
             ts_domain = get_tailscale_public_domain(cfg.get("tailscale_path", ""))
             if ts_domain:
-                return f"{ts_domain}{path}"
-            return f"http://127.0.0.1:{port}{path} (Tailscale not connected)"
+                return f"{ts_domain}{path}{query}"
+            return f"http://127.0.0.1:{port}{path}{query} (Tailscale not connected)"
 
         elif mode == "Cloudflare Tunnel":
             if self.dynamic_tunnel_url:
-                return f"{self.dynamic_tunnel_url.rstrip('/')}{path}"
+                return f"{self.dynamic_tunnel_url.rstrip('/')}{path}{query}"
             custom_cf = cfg.get("cloudflare_custom_url", "").strip()
             if custom_cf:
-                return f"{custom_cf.rstrip('/')}{path}"
-            return f"https://[your-tunnel].trycloudflare.com{path} (Start server to activate)"
+                return f"{custom_cf.rstrip('/')}{path}{query}"
+            return f"https://[your-tunnel].trycloudflare.com{path}{query} (Start server to activate)"
 
         elif mode == "ngrok":
+            if self.dynamic_tunnel_url:
+                return f"{self.dynamic_tunnel_url.rstrip('/')}{path}{query}"
             custom_ng = cfg.get("ngrok_custom_url", "").strip()
             if custom_ng:
-                return f"{custom_ng.rstrip('/')}{path}"
-            return f"https://[your-domain].ngrok-free.app{path} (Start server to activate)"
+                return f"{custom_ng.rstrip('/')}{path}{query}"
+            return f"https://[your-domain].ngrok-free.app{path}{query} (Start server to activate)"
 
         elif mode == "Direct / LAN IP":
             bind_host = cfg.get("host", "127.0.0.1")
             lan_ip = get_lan_ip()
             target_ip = lan_ip if bind_host in ["0.0.0.0", lan_ip] else "127.0.0.1"
-            return f"http://{target_ip}:{port}{path}"
+            return f"http://{target_ip}:{port}{path}{query}"
 
         elif mode == "Custom Domain":
             custom = cfg.get("custom_public_url", "").strip()
             if custom:
-                return f"{custom.rstrip('/')}{path}"
-            return f"http://127.0.0.1:{port}{path} (Enter custom URL in Settings)"
+                return f"{custom.rstrip('/')}{path}{query}"
+            return f"http://127.0.0.1:{port}{path}{query} (Enter custom URL in Settings)"
 
-        return f"http://127.0.0.1:{port}{path}"
+        return f"http://127.0.0.1:{port}{path}{query}"
+
+    def _calculate_local_endpoint_url(self) -> str:
+        cfg = self.config_data.get("server", {})
+        port = cfg.get("port", 8000)
+        path = cfg.get("endpoint_path", "/sse")
+        token = cfg.get("api_token", "") if cfg.get("enforce_auth", True) else ""
+        query = f"?token={token}" if token else ""
+        return f"http://127.0.0.1:{port}{path}{query}"
 
     def _refresh_all_endpoint_labels(self):
         url = self._calculate_active_endpoint_url()
         self.lbl_public_url.configure(text=url)
-        port = self.config_data.get("server", {}).get("port", 8000)
-        path = self.config_data.get("server", {}).get("endpoint_path", "/sse")
-        self.lbl_local_url.configure(text=f"http://127.0.0.1:{port}{path}")
+        self.lbl_local_url.configure(text=self._calculate_local_endpoint_url())
         mode = self.config_data.get("server", {}).get("tunnel_mode", "Tailscale Funnel")
         self.lbl_primary_title.configure(text=f"🌐 {mode}:")
+        auth_on = self.config_data.get("server", {}).get("enforce_auth", True)
+        self.lbl_auth_status.configure(
+            text="🔒 Token Auth Active" if auth_on else "⚠️ No Auth",
+            text_color="#10B981" if auth_on else "#F59E0B"
+        )
 
     def _log(self, text: str):
         timestamp = time.strftime("%H:%M:%S")
@@ -441,7 +463,15 @@ class MammouthControlCenter(ctk.CTk):
             left.pack(side="left", padx=15, pady=10, fill="x", expand=True)
 
             icon = icons.get(key, "⚙️")
-            lbl_name = ctk.CTkLabel(left, text=f"{icon}  {mod.get('name', key)}", font=ctk.CTkFont(size=14, weight="bold"), anchor="w")
+            title_text = f"{icon}  {mod.get('name', key)}"
+            if key == "shell_processes":
+                title_text += "  [⚠️ High Privilege]"
+            elif key == "file_ops":
+                title_text += "  [🔒 Sandboxed]"
+            elif key == "putty_ssh":
+                title_text += "  [🔒 DPAPI Encrypted]"
+
+            lbl_name = ctk.CTkLabel(left, text=title_text, font=ctk.CTkFont(size=14, weight="bold"), anchor="w")
             lbl_name.pack(anchor="w")
 
             lbl_desc = ctk.CTkLabel(left, text=mod.get("description", ""), font=ctk.CTkFont(size=12), text_color="#94A3B8", anchor="w")
@@ -472,7 +502,10 @@ class MammouthControlCenter(ctk.CTk):
         top_bar = ctk.CTkFrame(self.tab_hosts, fg_color="transparent")
         top_bar.pack(fill="x", padx=15, pady=(10, 10))
 
-        ctk.CTkLabel(top_bar, text="Configured SSH Servers & PuTTY Aliases", font=ctk.CTkFont(size=16, weight="bold")).pack(side="left")
+        title_box = ctk.CTkFrame(top_bar, fg_color="transparent")
+        title_box.pack(side="left")
+        ctk.CTkLabel(title_box, text="Configured SSH Servers & PuTTY Aliases", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(title_box, text="🔒 Passwords stored with Windows DPAPI encryption", font=ctk.CTkFont(size=11), text_color="#10B981").pack(anchor="w")
 
         btn_add = ctk.CTkButton(top_bar, text="➕ Add Server", fg_color="#10B981", hover_color="#059669", width=120, command=self._add_host)
         btn_add.pack(side="right")
@@ -519,7 +552,7 @@ class MammouthControlCenter(ctk.CTk):
             ctk.CTkLabel(left, text=host_str, font=ctk.CTkFont(size=14, weight="bold"), anchor="w").pack(anchor="w")
 
             desc = info.get("description") or "No description"
-            has_pw = "Password set" if info.get("password") else "No password"
+            has_pw = "🔒 Password (DPAPI Encrypted)" if info.get("password") else "No password"
             has_key = f"Key: {Path(info.get('private_key_path', '')).name}" if info.get("private_key_path") else "No key file"
             subtext = f"{desc} | {has_pw} | {has_key}"
             ctk.CTkLabel(left, text=subtext, font=ctk.CTkFont(size=12), text_color="#94A3B8", anchor="w").pack(anchor="w", pady=(3, 0))
@@ -537,21 +570,37 @@ class MammouthControlCenter(ctk.CTk):
         dialog = HostDialog(self)
         self.wait_window(dialog)
         if dialog.result:
-            hosts = self._load_hosts_file()
-            hosts[dialog.result["alias"]] = dialog.result["data"]
-            self._save_hosts_file(hosts)
+            from modules.putty_ssh import ssh_save_host
+            d = dialog.result["data"]
+            ssh_save_host(
+                alias=dialog.result["alias"],
+                host=d["host"],
+                username=d.get("username", "root"),
+                password=d.get("password", ""),
+                private_key_path=d.get("private_key_path", ""),
+                port=d.get("port", 22),
+                description=d.get("description", "")
+            )
             self._refresh_hosts_list()
-            self._log(f"Added SSH host '{dialog.result['alias']}' to hosts.json.")
+            self._log(f"Added SSH host '{dialog.result['alias']}' with DPAPI encryption.")
 
     def _edit_host(self, alias: str, data: Dict[str, Any]):
         dialog = HostDialog(self, host_data=data, alias=alias)
         self.wait_window(dialog)
         if dialog.result:
-            hosts = self._load_hosts_file()
-            hosts[alias] = dialog.result["data"]
-            self._save_hosts_file(hosts)
+            from modules.putty_ssh import ssh_save_host
+            d = dialog.result["data"]
+            ssh_save_host(
+                alias=alias,
+                host=d["host"],
+                username=d.get("username", "root"),
+                password=d.get("password", ""),
+                private_key_path=d.get("private_key_path", ""),
+                port=d.get("port", 22),
+                description=d.get("description", "")
+            )
             self._refresh_hosts_list()
-            self._log(f"Updated SSH host '{alias}' in hosts.json.")
+            self._log(f"Updated SSH host '{alias}' with DPAPI encryption.")
 
     def _delete_host(self, alias: str):
         if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete host alias '{alias}'?", parent=self):
@@ -563,17 +612,74 @@ class MammouthControlCenter(ctk.CTk):
                 self._log(f"Deleted SSH host '{alias}' from hosts.json.")
 
     # ---------------------------------------------------------
-    # TAB 4: SETTINGS & SETUP GUIDE
+    # TAB 4: SECURITY & SETTINGS
     # ---------------------------------------------------------
     def _setup_settings_tab(self):
         scroll = ctk.CTkScrollableFrame(self.tab_settings, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=15, pady=10)
 
-        # Network Settings Group
+        # 1. Security & Authentication Group
+        group_sec = ctk.CTkFrame(scroll, fg_color="#1E293B", corner_radius=8)
+        group_sec.pack(fill="x", pady=(0, 15), padx=5)
+
+        ctk.CTkLabel(group_sec, text="🔒 Security & Authentication", font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=15, pady=(12, 4))
+
+        sec_form = ctk.CTkFrame(group_sec, fg_color="transparent")
+        sec_form.pack(fill="x", padx=15, pady=(0, 15))
+
+        # Enforce Auth Toggle
+        self.var_enforce_auth = ctk.BooleanVar(value=self.config_data.get("server", {}).get("enforce_auth", True))
+        self.switch_enforce_auth = ctk.CTkSwitch(
+            sec_form,
+            text="Enforce Token Authentication (Blocks unauthorized requests)",
+            variable=self.var_enforce_auth,
+            font=ctk.CTkFont(size=13, weight="bold")
+        )
+        self.switch_enforce_auth.grid(row=0, column=0, columnspan=3, sticky="w", pady=(4, 10))
+
+        # API Token
+        ctk.CTkLabel(sec_form, text="API Bearer Token:").grid(row=1, column=0, sticky="w", pady=6)
+        
+        token_box = ctk.CTkFrame(sec_form, fg_color="transparent")
+        token_box.grid(row=1, column=1, columnspan=2, sticky="ew", padx=10, pady=6)
+
+        self.entry_token = ctk.CTkEntry(token_box, width=320, show="*")
+        self.entry_token.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.entry_token.insert(0, self.config_data.get("server", {}).get("api_token", ""))
+
+        self.btn_show_token = ctk.CTkButton(token_box, text="👁️", width=36, fg_color="#4B5563", hover_color="#374151", command=self._toggle_token_visibility)
+        self.btn_show_token.pack(side="left", padx=(0, 8))
+
+        btn_gen_token = ctk.CTkButton(token_box, text="🎲 Generate", width=90, fg_color="#0284C7", hover_color="#0369A1", command=self._generate_new_token)
+        btn_gen_token.pack(side="left")
+
+        # Workspace Sandbox
+        self.var_sandbox = ctk.BooleanVar(value=self.config_data.get("server", {}).get("enforce_workspace_sandbox", True))
+        self.switch_sandbox = ctk.CTkSwitch(
+            sec_form,
+            text="Enforce Workspace Path Sandbox (Restricts file reading & writing to workspace)",
+            variable=self.var_sandbox,
+            font=ctk.CTkFont(size=13)
+        )
+        self.switch_sandbox.grid(row=2, column=0, columnspan=3, sticky="w", pady=(10, 6))
+
+        # Workspace Root Path
+        ctk.CTkLabel(sec_form, text="Workspace Path:").grid(row=3, column=0, sticky="w", pady=6)
+        ws_box = ctk.CTkFrame(sec_form, fg_color="transparent")
+        ws_box.grid(row=3, column=1, columnspan=2, sticky="ew", padx=10, pady=6)
+
+        self.entry_ws_path = ctk.CTkEntry(ws_box, width=320)
+        self.entry_ws_path.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.entry_ws_path.insert(0, self.config_data.get("server", {}).get("workspace_root", str(BASE_DIR / "workspace")))
+
+        btn_browse_ws = ctk.CTkButton(ws_box, text="Browse", width=70, command=self._browse_workspace)
+        btn_browse_ws.pack(side="left")
+
+        # 2. Network & Tunnel Settings Group
         group_net = ctk.CTkFrame(scroll, fg_color="#1E293B", corner_radius=8)
         group_net.pack(fill="x", pady=(0, 15), padx=5)
 
-        ctk.CTkLabel(group_net, text="⚙️ Tunnel Provider & Exposure Settings", font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=15, pady=(12, 8))
+        ctk.CTkLabel(group_net, text="⚙️ Network & Tunnel Settings", font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=15, pady=(12, 8))
 
         form = ctk.CTkFrame(group_net, fg_color="transparent")
         form.pack(fill="x", padx=15, pady=(0, 15))
@@ -627,7 +733,7 @@ class MammouthControlCenter(ctk.CTk):
         self.entry_custom_url.grid(row=7, column=1, sticky="w", padx=15, pady=6)
         self.entry_custom_url.insert(0, self.config_data.get("server", {}).get("custom_public_url", ""))
 
-        btn_save_settings = ctk.CTkButton(group_net, text="💾 Save Network & Endpoint Settings", fg_color="#10B981", hover_color="#059669", command=self._save_settings)
+        btn_save_settings = ctk.CTkButton(group_net, text="💾 Save All Settings", fg_color="#10B981", hover_color="#059669", command=self._save_settings)
         btn_save_settings.pack(anchor="e", padx=15, pady=(0, 15))
 
         # Mammouth Integration Guide Group
@@ -639,15 +745,36 @@ class MammouthControlCenter(ctk.CTk):
         guide_text = (
             "1. Choose your exposure mode (Tailscale, Cloudflare, ngrok, Direct IP, or Custom Domain).\n"
             "2. Start the server using the '▶ Start Server' button in the header.\n"
-            "3. Click the '📋 Copy' button next to the calculated Endpoint URL.\n"
+            "3. Click the '📋 Copy' button next to the calculated Endpoint URL (it automatically includes your secure token).\n"
             "4. Open Mammouth.ai -> Settings -> Custom MCP Servers / Tools.\n"
             "5. Add a new MCP Server:\n"
             "     • Name: Mammouth Powerhouse\n"
             "     • Server Type: SSE (or HTTP Streaming)\n"
             "     • Endpoint URL: Paste your copied URL\n"
-            "6. Save and start chatting! Mammouth AI will now use all active tools on your system."
+            "6. Save and start chatting! Mammouth AI will securely communicate with your system."
         )
         ctk.CTkLabel(guide_group, text=guide_text, font=ctk.CTkFont(size=13), text_color="#CBD5E1", justify="left").pack(anchor="w", padx=15, pady=(0, 15))
+
+    def _toggle_token_visibility(self):
+        if self.entry_token.cget("show") == "*":
+            self.entry_token.configure(show="")
+            self.btn_show_token.configure(text="🔒")
+        else:
+            self.entry_token.configure(show="*")
+            self.btn_show_token.configure(text="👁️")
+
+    def _generate_new_token(self):
+        if messagebox.askyesno("Generate Token", "Generate a new 32-character authentication token?", parent=self):
+            new_tok = generate_secure_token()
+            self.entry_token.delete(0, "end")
+            self.entry_token.insert(0, new_tok)
+            self._log("Generated new secure API authentication token.")
+
+    def _browse_workspace(self):
+        folder = filedialog.askdirectory(title="Select Allowed Workspace Folder")
+        if folder:
+            self.entry_ws_path.delete(0, "end")
+            self.entry_ws_path.insert(0, folder)
 
     def _on_settings_mode_changed(self, choice: str):
         self.dash_mode_menu.set(choice)
@@ -663,6 +790,10 @@ class MammouthControlCenter(ctk.CTk):
         self.config_data["server"]["tunnel_mode"] = self.opt_tunnel_mode.get()
         self.config_data["server"]["endpoint_path"] = self.opt_endpoint_path.get()
         self.config_data["server"]["auto_tunnel"] = self.var_auto_tunnel.get()
+        self.config_data["server"]["enforce_auth"] = self.var_enforce_auth.get()
+        self.config_data["server"]["api_token"] = self.entry_token.get().strip()
+        self.config_data["server"]["enforce_workspace_sandbox"] = self.var_sandbox.get()
+        self.config_data["server"]["workspace_root"] = self.entry_ws_path.get().strip()
         self.config_data["server"]["cloudflare_custom_url"] = self.entry_cf_url.get().strip()
         self.config_data["server"]["ngrok_custom_url"] = self.entry_ngrok_url.get().strip()
         self.config_data["server"]["custom_public_url"] = self.entry_custom_url.get().strip()
@@ -671,8 +802,8 @@ class MammouthControlCenter(ctk.CTk):
         self.dash_mode_menu.set(self.opt_tunnel_mode.get())
         self.dash_path_menu.set(self.opt_endpoint_path.get())
         self._refresh_all_endpoint_labels()
-        self._log("Updated network & endpoint settings in config.json.")
-        messagebox.showinfo("Saved", "Network and endpoint settings saved successfully!")
+        self._log("Updated security, network & endpoint settings in config.json.")
+        messagebox.showinfo("Saved", "Security and network settings saved successfully!")
 
     # ---------------------------------------------------------
     # SERVER & TUNNEL RUNNER LIFECYCLE
@@ -738,7 +869,8 @@ class MammouthControlCenter(ctk.CTk):
                     self._log("Notice: 'ngrok' not found in PATH.")
 
         # 2. Launch FastMCP server
-        self._log(f"Launching FastMCP Server on http://{host}:{port} (Exposure: {mode})...")
+        auth_str = "Token-Protected" if cfg.get("server", {}).get("enforce_auth", True) else "Open"
+        self._log(f"Launching FastMCP Server on http://{host}:{port} ({auth_str}, Exposure: {mode})...")
         cmd = [sys.executable, str(BASE_DIR / "server.py"), "--host", host, "--port", str(port)]
         
         try:

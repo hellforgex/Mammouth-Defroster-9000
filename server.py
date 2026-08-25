@@ -10,6 +10,7 @@
 import os
 import sys
 import argparse
+import urllib.parse
 from pathlib import Path
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -23,6 +24,7 @@ from fastmcp.server.http import (
 from starlette.routing import Route
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Scope, Receive, Send
 import uvicorn
 
@@ -33,6 +35,7 @@ from config import load_config, is_module_enabled
 
 # Build dynamic instructions based on active modules
 cfg = load_config()
+cfg_server = cfg.get("server", {})
 active_capabilities = []
 
 # Initialize FastMCP Server
@@ -60,7 +63,7 @@ if is_module_enabled("tasks_kanban"):
     mcp.tool()(task_delete)
     active_capabilities.append("2. Task & Kanban Board (task_create, task_update, task_list, task_delete)")
 
-# 3. File Operations Module
+# 3. File Operations Module (Sandboxed)
 if is_module_enabled("file_ops"):
     from modules.file_ops import file_read, file_write, file_replace_chunk, file_search_text, directory_list, directory_tree
     mcp.tool()(file_read)
@@ -69,9 +72,9 @@ if is_module_enabled("file_ops"):
     mcp.tool()(file_search_text)
     mcp.tool()(directory_list)
     mcp.tool()(directory_tree)
-    active_capabilities.append("3. File & Code Operations (file_read, file_write, file_replace_chunk, file_search_text, directory_tree)")
+    active_capabilities.append("3. File & Code Operations (Sandboxed: file_read, file_write, file_replace_chunk, file_search_text, directory_tree)")
 
-# 4. Shell & Background Processes Module
+# 4. Shell & Background Processes Module (High Privilege)
 if is_module_enabled("shell_processes"):
     from modules.shell_processes import command_run, process_start_background, process_list_background, process_get_output, process_kill_background
     mcp.tool()(command_run)
@@ -81,7 +84,7 @@ if is_module_enabled("shell_processes"):
     mcp.tool()(process_kill_background)
     active_capabilities.append("4. PowerShell & Background Processes (command_run, process_start_background, process_get_output, process_kill_background)")
 
-# 5. PuTTY & SSH Remote Module
+# 5. PuTTY & SSH Remote Module (Encrypted)
 if is_module_enabled("putty_ssh"):
     from modules.putty_ssh import ssh_exec_command, ssh_open_putty_window, ssh_transfer_file, ssh_list_saved_hosts, ssh_save_host, ssh_list_putty_registry_sessions
     mcp.tool()(ssh_exec_command)
@@ -90,7 +93,7 @@ if is_module_enabled("putty_ssh"):
     mcp.tool()(ssh_list_saved_hosts)
     mcp.tool()(ssh_save_host)
     mcp.tool()(ssh_list_putty_registry_sessions)
-    active_capabilities.append("5. PuTTY / SSH Remote Shell & SCP File Sync (ssh_exec_command, ssh_open_putty_window, ssh_transfer_file, hosts.json)")
+    active_capabilities.append("5. PuTTY / SSH Remote Shell & SCP File Sync (DPAPI Encrypted: ssh_exec_command, ssh_open_putty_window, ssh_transfer_file, hosts.json)")
 
 # 6. System & Hardware Diagnostics Module
 if is_module_enabled("system_monitor"):
@@ -113,8 +116,54 @@ if active_capabilities:
     mcp.instructions = "Advanced Windows 11 & DevOps Agent MCP Server.\nActive capabilities:\n" + "\n".join(active_capabilities)
 
 # ==========================================
-# ASGI APP & LIFESPAN CONFIGURATION
+# SECURITY & AUTHENTICATION MIDDLEWARE
 # ==========================================
+
+class AuthenticationMiddleware:
+    """Enforces Bearer token and Query token validation for incoming requests."""
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "http":
+            # Allow CORS preflight requests
+            if scope.get("method") == "OPTIONS":
+                await self.app(scope, receive, send)
+                return
+
+            current_cfg = load_config().get("server", {})
+            enforce_auth = current_cfg.get("enforce_auth", True)
+            expected_token = current_cfg.get("api_token", "").strip()
+
+            if enforce_auth and expected_token:
+                # 1. Check Authorization header
+                raw_headers = dict(scope.get("headers", []))
+                auth_header = raw_headers.get(b"authorization", b"").decode("latin1").strip()
+                
+                token_valid = False
+                if auth_header.startswith("Bearer "):
+                    provided_token = auth_header[len("Bearer "):].strip()
+                    if provided_token == expected_token:
+                        token_valid = True
+
+                # 2. Check query string parameter (?token=... or ?api_key=...)
+                if not token_valid:
+                    query_string = scope.get("query_string", b"").decode("latin1")
+                    params = urllib.parse.parse_qs(query_string)
+                    query_token = params.get("token", [""])[0] or params.get("api_key", [""])[0]
+                    if query_token and query_token == expected_token:
+                        token_valid = True
+
+                if not token_valid:
+                    response = JSONResponse(
+                        {"error": "Unauthorized", "message": "Invalid or missing API authentication token. Include 'Authorization: Bearer <token>' or '?token=<token>'."},
+                        status_code=401
+                    )
+                    await response(scope, receive, send)
+                    return
+
+        await self.app(scope, receive, send)
+
 
 class LoggingAndNormalizationMiddleware:
     """Logs requests and normalizes Accept headers for seamless MCP cloud compatibility."""
@@ -173,14 +222,24 @@ def build_app():
         async with mcp._lifespan_manager(), streamable_http_app.session_manager.run():
             yield
 
+    # Specific CORS origins - no insecure wildcard "*"
+    allowed_origins = cfg_server.get("allowed_origins", [
+        "https://mammouth.ai",
+        "https://app.mammouth.ai",
+        "http://localhost",
+        "http://127.0.0.1"
+    ])
+
     middleware = [
         Middleware(
             CORSMiddleware,
-            allow_origins=["*"],
-            allow_methods=["*"],
+            allow_origins=allowed_origins,
+            allow_origin_regex=r"https://.*\.mammouth\.ai",
+            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
             allow_headers=["*"],
             allow_credentials=True,
         ),
+        Middleware(AuthenticationMiddleware),
         Middleware(LoggingAndNormalizationMiddleware),
     ]
 
@@ -198,6 +257,8 @@ if __name__ == "__main__":
     host = args.host or os.environ.get("HOST") or cfg_server.get("host", "127.0.0.1")
     port = args.port or int(os.environ.get("PORT") or cfg_server.get("port", 8000))
     
+    auth_status = "ENABLED (Token Protected)" if cfg_server.get("enforce_auth", True) else "DISABLED (Open)"
     print(f"Starting Mammouth-Powerhouse MCP Server on http://{host}:{port}...")
+    print(f"Security: Authentication={auth_status}, Workspace Sandbox={cfg_server.get('enforce_workspace_sandbox', True)}")
     print(f"Active modules ({len(active_capabilities)}): {[k for k, v in cfg.get('modules', {}).items() if v.get('enabled')]}")
     uvicorn.run(app, host=host, port=port, log_level="info")

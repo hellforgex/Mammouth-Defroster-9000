@@ -5,6 +5,16 @@
     "tunnel_mode": "Tailscale Funnel",
     "endpoint_path": "/sse",
     "auto_tunnel": true,
+    "api_token": "your_secure_random_token_here",
+    "enforce_auth": true,
+    "allowed_origins": [
+      "https://mammouth.ai",
+      "https://app.mammouth.ai",
+      "http://localhost",
+      "http://127.0.0.1"
+    ],
+    "workspace_root": "./workspace",
+    "enforce_workspace_sandbox": true,
     "tailscale_path": "C:\\Program Files\\Tailscale\\tailscale.exe",
     "cloudflared_path": "cloudflared",
     "ngrok_path": "ngrok",
@@ -25,17 +35,17 @@
     },
     "file_ops": {
       "enabled": true,
-      "name": "File & Code Operations",
-      "description": "Read, write, search files (grep-like), replace code chunks, and directory trees."
+      "name": "File & Code Operations (Sandboxed)",
+      "description": "Read, write, search files within workspace, replace code chunks, and directory trees."
     },
     "shell_processes": {
-      "enabled": true,
+      "enabled": false,
       "name": "PowerShell & Background Daemons",
-      "description": "Execute synchronous commands and manage long-running background tasks."
+      "description": "Execute synchronous commands and manage long-running background tasks. (High Privilege)"
     },
     "putty_ssh": {
       "enabled": true,
-      "name": "PuTTY & SSH Host Manager",
+      "name": "PuTTY & SSH Host Manager (DPAPI Encrypted)",
       "description": "Remote shell execution, PuTTY GUI launch, SCP file transfers, and host manager."
     },
     "system_monitor": {

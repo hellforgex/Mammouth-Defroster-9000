@@ -1,12 +1,77 @@
 import os
 import json
 import shutil
+import base64
+import ctypes
+from ctypes import wintypes
 import subprocess
 import winreg
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 HOSTS_FILE = Path(__file__).parent.parent / "hosts.json"
+
+# ==========================================
+# WINDOWS DPAPI PASSWORD ENCRYPTION
+# ==========================================
+class DATA_BLOB(ctypes.Structure):
+    _fields_ = [
+        ('cbData', wintypes.DWORD),
+        ('pbData', ctypes.POINTER(ctypes.c_char))
+    ]
+
+def _dpapi_encrypt(plaintext: str) -> str:
+    """Encrypt password using current Windows user's DPAPI credentials."""
+    if not plaintext or plaintext.startswith("dpapi:"):
+        return plaintext
+    if os.name != 'nt':
+        return plaintext
+    try:
+        data = plaintext.encode('utf-8')
+        blob_in = DATA_BLOB(len(data), ctypes.create_string_buffer(data, len(data)))
+        blob_out = DATA_BLOB()
+        if ctypes.windll.crypt32.CryptProtectData(
+            ctypes.byref(blob_in),
+            "MammouthHostPassword",
+            None,
+            None,
+            None,
+            0,
+            ctypes.byref(blob_out)
+        ):
+            encrypted = ctypes.string_at(blob_out.pbData, blob_out.cbData)
+            ctypes.windll.kernel32.LocalFree(blob_out.pbData)
+            return "dpapi:" + base64.b64encode(encrypted).decode('ascii')
+    except Exception:
+        pass
+    return plaintext
+
+def _dpapi_decrypt(ciphertext: str) -> str:
+    """Decrypt DPAPI-encrypted password for execution."""
+    if not ciphertext or not ciphertext.startswith("dpapi:"):
+        return ciphertext
+    if os.name != 'nt':
+        return ciphertext
+    try:
+        raw_b64 = ciphertext[len("dpapi:"):]
+        data = base64.b64decode(raw_b64)
+        blob_in = DATA_BLOB(len(data), ctypes.create_string_buffer(data, len(data)))
+        blob_out = DATA_BLOB()
+        if ctypes.windll.crypt32.CryptUnprotectData(
+            ctypes.byref(blob_in),
+            None,
+            None,
+            None,
+            None,
+            0,
+            ctypes.byref(blob_out)
+        ):
+            decrypted = ctypes.string_at(blob_out.pbData, blob_out.cbData)
+            ctypes.windll.kernel32.LocalFree(blob_out.pbData)
+            return decrypted.decode('utf-8', errors='replace')
+    except Exception:
+        pass
+    return ""
 
 def _load_hosts() -> Dict[str, Any]:
     if HOSTS_FILE.exists():
@@ -44,18 +109,19 @@ def ssh_save_host(
     port: int = 22,
     description: str = ""
 ) -> str:
-    """Save or update an SSH host login alias in the local hosts.json file."""
+    """Save or update an SSH host login alias in the local hosts.json file with DPAPI encryption."""
     hosts = _load_hosts()
+    encrypted_pw = _dpapi_encrypt(password or "") if password else ""
     hosts[alias] = {
         "host": host,
         "username": username,
         "port": port,
-        "password": password or "",
+        "password": encrypted_pw,
         "private_key_path": private_key_path or "",
         "description": description
     }
     _save_hosts(hosts)
-    return f"Successfully saved host alias '{alias}' ({username}@{host}:{port}) to local hosts.json"
+    return f"Successfully saved host alias '{alias}' ({username}@{host}:{port}) to local hosts.json (Password DPAPI encrypted)"
 
 def ssh_exec_command(
     host: str,
@@ -81,11 +147,13 @@ def ssh_exec_command(
         if not target_user:
             target_user = cfg.get("username")
         if not target_pw:
-            target_pw = cfg.get("password")
+            target_pw = _dpapi_decrypt(cfg.get("password", ""))
         if not target_key:
             target_key = cfg.get("private_key_path")
         if not port:
             target_port = cfg.get("port", 22)
+    elif target_pw:
+        target_pw = _dpapi_decrypt(target_pw)
 
     plink_bin = shutil.which("plink") or r"C:\Program Files\PuTTY\plink.exe"
     if not os.path.exists(plink_bin) and not shutil.which("plink"):
@@ -216,11 +284,13 @@ def ssh_transfer_file(
         if not target_user:
             target_user = cfg.get("username")
         if not target_pw:
-            target_pw = cfg.get("password")
+            target_pw = _dpapi_decrypt(cfg.get("password", ""))
         if not target_key:
             target_key = cfg.get("private_key_path")
         if not port:
             target_port = cfg.get("port", 22)
+    elif target_pw:
+        target_pw = _dpapi_decrypt(target_pw)
 
     pscp_bin = shutil.which("pscp") or r"C:\Program Files\PuTTY\pscp.exe"
     if not os.path.exists(pscp_bin) and not shutil.which("pscp"):

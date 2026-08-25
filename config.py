@@ -1,7 +1,8 @@
 import json
 import socket
+import secrets
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
 CONFIG_EXAMPLE_FILE = Path(__file__).parent / "config.example.json"
@@ -13,6 +14,16 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "tunnel_mode": "Tailscale Funnel",  # Options: "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"
         "endpoint_path": "/sse",           # Options: "/sse", "/mcp", "/messages", "/"
         "auto_tunnel": True,
+        "api_token": "",                   # Generated on initial run
+        "enforce_auth": True,              # Require Bearer token or ?token= query parameter
+        "allowed_origins": [
+            "https://mammouth.ai",
+            "https://app.mammouth.ai",
+            "http://localhost",
+            "http://127.0.0.1"
+        ],
+        "workspace_root": str(Path(__file__).parent / "workspace"),
+        "enforce_workspace_sandbox": True,  # Prevent path traversal outside workspace
         "tailscale_path": r"C:\Program Files\Tailscale\tailscale.exe",
         "cloudflared_path": "cloudflared",
         "ngrok_path": "ngrok",
@@ -33,17 +44,17 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         },
         "file_ops": {
             "enabled": True,
-            "name": "File & Code Operations",
-            "description": "Read, write, search files (grep-like), replace code chunks, and directory trees."
+            "name": "File & Code Operations (Sandboxed)",
+            "description": "Read, write, search files within workspace, replace code chunks, and directory trees."
         },
         "shell_processes": {
-            "enabled": True,
+            "enabled": False,  # Disabled by default for security
             "name": "PowerShell & Background Daemons",
-            "description": "Execute synchronous commands and manage long-running background tasks."
+            "description": "Execute synchronous commands and manage long-running background tasks. (High Privilege)"
         },
         "putty_ssh": {
             "enabled": True,
-            "name": "PuTTY & SSH Host Manager",
+            "name": "PuTTY & SSH Host Manager (DPAPI Encrypted)",
             "description": "Remote shell execution, PuTTY GUI launch, SCP file transfers, and host manager."
         },
         "system_monitor": {
@@ -59,6 +70,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     }
 }
 
+def generate_secure_token() -> str:
+    """Generate a cryptographically secure 32-character URL-safe authentication token."""
+    return secrets.token_urlsafe(24)
+
 def get_lan_ip() -> str:
     """Detect local network LAN IP (e.g. 192.168.x.x or 10.x.x.x)."""
     try:
@@ -73,8 +88,10 @@ def get_lan_ip() -> str:
 def load_config() -> Dict[str, Any]:
     """Load configuration from config.json with fallback to default values."""
     if not CONFIG_FILE.exists():
-        save_config(DEFAULT_CONFIG)
-        return DEFAULT_CONFIG.copy()
+        cfg = DEFAULT_CONFIG.copy()
+        cfg["server"]["api_token"] = generate_secure_token()
+        save_config(cfg)
+        return cfg
         
     try:
         data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
@@ -87,9 +104,17 @@ def load_config() -> Dict[str, Any]:
                     merged["modules"][k].update(v)
                 else:
                     merged["modules"][k] = v
+                    
+        # Ensure an API token exists
+        if not merged["server"].get("api_token"):
+            merged["server"]["api_token"] = generate_secure_token()
+            save_config(merged)
+            
         return merged
     except Exception:
-        return DEFAULT_CONFIG.copy()
+        cfg = DEFAULT_CONFIG.copy()
+        cfg["server"]["api_token"] = generate_secure_token()
+        return cfg
 
 def save_config(config: Dict[str, Any]) -> None:
     """Save configuration to config.json."""

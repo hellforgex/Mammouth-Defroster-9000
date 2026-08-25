@@ -4,8 +4,49 @@ import fnmatch
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+from config import load_config
+
+FORBIDDEN_WINDOWS_PATHS = [
+    os.environ.get("SystemRoot", r"C:\Windows").lower(),
+    os.environ.get("ProgramFiles", r"C:\Program Files").lower(),
+    os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)").lower(),
+    r"\microsoft\windows\start menu\programs\startup",
+]
+
+def _validate_path_safety(target_path: str, is_write: bool = False) -> Optional[str]:
+    """Validate path against directory traversal and workspace sandbox policy."""
+    try:
+        path = Path(target_path).resolve()
+    except Exception as e:
+        return f"Error: Invalid path format: {e}"
+
+    str_path = str(path).lower()
+
+    # Block sensitive system folders
+    for forbidden in FORBIDDEN_WINDOWS_PATHS:
+        if forbidden in str_path:
+            return f"Security Error: Access to system protected location '{path}' is blocked."
+
+    # Enforce workspace sandbox if configured
+    cfg = load_config()
+    server_cfg = cfg.get("server", {})
+    if server_cfg.get("enforce_workspace_sandbox", True):
+        ws_root = server_cfg.get("workspace_root", "")
+        if ws_root:
+            ws_path = Path(ws_root).resolve()
+            ws_path.mkdir(parents=True, exist_ok=True)
+            try:
+                if not path.is_relative_to(ws_path):
+                    return f"Security Error: Path '{path}' is outside the authorized workspace directory '{ws_path}'. Modify workspace_root in Settings to expand scope."
+            except AttributeError:
+                # Python < 3.9 compatibility
+                if not str(path).startswith(str(ws_path)):
+                    return f"Security Error: Path '{path}' is outside the authorized workspace directory '{ws_path}'."
+
+    return None
+
 def file_read(file_path: str, start_line: Optional[int] = None, end_line: Optional[int] = None, max_chars: int = 50000) -> str:
-    """Read a text file with optional line slicing.
+    """Read a text file with optional line slicing within authorized workspace.
     
     Args:
         file_path: Absolute path to the file.
@@ -13,6 +54,10 @@ def file_read(file_path: str, start_line: Optional[int] = None, end_line: Option
         end_line: Optional 1-indexed end line.
         max_chars: Character limit (default 50,000).
     """
+    safety_err = _validate_path_safety(file_path, is_write=False)
+    if safety_err:
+        return safety_err
+
     path = Path(file_path)
     if not path.exists():
         return f"Error: File not found: {file_path}"
@@ -36,13 +81,17 @@ def file_read(file_path: str, start_line: Optional[int] = None, end_line: Option
         return f"Error reading file: {e}"
 
 def file_write(file_path: str, content: str, overwrite: bool = True) -> str:
-    """Write or overwrite a file on disk.
+    """Write or overwrite a file on disk securely within the workspace sandbox.
     
     Args:
         file_path: Target path.
         content: Text content.
         overwrite: Overwrite if file exists.
     """
+    safety_err = _validate_path_safety(file_path, is_write=True)
+    if safety_err:
+        return safety_err
+
     path = Path(file_path)
     if path.exists() and not overwrite:
         return f"Error: File already exists: {file_path}"
@@ -55,13 +104,17 @@ def file_write(file_path: str, content: str, overwrite: bool = True) -> str:
         return f"Error writing file: {e}"
 
 def file_replace_chunk(file_path: str, target_chunk: str, replacement_chunk: str) -> str:
-    """Replace an exact block of text/code in a file.
+    """Replace an exact block of text/code in a file securely within the workspace sandbox.
     
     Args:
         file_path: Path of the file to modify.
         target_chunk: Exact string to find and replace.
         replacement_chunk: Exact string to replace it with.
     """
+    safety_err = _validate_path_safety(file_path, is_write=True)
+    if safety_err:
+        return safety_err
+
     path = Path(file_path)
     if not path.exists() or not path.is_file():
         return f"Error: File not found: {file_path}"
@@ -95,6 +148,10 @@ def file_search_text(
         is_regex: Whether search_query is a regex.
         max_matches: Maximum matching lines to return.
     """
+    safety_err = _validate_path_safety(directory_path, is_write=False)
+    if safety_err:
+        return [{"error": safety_err}]
+
     path = Path(directory_path)
     if not path.exists() or not path.is_dir():
         return [{"error": f"Invalid directory: {directory_path}"}]
@@ -141,6 +198,10 @@ def file_search_text(
 
 def directory_list(directory_path: str, max_depth: int = 1) -> List[Dict[str, Any]]:
     """List files and subfolders in a directory."""
+    safety_err = _validate_path_safety(directory_path, is_write=False)
+    if safety_err:
+        return [{"error": safety_err}]
+
     path = Path(directory_path)
     if not path.exists() or not path.is_dir():
         return [{"error": f"Invalid directory: {directory_path}"}]
@@ -160,6 +221,10 @@ def directory_list(directory_path: str, max_depth: int = 1) -> List[Dict[str, An
 
 def directory_tree(directory_path: str, max_depth: int = 2) -> str:
     """Generate an ASCII visual tree structure of a directory."""
+    safety_err = _validate_path_safety(directory_path, is_write=False)
+    if safety_err:
+        return safety_err
+
     path = Path(directory_path)
     if not path.exists() or not path.is_dir():
         return f"Invalid directory: {directory_path}"
