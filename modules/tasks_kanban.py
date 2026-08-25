@@ -25,29 +25,39 @@ def _get_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
     return conn
 
+ALLOWED_STATUSES = {"todo", "in_progress", "done", "blocked"}
+ALLOWED_PRIORITIES = {"low", "medium", "high", "urgent"}
+
 def task_create(title: str, description: str = "", priority: str = "medium") -> Dict[str, Any]:
     """Create a new task in the persistent todo/Kanban board.
     
     Args:
         title: Short actionable title of the task.
-        description: Detailed instructions or subtasks.
+        description: Detailed instructions or subtasks (max 50,000 chars).
         priority: 'low', 'medium', 'high', 'urgent'.
     """
+    clean_title = title.strip()[:256]
+    clean_desc = description.strip()[:50_000]
+    clean_prio = priority.lower().strip() if priority.lower().strip() in ALLOWED_PRIORITIES else "medium"
+
+    if not clean_title:
+        return {"error": "Task title cannot be empty."}
+
     now = datetime.now().isoformat()
     conn = _get_db()
     with conn:
         cursor = conn.execute("""
             INSERT INTO tasks (title, description, status, priority, created_at, updated_at)
             VALUES (?, ?, 'todo', ?, ?, ?)
-        """, (title.strip(), description.strip(), priority.lower(), now, now))
+        """, (clean_title, clean_desc, clean_prio, now, now))
         task_id = cursor.lastrowid
     conn.close()
     return {
         "id": task_id,
-        "title": title,
-        "description": description,
+        "title": clean_title,
+        "description": clean_desc,
         "status": "todo",
-        "priority": priority,
+        "priority": clean_prio,
         "created_at": now
     }
 
@@ -70,24 +80,30 @@ def task_update(
     now = datetime.now().isoformat()
     conn = _get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    cursor.execute("SELECT * FROM tasks WHERE id = ?", (int(task_id),))
     row = cursor.fetchone()
     if not row:
         conn.close()
         return {"error": f"Task with ID {task_id} not found."}
         
     current = dict(row)
-    new_title = title.strip() if title is not None else current["title"]
-    new_desc = description.strip() if description is not None else current["description"]
+    new_title = title.strip()[:256] if title is not None else current["title"]
+    new_desc = description.strip()[:50_000] if description is not None else current["description"]
+    
     new_status = status.lower().strip() if status is not None else current["status"]
+    if new_status not in ALLOWED_STATUSES:
+        new_status = current["status"]
+
     new_prio = priority.lower().strip() if priority is not None else current["priority"]
+    if new_prio not in ALLOWED_PRIORITIES:
+        new_prio = current["priority"]
     
     with conn:
         conn.execute("""
             UPDATE tasks
             SET title = ?, description = ?, status = ?, priority = ?, updated_at = ?
             WHERE id = ?
-        """, (new_title, new_desc, new_status, new_prio, now, task_id))
+        """, (new_title, new_desc, new_status, new_prio, now, int(task_id)))
     conn.close()
     
     return {

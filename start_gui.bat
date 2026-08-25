@@ -1,8 +1,8 @@
 @echo off
-title Mammouth MCP Control Center
+title Mammouth Defroster 9000
 cd /d "%~dp0"
 
-echo Starting Mammouth MCP Control Center...
+echo Starting Mammouth Defroster 9000...
 
 where uv >nul 2>nul
 if %ERRORLEVEL% equ 0 (

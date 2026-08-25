@@ -30,9 +30,16 @@ def memory_save(key: str, content: str, category: str = "general") -> str:
     
     Args:
         key: Unique identifier for the memory (e.g. 'preferred_editor', 'project_db_structure', 'vps_info').
-        content: The information/note to remember.
+        content: The information/note to remember (max 500 KB).
         category: Optional category (e.g. 'project', 'preference', 'infrastructure', 'note').
     """
+    clean_key = key.strip()[:128]
+    clean_cat = category.strip()[:64]
+    if not clean_key:
+        return "Error: Memory key cannot be empty."
+    if len(content) > 500_000:
+        return f"Error: Memory content exceeds 500,000 characters limit ({len(content)} characters)."
+
     now = datetime.now().isoformat()
     conn = _get_db()
     with conn:
@@ -43,9 +50,9 @@ def memory_save(key: str, content: str, category: str = "general") -> str:
                 content = excluded.content,
                 category = excluded.category,
                 updated_at = excluded.updated_at
-        """, (key.strip(), content.strip(), category.strip(), now, now))
+        """, (clean_key, content.strip(), clean_cat, now, now))
     conn.close()
-    return f"Successfully saved memory '{key}' in category '{category}'."
+    return f"Successfully saved memory '{clean_key}' in category '{clean_cat}'."
 
 def memory_recall(query: str) -> List[Dict[str, Any]]:
     """Search persistent long-term memory by key or content keyword.

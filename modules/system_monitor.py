@@ -70,7 +70,13 @@ def system_get_gpu_info() -> Dict[str, Any]:
     """Get graphics controller / GPU details."""
     try:
         cmd = "Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, VideoProcessor, AdapterRAM | ConvertTo-Json"
-        proc = subprocess.run(["powershell.exe", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=10)
+        proc = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
         if proc.returncode == 0 and proc.stdout.strip():
             import json
             return {"gpu_devices": json.loads(proc.stdout)}
@@ -101,7 +107,13 @@ def system_get_event_logs(log_name: str = "System", entry_type: str = "Error", c
     
     try:
         ps_cmd = f"Get-EventLog -LogName '{safe_log}' -EntryType '{safe_type}' -Newest {safe_count} | Select-Object TimeGenerated, Source, EventID, Message | ConvertTo-Json"
-        proc = subprocess.run(["powershell.exe", "-NoProfile", "-Command", ps_cmd], capture_output=True, text=True, timeout=15)
+        proc = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
         if proc.returncode == 0 and proc.stdout.strip():
             import json
             data = json.loads(proc.stdout)

@@ -80,6 +80,8 @@ def file_read(file_path: str, start_line: Optional[int] = None, end_line: Option
     except Exception as e:
         return f"Error reading file: {e}"
 
+DANGEROUS_WRITE_EXTENSIONS = {".exe", ".dll", ".scr", ".sys", ".drv", ".msi", ".com"}
+
 def file_write(file_path: str, content: str, overwrite: bool = True) -> str:
     """Write or overwrite a file on disk securely within the workspace sandbox.
     
@@ -93,6 +95,9 @@ def file_write(file_path: str, content: str, overwrite: bool = True) -> str:
         return safety_err
 
     path = Path(file_path)
+    if path.suffix.lower() in DANGEROUS_WRITE_EXTENSIONS:
+        return f"Security Error: Writing executable binary file type '{path.suffix}' is blocked by workspace security policy."
+
     if path.exists() and not overwrite:
         return f"Error: File already exists: {file_path}"
         
@@ -159,6 +164,8 @@ def file_search_text(
     results = []
     compiled_re = None
     if is_regex:
+        if len(search_query) > 200:
+            return [{"error": "Regex pattern exceeds maximum allowed length of 200 characters (ReDoS protection)."}]
         try:
             compiled_re = re.compile(search_query, re.IGNORECASE)
         except re.error as e:

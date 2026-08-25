@@ -136,6 +136,9 @@ def ssh_exec_command(
     timeout_seconds: int = 60
 ) -> Dict[str, Any]:
     """Execute a remote shell command on any SSH server via PuTTY plink."""
+    if host.strip().startswith("-"):
+        return {"exit_code": -1, "stdout": "", "stderr": "Invalid host parameter. Option injection detected."}
+
     hosts_data = _load_hosts()
     target_host = host
     target_user = username
@@ -224,6 +227,9 @@ def ssh_open_putty_window(
     session_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """Launch an interactive PuTTY GUI window on the Windows desktop for the user."""
+    if host.strip().startswith("-"):
+        return {"error": "Invalid host parameter. Option injection detected."}
+
     hosts_data = _load_hosts()
     target_host = host
     target_user = username
