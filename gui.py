@@ -13,6 +13,15 @@ from typing import Dict, Any, Optional, List
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox, filedialog
+import ctypes
+from PIL import Image, ImageTk
+
+# Set Windows AppUserModelID for distinct taskbar icon grouping
+if os.name == 'nt':
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("noskillz.mammouth.defroster9000")
+    except Exception:
+        pass
 
 # Add project directory to sys.path
 BASE_DIR = Path(__file__).parent
@@ -185,6 +194,9 @@ class MammouthControlCenter(ctk.CTk):
         self.geometry("1020x760")
         self.minsize(920, 680)
 
+        # Set Window and Taskbar Icon
+        self._set_app_icons()
+
         self.config_data = load_config()
         self.server_process: Optional[subprocess.Popen] = None
         self.tunnel_process: Optional[subprocess.Popen] = None
@@ -196,17 +208,48 @@ class MammouthControlCenter(ctk.CTk):
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    def _set_app_icons(self):
+        """Configure Windows taskbar and titlebar icons."""
+        ico_file = BASE_DIR / "assets" / "icon.ico"
+        if not ico_file.exists():
+            ico_file = BASE_DIR / "icon.ico"
+        if ico_file.exists():
+            try:
+                self.iconbitmap(str(ico_file))
+            except Exception:
+                pass
+
+        png_file = BASE_DIR / "assets" / "icon.png"
+        if png_file.exists():
+            try:
+                self.tk_icon = ImageTk.PhotoImage(Image.open(png_file))
+                self.wm_iconphoto(True, self.tk_icon)
+            except Exception:
+                pass
+
     def _build_ui(self):
         # 1. Top Header Banner
-        header = ctk.CTkFrame(self, height=75, corner_radius=0, fg_color="#1E293B")
+        header = ctk.CTkFrame(self, height=80, corner_radius=0, fg_color="#1E293B")
         header.pack(fill="x", side="top")
 
         # App Logo & Title
         title_box = ctk.CTkFrame(header, fg_color="transparent")
         title_box.pack(side="left", padx=20, pady=10)
         
-        lbl_icon = ctk.CTkLabel(title_box, text="🦣🔥", font=ctk.CTkFont(size=30))
-        lbl_icon.pack(side="left", padx=(0, 10))
+        # Load Graphic Mammoth Icon
+        png_file = BASE_DIR / "assets" / "icon.png"
+        if png_file.exists():
+            try:
+                pil_logo = Image.open(png_file)
+                self.header_logo = ctk.CTkImage(light_image=pil_logo, dark_image=pil_logo, size=(52, 52))
+                lbl_icon = ctk.CTkLabel(title_box, text="", image=self.header_logo)
+                lbl_icon.pack(side="left", padx=(0, 14))
+            except Exception:
+                lbl_icon = ctk.CTkLabel(title_box, text="🦣🔥", font=ctk.CTkFont(size=32))
+                lbl_icon.pack(side="left", padx=(0, 10))
+        else:
+            lbl_icon = ctk.CTkLabel(title_box, text="🦣🔥", font=ctk.CTkFont(size=32))
+            lbl_icon.pack(side="left", padx=(0, 10))
 
         title_text_box = ctk.CTkFrame(title_box, fg_color="transparent")
         title_text_box.pack(side="left")

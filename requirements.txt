@@ -4,5 +4,6 @@ psutil>=7.0.0
 uvicorn>=0.30.0
 starlette>=0.38.0
 customtkinter>=5.2.0
+pillow>=10.0.0
 packaging>=24.0
 pyinstaller>=6.10.0

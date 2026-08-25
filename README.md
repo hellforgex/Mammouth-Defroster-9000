@@ -1,14 +1,23 @@
-# 🦣 Mammouth Defroster 9000 ❄️🔥
+<p align="center">
+  <img src="assets/banner.png" alt="Mammouth Defroster 9000 Banner" width="100%">
+</p>
 
-> **Thawing 10,000 years of frozen Windows automation power for [Mammouth.ai](https://mammouth.ai). An enterprise-grade, vibecoded FastMCP control center by noskillz.**
+<p align="center">
+  <a href="https://github.com/hellforgex/Mammouth-MCP-Control-Center/releases"><img src="https://img.shields.io/github/v/release/hellforgex/Mammouth-MCP-Control-Center?include_prereleases&label=Latest%20Release&color=blueviolet" alt="Release"></a>
+  <img src="https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-0078D6?logo=windows&logoColor=white" alt="Platform">
+  <img src="https://img.shields.io/badge/Vibecoded%20By-noskillz%20⚡-8A2BE2" alt="Vibecoded">
+  <img src="https://img.shields.io/badge/Security-DPAPI%20%2B%20Sandbox%20%2B%20SSRF%20Shield-10B981" alt="Security">
+  <img src="https://img.shields.io/badge/MCP%20Protocol-FastMCP%203.4%2B-purple" alt="MCP">
+  <img src="https://img.shields.io/badge/License-MIT%20%2B%20Legal%20Disclaimer-F59E0B" alt="License">
+</p>
 
-![Platform](https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-blue)
-![Vibecoded](https://img.shields.io/badge/Vibecoded%20By-noskillz%20⚡-purple)
-![Security](https://img.shields.io/badge/Security-Bearer%20Token%20%2B%20DPAPI%20%2B%20Sandbox-green)
-![Status](https://img.shields.io/badge/Defroster%20State-100%25%20THAWED%20%F0%9F%94%A5-orange)
-![License](https://img.shields.io/badge/License-MIT%20%2B%20Legal%20Disclaimer-orange)
-![FastMCP](https://img.shields.io/badge/MCP-FastMCP%203.4%2B-purple)
-![Interface](https://img.shields.io/badge/UI-CustomTkinter%20Dark%20Theme-blueviolet)
+<h3 align="center">
+  🦣 <b>Thawing 10,000 years of frozen Windows automation power for <a href="https://mammouth.ai">Mammouth.ai</a>.</b> 🔥
+</h3>
+
+<p align="center">
+  <b>Mammouth Defroster 9000 (MD-9000)</b> is a sovereign FastMCP desktop cockpit and DevOps powerhouse engineered by <b>noskillz</b>. It bridges remote AI assistants directly to your local Windows environment, background daemons, and remote SSH server fleets with zero friction.
+</p>
 
 ---
 
@@ -46,103 +55,126 @@
 
 ---
 
-## 🌟 Highlights & Features
+## 🌟 Key Features
 
-**Mammouth Defroster 9000** gives your Mammouth AI assistants secure, controlled access to your local Windows environment, remote servers, and background automation daemons.
-
-- 🔒 **Hardened Security Architecture**:
-  - **API Token Authentication**: Optional Bearer token / query auth (`Authorization: Bearer <token>` or `?token=...`).
-  - **CORS Protection**: Restricted specifically to `mammouth.ai` domains and local development origins (no open wildcard `*`).
-  - **Workspace Path Sandboxing**: File operations are jailed to an authorized workspace directory (`./workspace`) to prevent system file tampering or traversal attacks.
-  - **Windows DPAPI Password Encryption**: SSH passwords stored in `hosts.json` are encrypted using the native Windows Data Protection API bound to your Windows user profile.
-  - **SSRF Filter**: Web scraper blocks private IP networks, loopbacks, and cloud metadata services.
-  - **Safe Defaults**: High-privilege tools (PowerShell execution) are disabled by default in template configurations.
-- 🖥️ **Modern Windows 11 Desktop Cockpit**: Beautiful dark-mode dashboard with real-time status indicators, 1-click token-ready endpoint copy, and live console logs.
-- ⚡ **Modular Skill Toggles**: Granularly enable or disable individual toolsets directly from the GUI (Memory, Kanban, File Ops, PowerShell, SSH, System Monitor, Web).
-- 🌐 **Flexible Network & Tunnel Providers**:
-  - **Tailscale Funnel**: Zero-config auto-detection and public HTTPS domain (`https://<node>.ts.net/sse`).
-  - **Cloudflare Tunnel**: Quick free tunnels via `trycloudflare.com` or custom Cloudflare domains.
-  - **ngrok Tunnel**: Instant public HTTP tunnel support with local API auto-discovery (`127.0.0.1:4040`).
-  - **Direct IP / LAN**: Connect directly via Localhost (`127.0.0.1`) or local network LAN IP (`192.168.x.x`).
-  - **Custom Domain**: Use your own reverse proxy (Nginx, Caddy, Traefik).
-- 🔀 **Custom Route Endpoints**: Select between `/sse`, `/mcp`, `/messages`, or `/` root paths.
-- 🔑 **Integrated SSH Host Manager**: Add, edit, and test remote Linux VPS/servers for PuTTY, Plink commands, and SCP file synchronization without touching JSON files.
-- 📦 **Standalone EXE Packaging**: 1-click build script (`build_exe.bat`) to package the entire Defroster into an `.exe` for any Windows machine.
+<table align="center" width="100%">
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🖥️ Desktop Cockpit GUI</h3>
+      <ul>
+        <li><b>Modern Windows 11 Dark Mode</b> built with CustomTkinter.</li>
+        <li><b>1-Click Server Lifecycle</b> with live process status badge.</li>
+        <li><b>Real-Time Console Log Stream</b> monitoring every MCP handshake and tool call.</li>
+        <li><b>Taskbar & System Tray Icons</b> featuring the official Defroster 9000 artwork.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3>🌐 Multi-Tunnel Network Hub</h3>
+      <ul>
+        <li><b>Tailscale Funnel</b> zero-config auto-discovery (<code>https://&lt;node&gt;.ts.net/sse</code>).</li>
+        <li><b>Cloudflare Quick Tunnels</b> (<code>trycloudflare.com</code>).</li>
+        <li><b>ngrok HTTP Tunnels</b> with dynamic API polling.</li>
+        <li><b>Direct LAN IP & Custom Proxies</b> (Nginx, Traefik, Caddy).</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🔒 Hardened Security Stack</h3>
+      <ul>
+        <li><b>Windows DPAPI Encryption</b> for saved SSH credentials in <code>hosts.json</code>.</li>
+        <li><b>Workspace Sandboxing</b> preventing writes outside <code>./workspace</code>.</li>
+        <li><b>SSRF Defense Filter</b> blocking private IP ranges & cloud metadata.</li>
+        <li><b>PowerShell Input Sanitization</b> preventing command injection.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3>⚡ Modular Skill Architecture</h3>
+      <ul>
+        <li><b>7 Granular Toolsets (32 Total Tools)</b>.</li>
+        <li>Toggle individual modules on/off instantly via GUI switches.</li>
+        <li>Dynamic FastMCP instruction generator informing connected models of active capabilities.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## 🛠️ Included MCP Toolsets (32 Defrosted Tools)
+## 🛠️ 32 Defrosted MCP Tools
 
-| Skill / Module | Security Level | Key Capabilities | Example Tools |
-| :--- | :---: | :--- | :--- |
-| 🧠 **Persistent Memory** | 🟢 Safe | SQLite cross-session knowledge storage with keyword search & categories | `memory_save`, `memory_recall`, `memory_list`, `memory_get` |
-| 📋 **Task & Kanban Board** | 🟢 Safe | SQLite-backed task & project tracker (`todo`, `in_progress`, `done`, `blocked`) | `task_create`, `task_update`, `task_list`, `task_delete` |
-| 📁 **File & Code Operations** | 🔒 Sandboxed | Line slicing, ripgrep search, chunk replacement within authorized workspace | `file_read`, `file_write`, `file_replace_chunk`, `file_search_text`, `directory_tree` |
-| 💻 **PowerShell Execution** | ⚠️ High Privilege | Sync command execution & background daemon process manager with live logs | `command_run`, `process_start_background`, `process_get_output`, `process_kill_background` |
-| 🔑 **PuTTY & SSH Management** | 🔒 DPAPI Encrypted | Remote execution via Plink, SCP file transfers, PuTTY GUI launch, registry sessions | `ssh_exec_command`, `ssh_open_putty_window`, `ssh_transfer_file`, `ssh_list_saved_hosts` |
-| 📊 **System & Diagnostics** | 🟢 Safe | CPU, RAM, Disk usage, GPU details, top process listing, Windows Event Logs | `system_get_specs`, `system_get_processes`, `system_get_gpu_info`, `system_get_event_logs` |
-| 🌐 **Web Scraper & Tools** | 🛡️ SSRF Protected | URL fetcher with HTML-to-markdown text cleaning, private IP blocking & endpoint ping | `web_fetch_url`, `web_check_status` |
+| Skill / Module | Icon | Security Profile | Core Capabilities | Tools |
+| :--- | :---: | :---: | :--- | :--- |
+| **Persistent Memory** | 🧠 | 🟢 Safe | SQLite cross-session knowledge storage with keyword search & categories | `memory_save`<br>`memory_recall`<br>`memory_list`<br>`memory_get`<br>`memory_delete` |
+| **Tasks & Kanban** | 📋 | 🟢 Safe | Persistent task tracking (`todo`, `in_progress`, `done`, `blocked`) | `task_create`<br>`task_update`<br>`task_list`<br>`task_delete` |
+| **File & Code Ops** | 📁 | 🔒 Sandboxed | Line slicing, ripgrep text search, chunk replacement, directory trees | `file_read`<br>`file_write`<br>`file_replace_chunk`<br>`file_search_text`<br>`directory_tree`<br>`directory_list` |
+| **PowerShell & Daemons** | 💻 | ⚠️ High Privilege | Synchronous PowerShell execution & background daemon process manager | `command_run`<br>`process_start_background`<br>`process_get_output`<br>`process_list_background`<br>`process_kill_background` |
+| **PuTTY & SSH Remote** | 🔑 | 🔒 DPAPI Encrypted | Remote command execution via plink, SCP file transfers, PuTTY GUI window launch | `ssh_exec_command`<br>`ssh_open_putty_window`<br>`ssh_transfer_file`<br>`ssh_list_saved_hosts`<br>`ssh_save_host`<br>`ssh_list_putty_registry_sessions` |
+| **System Diagnostics** | 📊 | 🟢 Safe | CPU, RAM, Disk partitions, GPU specs, top processes, Windows Event Logs | `system_get_specs`<br>`system_get_processes`<br>`system_get_gpu_info`<br>`system_get_event_logs` |
+| **Web Scraper & Tools** | 🌐 | 🛡️ SSRF Shield | Webpage text extractor with markdown conversion & HTTP endpoint latency check | `web_fetch_url`<br>`web_check_status` |
 
 ---
 
 ## 🚀 Quickstart
 
-### Prerequisites
-- Windows 10 or 11
-- Python 3.10+ (or [uv package manager](https://docs.astral.sh/uv/) — recommended)
-- Optional tunnel CLI tools: [Tailscale](https://tailscale.com/), [cloudflared](https://github.com/cloudflare/cloudflared), or [ngrok](https://ngrok.com/).
+### Method 1: Launching via Python / `uv` (Recommended)
 
----
-
-### Option A: Launching via Python / `uv` (Recommended)
-
-1. Clone or extract the repository:
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/hellforgex/Mammouth-MCP-Control-Center.git
    cd Mammouth-MCP-Control-Center
    ```
 
-2. Double-click **`start_gui.bat`**  
-   *(or run `uv run gui.py` / `python gui.py` in your terminal)*
+2. **Launch the Defroster**:
+   - Double-click **`start_gui.bat`**  
+   *(or execute `uv run gui.py` / `python gui.py` in your terminal)*
 
 ---
 
-### Option B: Building a Standalone Windows EXE
+### Method 2: Building Standalone Windows `.exe`
 
-1. Double-click **`build_exe.bat`**
-2. The compiled application will be generated in `dist\MammouthDefroster9000\MammouthDefroster9000.exe`.
-3. You can now distribute the folder or create a shortcut on your Desktop!
+1. Double-click **`build_exe.bat`**.
+2. The standalone compiled application with full icon integration will be generated in:  
+   `dist\MammouthDefroster9000\MammouthDefroster9000.exe`
 
 ---
 
-## 🔗 Connecting to Mammouth.ai
+## 🔗 Connecting with Mammouth.ai
 
-1. Open **Mammouth Defroster 9000**, choose your preferred **Exposure Mode** (e.g. Tailscale Funnel) and click **`▶ Start Server`**.
-2. Click the **`📋 Copy`** button next to the calculated **Endpoint URL** (e.g. `https://<node>.ts.net/sse`).
-3. In **[Mammouth.ai](https://mammouth.ai)**:
-   - Navigate to **Settings** → **Custom MCP Servers** (or Tools).
+<p align="center">
+  <img src="assets/icon.png" alt="Mammouth Defroster Icon" width="100">
+</p>
+
+1. In **Mammouth Defroster 9000**, select your **Exposure Mode** (e.g. *Tailscale Funnel*) and click **`▶ Start Server`**.
+2. Click **`📋 Copy`** next to the calculated **Public Endpoint URL** (e.g. `https://<node>.ts.net/sse`).
+3. Open **[Mammouth.ai](https://mammouth.ai)**:
+   - Navigate to **Settings** → **Custom MCP Servers**.
    - Click **Add MCP Server**:
      - **Name**: `Mammouth Defroster 9000`
      - **Type**: `SSE` (Server-Sent Events)
-     - **URL**: Paste your copied URL (`https://.../sse`).
+     - **URL**: Paste your copied endpoint (`https://.../sse`).
    - Click **Save / Connect**.
-4. Start a new chat with Mammouth! The AI can now run diagnostics, edit files, manage remote servers, and retain long-term memory across sessions.
+4. Start a new chat! Mammouth will immediately discover and utilize your 32 defrosted tools.
 
 ---
 
-## 📂 Project Structure
+## 📂 Project Architecture
 
 ```
-mammouth-control-center/
+mammouth-defroster-9000/
+├── assets/
+│   ├── banner.png           # Widescreen 8K cybernetic hero banner
+│   ├── icon.png             # High-res application icon
+│   └── icon.ico             # Windows multi-resolution taskbar/window icon
 ├── modules/
 │   ├── __init__.py
 │   ├── memory.py            # SQLite Long-term memory
-│   ├── tasks_kanban.py      # SQLite Kanban & tasks
-│   ├── file_ops.py          # Sandboxed file editing & search
+│   ├── tasks_kanban.py      # SQLite Kanban & task tracker
+│   ├── file_ops.py          # Sandboxed code & file operations
 │   ├── shell_processes.py   # PowerShell execution & background daemons
 │   ├── putty_ssh.py         # DPAPI-encrypted PuTTY / Plink / PSCP remote tools
 │   ├── system_monitor.py    # Hardware & Windows diagnostics
-│   └── web_tools.py         # SSRF-protected web scraping & status checks
+│   └── web_tools.py         # SSRF-protected web scraper & status checks
 ├── config.py                # Security & Configuration manager
 ├── config.example.json      # Hardened template configuration
 ├── hosts.example.json       # Template SSH hosts configuration
@@ -154,7 +186,7 @@ mammouth-control-center/
 ├── pyproject.toml           # Project metadata
 ├── LICENSE                  # MIT License & Legal Disclaimer
 ├── .gitignore               # Git security & cache filter
-└── README.md                # Documentation, Legal Disclaimer & noskillz Manifesto
+└── README.md                # Documentation & noskillz Manifesto
 ```
 
 ---
