@@ -621,7 +621,18 @@ class MammouthControlCenter(ctk.CTk):
                 cleaned = line.rstrip()
                 self.after(0, lambda msg=cleaned: self._log(msg))
         if self.server_process:
-            self.server_process.stdout.close()
+            try:
+                self.server_process.stdout.close()
+            except Exception:
+                pass
+        self.after(0, self._on_server_exited)
+
+    def _on_server_exited(self):
+        if self.server_process is not None and self.server_process.poll() is not None:
+            self.server_process = None
+            self.status_badge.configure(text="● Server Stopped", text_color="#EF4444")
+            self.btn_toggle_server.configure(text="▶ Start Server", fg_color="#10B981", hover_color="#059669")
+            self._log("Server process terminated.")
 
     def _stop_server(self):
         self._log("Stopping FastMCP Server...")
