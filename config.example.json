@@ -6,7 +6,7 @@
     "endpoint_path": "/sse",
     "auto_tunnel": true,
     "api_token": "your_secure_random_token_here",
-    "enforce_auth": false,
+    "enforce_auth": true,
     "allowed_origins": [
       "https://mammouth.ai",
       "https://app.mammouth.ai",

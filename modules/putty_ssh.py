@@ -270,7 +270,18 @@ def ssh_transfer_file(
     port: Optional[int] = None,
     recursive: bool = False
 ) -> Dict[str, Any]:
-    """Transfer files between the local PC and a remote SSH server using PuTTY pscp."""
+    """Transfer files between the local PC and a remote SSH server using PuTTY pscp (Sandboxed)."""
+    # Validate local path against workspace sandbox policy
+    from modules.file_ops import _validate_path_safety
+    is_write = mode.lower() == "download"
+    path_err = _validate_path_safety(local_path, is_write=is_write)
+    if path_err:
+        return {"error": path_err}
+
+    # Reject options injection in remote path
+    if remote_path.strip().startswith("-"):
+        return {"error": "Invalid remote path. Options injection detected."}
+
     hosts_data = _load_hosts()
     target_host = host
     target_user = username

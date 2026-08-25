@@ -763,8 +763,8 @@ wheels = [
 ]
 
 [[package]]
-name = "mammouth-control-center"
-version = "1.0.0"
+name = "mammouth-defroster-9000"
+version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "customtkinter" },

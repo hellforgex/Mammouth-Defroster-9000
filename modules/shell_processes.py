@@ -48,6 +48,8 @@ def command_run(command: str, cwd: Optional[str] = None, timeout_seconds: int = 
             "stderr": str(e)
         }
 
+MAX_CONCURRENT_TASKS = 20
+
 def process_start_background(command: str, cwd: Optional[str] = None, name: Optional[str] = None) -> Dict[str, Any]:
     """Start a long-running process in the background (e.g. dev server, script).
     
@@ -56,6 +58,11 @@ def process_start_background(command: str, cwd: Optional[str] = None, name: Opti
         cwd: Working directory (optional).
         name: Short descriptive name for this background task.
     """
+    # Count active running processes
+    running_count = sum(1 for p in BACKGROUND_PROCESSES.values() if p["proc"].poll() is None)
+    if running_count >= MAX_CONCURRENT_TASKS:
+        return {"error": f"Process limit reached ({running_count}/{MAX_CONCURRENT_TASKS} active tasks). Terminate finished or running tasks first."}
+
     task_id = str(uuid.uuid4())[:8]
     task_name = name or f"task-{task_id}"
     log_file = LOGS_DIR / f"{task_id}.log"

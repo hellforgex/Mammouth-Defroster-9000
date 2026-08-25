@@ -124,21 +124,31 @@ if active_capabilities:
 # ==========================================
 
 # Active authenticated session cache (session_id -> expiration timestamp)
+MAX_AUTHENTICATED_SESSIONS = 500
 AUTHENTICATED_SESSIONS: Dict[str, float] = {}
 SESSION_LOCK = threading.Lock()
 
 def record_authenticated_session(session_id: str, ttl_seconds: float = 86400.0):
-    if not session_id:
+    """Store authenticated session with TTL and bounded LRU eviction."""
+    if not session_id or len(session_id) > 128:
         return
     with SESSION_LOCK:
         now = time.time()
-        # Clean expired
+        # Clean expired sessions
         expired = [sid for sid, exp in AUTHENTICATED_SESSIONS.items() if exp < now]
         for sid in expired:
             del AUTHENTICATED_SESSIONS[sid]
+        
+        # Enforce hard capacity limit to prevent unbounded memory growth
+        if len(AUTHENTICATED_SESSIONS) >= MAX_AUTHENTICATED_SESSIONS:
+            oldest = sorted(AUTHENTICATED_SESSIONS.items(), key=lambda x: x[1])[:50]
+            for sid, _ in oldest:
+                del AUTHENTICATED_SESSIONS[sid]
+                
         AUTHENTICATED_SESSIONS[session_id] = now + ttl_seconds
 
 def is_session_authenticated(session_id: str) -> bool:
+    """Check if session_id is currently active and authenticated."""
     if not session_id:
         return False
     with SESSION_LOCK:
@@ -199,7 +209,7 @@ class AuthenticationMiddleware:
                     record_authenticated_session(session_id)
 
                 if not token_valid:
-                    print(f"[AUTH BLOCKED] Unauthorized request to {scope.get('method')} {path} (Query: {query_string})")
+                    print(f"[AUTH BLOCKED] Unauthorized request to {scope.get('method')} {path}")
                     response = JSONResponse(
                         {
                             "error": "Unauthorized",
@@ -214,12 +224,13 @@ class AuthenticationMiddleware:
             if scope.get("path") == "/sse":
                 async def custom_send(message):
                     if message.get("type") == "http.response.body":
-                        body = message.get("body", b"").decode("utf-8", errors="ignore")
-                        if "session_id=" in body:
-                            match = urllib.parse.parse_qs(urllib.parse.urlparse(body.split("data: ")[-1].strip()).query)
-                            sid = match.get("session_id", [""])[0]
-                            if sid:
-                                record_authenticated_session(sid)
+                        try:
+                            body = message.get("body", b"").decode("utf-8", errors="ignore")
+                            match = re.search(r"session_id=([a-zA-Z0-9_-]+)", body)
+                            if match:
+                                record_authenticated_session(match.group(1))
+                        except Exception:
+                            pass
                     await send(message)
 
                 await self.app(scope, receive, custom_send)
@@ -229,7 +240,7 @@ class AuthenticationMiddleware:
 
 
 class LoggingAndNormalizationMiddleware:
-    """Logs requests and normalizes Accept headers for seamless MCP cloud compatibility."""
+    """Normalizes Accept headers and logs non-sensitive route metadata without leaking payloads."""
     def __init__(self, app: ASGIApp):
         self.app = app
 
@@ -244,25 +255,12 @@ class LoggingAndNormalizationMiddleware:
                 new_headers.append((b"accept", b"application/json, text/event-stream, */*"))
                 scope["headers"] = new_headers
 
-            body_chunks = []
-            async def receive_with_logging():
-                msg = await receive()
-                if msg.get("type") == "http.request":
-                    body_chunks.append(msg.get("body", b""))
-                    if not msg.get("more_body", False):
-                        full_body = b"".join(body_chunks).decode("utf-8", errors="replace")
-                        if full_body.strip():
-                            print(f"[MCP INCOMING] {scope.get('method')} {scope.get('path')} Body: {full_body[:300]}")
-                return msg
+            method = scope.get("method", "")
+            path = scope.get("path", "")
+            if method != "OPTIONS":
+                print(f"[MCP ROUTE] {method} {path}")
 
-            async def send_with_logging(msg):
-                if msg.get("type") == "http.response.body":
-                    chunk = msg.get("body", b"").decode("utf-8", errors="replace")
-                    if chunk.strip():
-                        print(f"[MCP OUTGOING] Body: {chunk[:300]}")
-                await send(msg)
-
-            await self.app(scope, receive_with_logging, send_with_logging)
+            await self.app(scope, receive, send)
         else:
             await self.app(scope, receive, send)
 
@@ -300,7 +298,7 @@ def build_app():
             allow_origins=allowed_origins,
             allow_origin_regex=r"https://[a-zA-Z0-9-]+\.mammouth\.ai$",
             allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-            allow_headers=["*"],
+            allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With", "Mcp-Session-Id", "Last-Event-ID", "Origin"],
             allow_credentials=True,
         ),
         Middleware(AuthenticationMiddleware),
