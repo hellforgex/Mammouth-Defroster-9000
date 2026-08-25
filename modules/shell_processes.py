@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import time
 import uuid
@@ -13,6 +14,32 @@ LOGS_DIR.mkdir(exist_ok=True)
 # In-memory registry of background processes
 BACKGROUND_PROCESSES: Dict[str, Dict[str, Any]] = {}
 
+# Destructive system command patterns blocked for safety
+BLOCKED_COMMAND_PATTERNS = [
+    re.compile(r"\b(format-(volume|disk)|clear-disk|initialize-disk)\b", re.IGNORECASE),
+    re.compile(r"\bdiskpart\b", re.IGNORECASE),
+    re.compile(r"\bbcdedit\b", re.IGNORECASE),
+    re.compile(r"\b(remove-item|rmdir|rd|del)\s+.*-recurse\s+.*[c-zC-Z]:\\(windows|system32|users)?\s*$", re.IGNORECASE),
+    re.compile(r"\b(stop-computer|restart-computer)\b", re.IGNORECASE),
+]
+
+def _is_safe_command(cmd_str: str) -> Optional[str]:
+    """Validate command against destructive system wipe commands."""
+    for pat in BLOCKED_COMMAND_PATTERNS:
+        if pat.search(cmd_str):
+            return "Security Error: Destructive system command blocked by safety policy."
+    return None
+
+def _cleanup_old_logs(max_files: int = 50):
+    """Rotate and clean up old execution log files to prevent storage accumulation."""
+    try:
+        log_files = sorted(LOGS_DIR.glob("*.log"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if len(log_files) > max_files:
+            for old_log in log_files[max_files:]:
+                old_log.unlink(missing_ok=True)
+    except Exception:
+        pass
+
 def command_run(command: str, cwd: Optional[str] = None, timeout_seconds: int = 60) -> Dict[str, Any]:
     """Execute a local PowerShell command synchronously and return stdout and stderr.
     
@@ -21,6 +48,10 @@ def command_run(command: str, cwd: Optional[str] = None, timeout_seconds: int = 
         cwd: Working directory (optional).
         timeout_seconds: Timeout in seconds (default 60).
     """
+    block_reason = _is_safe_command(command)
+    if block_reason:
+        return {"exit_code": -1, "stdout": "", "stderr": block_reason}
+
     work_dir = cwd if cwd and os.path.exists(cwd) else os.getcwd()
     try:
         proc = subprocess.run(
@@ -47,7 +78,7 @@ def command_run(command: str, cwd: Optional[str] = None, timeout_seconds: int = 
         return {
             "exit_code": -1,
             "stdout": "",
-            "stderr": str(e)
+            "stderr": f"Execution error: {type(e).__name__}"
         }
 
 MAX_CONCURRENT_TASKS = 20
@@ -60,6 +91,12 @@ def process_start_background(command: str, cwd: Optional[str] = None, name: Opti
         cwd: Working directory (optional).
         name: Short descriptive name for this background task.
     """
+    block_reason = _is_safe_command(command)
+    if block_reason:
+        return {"error": block_reason}
+
+    _cleanup_old_logs()
+
     # Count active running processes
     running_count = sum(1 for p in BACKGROUND_PROCESSES.values() if p["proc"].poll() is None)
     if running_count >= MAX_CONCURRENT_TASKS:

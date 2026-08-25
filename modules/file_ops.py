@@ -45,6 +45,15 @@ def _validate_path_safety(target_path: str, is_write: bool = False) -> Optional[
 
     return None
 
+# Dangerous regex quantifier nesting patterns prone to ReDoS
+REDOS_SUSPECT_PATTERN = re.compile(r"(\([^\)]*[\+\*][^\)]*\)[\+\*]|(?:\[[^\]]*\]|\.|\w)[\+\*]\{2,\}|\(\.\*\)\+)")
+
+def _is_safe_regex(pattern_str: str) -> bool:
+    """Detect common catastrophic backtracking regex constructs."""
+    if REDOS_SUSPECT_PATTERN.search(pattern_str):
+        return False
+    return True
+
 def file_read(file_path: str, start_line: Optional[int] = None, end_line: Optional[int] = None, max_chars: int = 50000) -> str:
     """Read a text file with optional line slicing within authorized workspace.
     
@@ -77,8 +86,10 @@ def file_read(file_path: str, start_line: Optional[int] = None, end_line: Option
         if len(content) > max_chars:
             return content[:max_chars] + f"\n\n[... Truncated, total length is {len(content)} characters ...]"
         return content
+    except PermissionError:
+        return "Error reading file: Permission denied."
     except Exception as e:
-        return f"Error reading file: {e}"
+        return f"Error reading file: {type(e).__name__}"
 
 DANGEROUS_WRITE_EXTENSIONS = {".exe", ".dll", ".scr", ".sys", ".drv", ".msi", ".com"}
 
@@ -105,8 +116,10 @@ def file_write(file_path: str, content: str, overwrite: bool = True) -> str:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         return f"Successfully wrote {len(content)} characters to {file_path}"
+    except PermissionError:
+        return "Error writing file: Permission denied."
     except Exception as e:
-        return f"Error writing file: {e}"
+        return f"Error writing file: {type(e).__name__}"
 
 def file_replace_chunk(file_path: str, target_chunk: str, replacement_chunk: str) -> str:
     """Replace an exact block of text/code in a file securely within the workspace sandbox.
@@ -134,8 +147,10 @@ def file_replace_chunk(file_path: str, target_chunk: str, replacement_chunk: str
         new_content = content.replace(target_chunk, replacement_chunk, 1)
         path.write_text(new_content, encoding="utf-8")
         return f"Successfully replaced chunk in {file_path}"
+    except PermissionError:
+        return "Error modifying file: Permission denied."
     except Exception as e:
-        return f"Error modifying file: {e}"
+        return f"Error modifying file: {type(e).__name__}"
 
 def file_search_text(
     directory_path: str,
@@ -164,8 +179,10 @@ def file_search_text(
     results = []
     compiled_re = None
     if is_regex:
-        if len(search_query) > 200:
-            return [{"error": "Regex pattern exceeds maximum allowed length of 200 characters (ReDoS protection)."}]
+        if len(search_query) > 150:
+            return [{"error": "Regex pattern exceeds maximum allowed length of 150 characters (ReDoS protection)."}]
+        if not _is_safe_regex(search_query):
+            return [{"error": "Regex pattern rejected: Potentially vulnerable to catastrophic backtracking (ReDoS protection)."}]
         try:
             compiled_re = re.compile(search_query, re.IGNORECASE)
         except re.error as e:
@@ -183,8 +200,9 @@ def file_search_text(
                         with open(fp, 'r', encoding='utf-8', errors='ignore') as f:
                             for idx, line in enumerate(f, 1):
                                 match = False
+                                clipped_line = line[:1000] # Limit line length to prevent ReDoS on massive lines
                                 if is_regex and compiled_re:
-                                    match = bool(compiled_re.search(line))
+                                    match = bool(compiled_re.search(clipped_line))
                                 elif search_query.lower() in line.lower():
                                     match = True
                                     
@@ -199,7 +217,7 @@ def file_search_text(
                     except Exception:
                         pass
     except Exception as e:
-        results.append({"error": str(e)})
+        results.append({"error": f"Search failed: {type(e).__name__}"})
         
     return results
 

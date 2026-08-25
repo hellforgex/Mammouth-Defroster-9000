@@ -255,12 +255,16 @@ class LoggingAndNormalizationMiddleware:
                 new_headers.append((b"accept", b"application/json, text/event-stream, */*"))
                 scope["headers"] = new_headers
 
-            method = scope.get("method", "")
-            path = scope.get("path", "")
-            if method != "OPTIONS":
-                print(f"[MCP ROUTE] {method} {path}")
+            async def send_with_security_headers(message):
+                if message.get("type") == "http.response.start":
+                    headers = list(message.get("headers", []))
+                    headers.append((b"x-content-type-options", b"nosniff"))
+                    headers.append((b"x-frame-options", b"DENY"))
+                    headers.append((b"referrer-policy", b"no-referrer"))
+                    message["headers"] = headers
+                await send(message)
 
-            await self.app(scope, receive, send)
+            await self.app(scope, receive, send_with_security_headers)
         else:
             await self.app(scope, receive, send)
 

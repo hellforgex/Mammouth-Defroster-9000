@@ -105,8 +105,12 @@ def web_fetch_url(url: str, max_length: int = 25000) -> str:
         if len(text) > max_length:
             return text[:max_length] + f"\n\n[... Truncated, total text length is {len(text)} characters ...]"
         return text if text else "Webpage returned empty content."
+    except httpx.HTTPStatusError as e:
+        return f"HTTP error {e.response.status_code} fetching URL."
+    except httpx.TimeoutException:
+        return "Request timed out while connecting to URL."
     except Exception as e:
-        return f"Error fetching {url}: {e}"
+        return f"Error fetching URL: {type(e).__name__}"
 
 def web_check_status(url: str) -> Dict[str, Any]:
     """Check HTTP response status, headers, and latency of any URL or API endpoint."""
@@ -124,5 +128,7 @@ def web_check_status(url: str) -> Dict[str, Any]:
                 "content_type": resp.headers.get("content-type"),
                 "elapsed_ms": round(resp.elapsed.total_seconds() * 1000, 2)
             }
+    except httpx.TimeoutException:
+        return {"error": "Connection timed out", "url": url}
     except Exception as e:
-        return {"error": str(e), "url": url}
+        return {"error": f"Request failed: {type(e).__name__}", "url": url}

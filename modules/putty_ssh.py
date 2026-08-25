@@ -214,7 +214,7 @@ def ssh_exec_command(
         return {
             "exit_code": -1,
             "stdout": "",
-            "stderr": f"SSH error: {str(e)}",
+            "stderr": f"SSH connection failed: {type(e).__name__} (Verify host credentials and network).",
             "host": target_host,
             "command": command
         }
