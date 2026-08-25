@@ -21,7 +21,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "host": "127.0.0.1",
         "port": 8000,
         "tunnel_mode": "Tailscale Funnel",  # Options: "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"
-        "endpoint_path": "/sse",           # Options: "/sse", "/mcp", "/messages", "/"
+        "endpoint_path": "/mcp",           # Options: "/mcp", "/sse", "/messages", "/"
         "auto_tunnel": True,
         "api_token": "",                   # Generated on initial run
         "enforce_auth": True,              # Require Bearer token or ?token= in URL

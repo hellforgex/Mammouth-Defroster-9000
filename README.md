@@ -145,16 +145,16 @@
   <img src="assets/icon.png" alt="Mammouth Defroster Icon" width="100">
 </p>
 
-1. In **Mammouth Defroster 9000**, select your **Exposure Mode** (e.g. *Tailscale Funnel*) and click **`▶ Start Server`**.
-2. Click **`📋 Copy`** next to the calculated **Public Endpoint URL** (e.g. `https://<node>.ts.net/sse`).
+1. In **Mammouth Defroster 9000**, select your **Exposure Mode** (e.g. *Tailscale Funnel*) with default **`/mcp`** route and click **`▶ Start Server`**.
+2. Click **`📋 Copy`** next to the calculated **Public Endpoint URL** (e.g. `https://<node>.ts.net/mcp?token=<token>`).
 3. Open **[Mammouth.ai](https://mammouth.ai)**:
    - Navigate to **Settings** → **Custom MCP Servers**.
    - Click **Add MCP Server**:
      - **Name**: `Mammouth Defroster 9000`
-     - **Type**: `SSE` (Server-Sent Events)
-     - **URL**: Paste your copied endpoint (`https://.../sse`).
+     - **Type**: `HTTP` / `Streamable HTTP` (or `SSE`)
+     - **URL**: Paste your copied endpoint (`https://.../mcp?token=...`).
    - Click **Save / Connect**.
-4. Start a new chat! Mammouth will immediately discover and utilize your 32 defrosted tools.
+4. Start a new chat! Mammouth will immediately authenticate, discover, and utilize your 32 defrosted tools.
 
 ---
 

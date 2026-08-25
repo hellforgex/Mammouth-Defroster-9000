@@ -3,7 +3,7 @@
     "host": "127.0.0.1",
     "port": 8000,
     "tunnel_mode": "Tailscale Funnel",
-    "endpoint_path": "/sse",
+    "endpoint_path": "/mcp",
     "auto_tunnel": true,
     "api_token": "your_secure_random_token_here",
     "enforce_auth": true,
