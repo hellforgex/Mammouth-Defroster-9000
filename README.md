@@ -1,23 +1,41 @@
 # 🦣❄️ Mammouth Defroster 9000
 
 > **Sovereign Windows 11 FastMCP Desktop Cockpit & DevOps Powerhouse**  
-> Tailored for Mammouth.ai with Live Unreal Engine 5 Automation, DPAPI Credential Security, Sandboxed File Operations, and Multi-Monitor Vision.
+> Custom-Engineered for **Mammouth.ai** with Live Unreal Engine 5 Automation, Multi-Monitor Vision, and Hardware-Secured Bearer Authentication.
 
 ---
 
-## 🌟 Overview
+## 🌟 Flagship Highlights
 
-**Mammouth Defroster 9000** is a production-grade, sovereign Model Context Protocol (MCP) server and desktop control cockpit. It provides local and remote AI models with powerful, sandboxed tools to automate development workflows, perform system diagnostics, manage SSH/PuTTY hosts, capture desktop screens, and interact directly with Unreal Engine 5.
+### 1. 🦣 Seamless Mammouth.ai Integration & Bearer Token Security
+- **Instant Cloud & Desktop Pairing:** Connects effortlessly to [Mammouth.ai](https://mammouth.ai) and [app.mammouth.ai](https://app.mammouth.ai) via high-throughput SSE / MCP endpoints.
+- **Hardware DPAPI Token Security:** API tokens and host credentials are encrypted directly via Windows DPAPI (`win32crypt.CryptProtectData`), ensuring zero plaintext leaks on disk or in git.
+- **Zero-Config Public Tunneling:** One-click integration with **Tailscale Funnel**, **Cloudflare Tunnels**, **ngrok**, or custom domains with progressive IP backoff anti-bruteforce defense ($2^n$s delay).
 
-### 🛡️ Security Architecture Highlights (v0.2.0)
-- **Fail-Closed Bearer Token Authentication:** Progressive exponential backoff per IP after failed attempts.
-- **DPAPI Hardware Token & Host Encryption:** API tokens and SSH passwords encrypted using Windows DPAPI (`win32crypt`).
-- **Strict Unreal Engine AST Allowlist:** Only 19 pre-approved standard modules permitted (`ALLOWED_MODULES`); all unauthorized imports, reflection, and dynamic code execution are unconditionally blocked.
-- **HMAC-SHA256 Challenge-Response Protocol:** Cryptographically authenticated remote execution on loopback sockets.
-- **Read-Only Shell Default with R7-N1 Path Guard:** PowerShell execution runs in Read-Only mode by default; path traversal outside workspace is strictly blocked. Admin mode requires explicit user confirmation.
-- **Desktop Vision Consent Gate:** Screen capture requires explicit interactive user consent (`require_consent: true`).
-- **Transport-Level SSRF Shield:** DNS pre-resolution and IP validation preventing access to internal/cloud metadata networks.
-- **Local LAN HTTPS / TLS Support:** Automated self-signed certificate generation (`generate_self_signed_cert`).
+### 2. 🎮 Live Unreal Engine 5 & 4 Automation Engine
+- **Direct Viewport & Scene Control:** Execute Python commands directly inside running Unreal Engine 5.x / 4.x Editor sessions in real time.
+- **Actor Spawning & Scene Inspection:** Inspect World Outliners, spawn static meshes, adjust materials, align viewport cameras, and trigger editor transactions.
+- **Hardened AST Sandbox & Cryptographic Handshake:** Protected by an AST Import Allowlist (`ALLOWED_MODULES = 19 standard modules`) and HMAC-SHA256 challenge-response verification on loopback sockets.
+
+### 3. 👁️ Multi-Monitor Desktop Vision for Multimodal LLMs
+- **High-Performance Multi-Screen Capture:** Instant screenshot captures across primary, secondary, or unified multi-monitor desktop spaces using hardware-accelerated MSS.
+- **LLM Token Optimization:** Intelligent downscaling and JPEG/PNG quality clamping to maximize vision accuracy while conserving AI context tokens.
+- **Interactive Consent Gate:** User-controlled privacy shield requiring interactive approval before screenshots are taken, coupled with 24-hour automated file pruning.
+
+---
+
+## 🛠️ Complete Tool Ecosystem
+
+| Module | Description | MCP Capabilities |
+|---|---|---|
+| 🦣 **Auth & Server** | Bearer token verification, DPAPI encryption, progressive IP lockout | Fail-closed protection, OPTIONS preflight, Security headers |
+| 🎮 **Unreal Engine** | Live UE5/UE4 Editor Python remote execution & viewport bridge | `unreal_execute_python`, `unreal_get_actors`, `unreal_spawn_actor` |
+| 👁️ **Desktop Vision** | Multi-monitor screen capture & downscaling for multimodal LLMs | `screen_capture`, `screen_list_monitors`, `screen_grant_consent` |
+| 💻 **PowerShell Shell** | Read-Only default shell with R7-N1 Path Guard & admin opt-in | `command_run`, `process_start_background`, `process_list` |
+| 📁 **File Operations** | Fail-closed workspace sandboxing, text search, code replacement | `file_read`, `file_write`, `file_search_text`, `file_replace_chunk` |
+| 🔑 **PuTTY & SSH** | Remote Linux terminal execution, SCP file transfers, PuTTY GUI launch | `ssh_exec_command`, `ssh_transfer_file`, `ssh_open_putty_window` |
+| 🧠 **Memory & Kanban** | SQLite persistent cross-session memory & Kanban task management | `memory_save`, `memory_recall`, `task_create`, `task_list` |
+| 📊 **System Monitor** | Real-time CPU, RAM, GPU, process listing, and Windows Event Logs | `system_get_specs`, `system_get_gpu_info`, `system_list_processes` |
 
 ---
 
@@ -28,46 +46,19 @@
 - Python 3.10+ (for source installation) or standalone binary from `dist/MammouthDefroster9000`
 
 ### Quick Start (Source)
-1. Clone the repository and install dependencies:
-   ```cmd
-   git clone https://github.com/mammouth-ai/mcpserv.git
-   cd mcpserv
-   pip install -r requirements.txt
-   ```
-2. Start the graphical cockpit:
-   ```cmd
-   python gui.py
-   ```
-3. Or start the headless server:
-   ```cmd
-   python server.py
-   ```
+```cmd
+git clone https://github.com/mammouth-ai/mcpserv.git
+cd mcpserv
+pip install -r requirements.txt
+python gui.py
+```
 
 ### Quick Start (Standalone Release)
 Run `MammouthDefroster9000.exe` from the release package.
 
 ---
 
-## ⚙️ Configuration (`config.json`)
-
-```json
-{
-  "server": {
-    "host": "127.0.0.1",
-    "port": 8000,
-    "enforce_auth": true,
-    "api_token": "dpapi:...",
-    "allow_admin_shell": false,
-    "enable_tls": false,
-    "enforce_workspace_sandbox": true,
-    "workspace_root": "./workspace"
-  }
-}
-```
-
----
-
-## 🧪 Testing
+## 🧪 Testing & Verification
 
 Run the full automated security regression test suite:
 ```cmd
