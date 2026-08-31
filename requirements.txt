@@ -1,0 +1,9 @@
+fastmcp>=3.4.0,<4.0.0
+httpx>=0.28.0,<1.0.0
+psutil>=7.0.0,<8.0.0
+uvicorn>=0.30.0,<1.0.0
+starlette>=0.38.0,<1.0.0
+customtkinter>=5.2.0,<6.0.0
+pillow>=10.0.0,<13.0.0
+packaging>=24.0,<25.0
+pyinstaller>=6.10.0,<7.0.0

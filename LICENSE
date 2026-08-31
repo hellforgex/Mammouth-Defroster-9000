@@ -1,0 +1,58 @@
+MIT License
+
+Copyright (c) 2026 noskillz (hellforgex)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+  LEGAL DISCLAIMER & LIMITATION OF LIABILITY
+================================================================================
+
+1. Gratuitous Provision ("As-Is" / Section 521 BGB):
+   This software is provided as an open-source project entirely free of charge on an
+   "as-is" and "as-available" basis. Pursuant to applicable statutory law governing
+   gratuitous software provision (including Section 521 of the German Civil Code / BGB),
+   the liability of the author and developer (noskillz / hellforgex) is strictly
+   limited to intentional misconduct (Vorsatz) and gross negligence (grobe Fahrlässigkeit).
+   Any liability for ordinary, slight, or simple negligence is expressly excluded to the
+   fullest extent permissible under governing law.
+
+2. Sole Risk and Operator Responsibility:
+   The execution and utilization of all capabilities provided by this software—including,
+   without limitation, modules executing local command-line / PowerShell instructions,
+   file system manipulations (reading, writing, replacing, deleting), system hardware
+   diagnostics, and remote SSH / VPS server operations (PuTTY / Plink / PSCP)—are
+   undertaken strictly and solely at the user's own risk. The operator retains sole,
+   exclusive responsibility for all commands, scripts, actions, and side effects initiated
+   by themselves or triggered by connected artificial intelligence models and autonomous agents.
+
+3. Exclusion of Consequential, Incidental, and Financial Damages:
+   Under no circumstances shall the author or developer be held liable for any direct,
+   indirect, incidental, special, exemplary, punitive, or consequential damages, including
+   but not limited to data loss, corrupted storage, operating system damage, hardware failure,
+   downtime, loss of business or profits, unauthorized third-party access, security incidents,
+   or network compromise arising out of the installation, configuration, execution, or
+   network exposure (via Tailscale, Cloudflare, ngrok, port forwarding, or custom proxy)
+   of this software.
+
+4. Network and Endpoint Security:
+   The user is solely responsible for implementing adequate security controls across all
+   network interfaces and tunnel endpoints (such as VPN isolation, firewall policies, and
+   token authentication). Operating this server on publicly routable networks without
+   authentication is performed strictly at the user's sole risk and discretion.
