@@ -1,0 +1,60 @@
+{
+  "server": {
+    "port": 8000,
+    "host": "127.0.0.1",
+    "enforce_auth": true,
+    "api_token": "",
+    "allow_admin_shell": false,
+    "enable_tls": false,
+    "ssl_certfile": "",
+    "ssl_keyfile": "",
+    "tunnel_mode": "Tailscale Funnel",
+    "endpoint_path": "/sse",
+    "auto_tunnel": false,
+    "tailscale_path": "",
+    "cloudflare_custom_url": "",
+    "ngrok_custom_url": "",
+    "custom_public_url": "",
+    "appearance_mode": "Dark",
+    "enforce_workspace_sandbox": true,
+    "workspace_root": "./workspace",
+    "allowed_origins": [
+      "https://mammouth.ai",
+      "https://app.mammouth.ai",
+      "http://localhost",
+      "http://127.0.0.1",
+      "http://localhost:3000",
+      "http://localhost:8000"
+    ]
+  },
+  "modules": {
+    "memory": {
+      "enabled": true
+    },
+    "tasks_kanban": {
+      "enabled": true
+    },
+    "file_ops": {
+      "enabled": true
+    },
+    "shell_processes": {
+      "enabled": false
+    },
+    "putty_ssh": {
+      "enabled": true
+    },
+    "system_monitor": {
+      "enabled": true
+    },
+    "web_tools": {
+      "enabled": false
+    },
+    "screen_capture": {
+      "enabled": true,
+      "require_consent": true
+    },
+    "unreal_engine": {
+      "enabled": true
+    }
+  }
+}

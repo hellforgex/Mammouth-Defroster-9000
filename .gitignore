@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Secrets & Local Configurations
+config.json
+hosts.json
+*.db
+*.sqlite
+*.sqlite3
+*.log
+server.log
+
+# Workspace & User Data
+workspace/
+process_logs/
+stunt car racer/
+test_screen.png
+
+# Build & Release Artifacts
+build/
+dist/
+MammouthDefroster9000-v*/
+*.exe
+*.zip

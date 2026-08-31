@@ -1,0 +1,10 @@
+{
+  "example-linux-vps": {
+    "host": "192.168.1.50",
+    "username": "root",
+    "port": 22,
+    "password": "",
+    "private_key_path": "",
+    "description": "Example SSH Host (Passwords are encrypted via Windows DPAPI upon save)"
+  }
+}
