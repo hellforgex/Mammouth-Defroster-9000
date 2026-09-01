@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-09-01
+
+### 🚀 Packaging, GUI Stability & Standalone Binary Fixes
+- **Inlined Self-Signed TLS Generation (`gui.py`):** Inlined TLS certificate generation directly into GUI startup to guarantee zero-dependency server launches across all execution environments.
+- **PyInstaller Asset Collection (`build.bat`):** Upgraded build scripts with full `--collect-all` for `customtkinter`, `fastmcp`, `uvicorn`, and `PIL` ensuring all UI themes, fonts, and runtime dependencies are fully bundled in standalone `.exe` packages.
+- **Synchronized Workspaces:** Unified multi-directory builds and eliminated legacy script paths.
+
+---
+
 ## [0.2.0] - 2026-08-31
 
 ### 🛡️ Security Hardening & Audit Remediation (Rounds 5–7 Verification)
