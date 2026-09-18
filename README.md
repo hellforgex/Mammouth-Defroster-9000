@@ -19,6 +19,10 @@
   <b>Mammouth Defroster 9000 (MD-9000)</b> is a sovereign FastMCP desktop cockpit and Windows automation platform engineered by <b>noskillz</b>. It connects your remote <a href="https://mammouth.ai">Mammouth.ai</a> assistant directly to your local Windows PC — letting your AI see your desktop, automate clicks & keystrokes, edit code in a safe workspace, run PowerShell commands, monitor hardware, and even control Unreal Engine 5.
 </p>
 
+<p align="center">
+  <img src="assets/cockpit_dark.png" alt="Mammouth Defroster 9000 Cockpit Dashboard (Dark Mode)" width="95%">
+</p>
+
 ---
 
 ## 🚀 60-Second Quickstart (The Easy Way — No Python Needed!)
