@@ -11,6 +11,7 @@
     "tunnel_mode": "Tailscale Funnel",
     "endpoint_path": "/sse",
     "auto_tunnel": false,
+    "auto_start_server": false,
     "tailscale_path": "",
     "cloudflare_custom_url": "",
     "ngrok_custom_url": "",
@@ -54,6 +55,9 @@
       "require_consent": true
     },
     "unreal_engine": {
+      "enabled": true
+    },
+    "desktop_input": {
       "enabled": true
     }
   }

@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('assets', 'assets'), ('modules', 'modules'), ('config.example.json', '.'), ('hosts.example.json', '.')]
 binaries = []
-hiddenimports = ['server', 'config', 'pystray']
+hiddenimports = ['server', 'config', 'pystray', 'modules.desktop_input']
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('PIL')
@@ -33,7 +33,7 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe = EXE(
+exe_gui = EXE(
     pyz,
     a.scripts,
     [],
@@ -51,8 +51,29 @@ exe = EXE(
     entitlements_file=None,
     icon=['assets/icon.ico'],
 )
+
+exe_server = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name='MammouthDefroster9000-server',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=['assets/icon.ico'],
+)
+
 coll = COLLECT(
-    exe,
+    exe_gui,
+    exe_server,
     a.binaries,
     a.datas,
     strip=False,

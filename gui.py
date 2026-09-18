@@ -12,19 +12,92 @@ import webbrowser
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
-# If spawned in CLI / server-only mode, run headless server without GUI
-if "--server-only" in sys.argv or "--cli" in sys.argv or "--headless" in sys.argv:
+# Add project directories to sys.path
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.resolve()
+
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+if (BASE_DIR / "mcpserv").exists() and str(BASE_DIR / "mcpserv") not in sys.path:
+    sys.path.insert(0, str(BASE_DIR / "mcpserv"))
+if (BASE_DIR / "modules").exists() and str(BASE_DIR / "modules") not in sys.path:
+    sys.path.insert(0, str(BASE_DIR / "modules"))
+
+from config import load_config, save_config, get_lan_ip, generate_secure_token, _decrypt_dpapi, CONFIG_FILE
+from server import build_app, app
+
+# If spawned as dedicated server executable or with CLI / server-only flags, run headless server
+is_server_binary = "server" in Path(sys.argv[0]).stem.lower()
+if is_server_binary or "--server-only" in sys.argv or "--cli" in sys.argv or "--headless" in sys.argv:
+    # Try attaching to Windows parent console so logs stream directly to the terminal
+    if os.name == "nt":
+        try:
+            import ctypes
+            if ctypes.windll.kernel32.AttachConsole(-1):
+                sys.stdout = open("CONOUT$", "w", encoding="utf-8", errors="replace")
+                sys.stderr = open("CONOUT$", "w", encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     import uvicorn
-    # Add mcpserv to sys.path
-    base_p = Path(__file__).parent
-    if (base_p / "mcpserv").exists():
-        sys.path.insert(0, str(base_p / "mcpserv"))
-    elif (base_p / "modules").exists():
-        sys.path.insert(0, str(base_p))
-    from server import app, MCP_API_TOKEN
-    port = int(os.environ.get("PORT", 8000))
-    host = os.environ.get("HOST", "127.0.0.1")
-    uvicorn.run(app, host=host, port=port, log_level="info", use_colors=False)
+    from server import generate_self_signed_cert
+
+    cfg = load_config()
+    server_cfg = cfg.get("server", {})
+    port = int(os.environ.get("PORT", server_cfg.get("port", 8000)))
+    host = os.environ.get("HOST", server_cfg.get("host", "127.0.0.1"))
+    enable_tls = bool(server_cfg.get("enable_tls", False))
+    cert_file = server_cfg.get("ssl_certfile")
+    key_file = server_cfg.get("ssl_keyfile")
+
+    token = server_cfg.get("api_token", "").strip()
+    if token and token.startswith("dpapi:"):
+        dec = _decrypt_dpapi(token)
+        if dec and not dec.startswith("dpapi:"):
+            token = dec
+            cfg["server"]["api_token"] = token
+            save_config(cfg)
+    if server_cfg.get("enforce_auth", True) and not token:
+        token = generate_secure_token()
+        cfg["server"]["api_token"] = token
+        save_config(cfg)
+
+    server_app = build_app(token=token)
+
+    if enable_tls and (not cert_file or not os.path.exists(str(cert_file))):
+        default_cert = str(BASE_DIR / "cert.pem")
+        default_key = str(BASE_DIR / "key.pem")
+        if not os.path.exists(default_cert):
+            print("[TLS] Generating self-signed TLS certificate for local network security...")
+            generate_self_signed_cert(default_cert, default_key, host)
+        cert_file = default_cert
+        key_file = default_key
+
+    proto = "https" if enable_tls else "http"
+    print("=======================================================")
+    print(f"  Mammouth Defroster 9000 FastMCP Server (CLI Mode)")
+    print(f"  Listening on: {proto}://{host}:{port}/sse")
+    if token:
+        print(f"  Bearer Auth: ENABLED (Token: {token[:6]}...{token[-4:]})")
+    else:
+        print("  Bearer Auth: DISABLED")
+    print("  Press Ctrl+C in this terminal to stop.")
+    print("=======================================================\n")
+
+    uvicorn_kwargs = {
+        "app": server_app,
+        "host": host,
+        "port": port,
+        "log_level": "info",
+        "use_colors": False
+    }
+    if enable_tls and cert_file and os.path.exists(cert_file):
+        uvicorn_kwargs["ssl_certfile"] = cert_file
+        uvicorn_kwargs["ssl_keyfile"] = key_file
+
+    uvicorn.run(**uvicorn_kwargs)
     sys.exit(0)
 
 import customtkinter as ctk
@@ -45,18 +118,7 @@ try:
 except ImportError:
     pass
 
-# Add project directories to sys.path
-BASE_DIR = Path(__file__).parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
-if (BASE_DIR / "mcpserv").exists() and str(BASE_DIR / "mcpserv") not in sys.path:
-    sys.path.insert(0, str(BASE_DIR / "mcpserv"))
-if (BASE_DIR / "modules").exists() and str(BASE_DIR / "modules") not in sys.path:
-    sys.path.insert(0, str(BASE_DIR / "modules"))
-
-from config import load_config, save_config, get_lan_ip, generate_secure_token, CONFIG_FILE
 from modules.putty_ssh import ssh_save_host, ssh_list_saved_hosts, ssh_open_putty_window, ssh_exec_command
-from server import build_app, app
 
 # Appearance setup
 INITIAL_CONFIG = load_config()
@@ -65,7 +127,7 @@ ctk.set_appearance_mode(INITIAL_MODE)
 ctk.set_default_color_theme("dark-blue")
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.2.1 Hardened"
+APP_VERSION = "v0.2.2"
 
 
 def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
@@ -82,6 +144,50 @@ def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
     for c in candidates:
         if c and os.path.exists(c):
             return c
+    return None
+
+
+def find_cloudflared_binary(custom_path: str = "") -> Optional[str]:
+    """Find the cloudflared binary across custom config, app directories, siblings, and PATH."""
+    candidates = [
+        custom_path,
+        str(BASE_DIR / "cloudflared.exe") if os.name == "nt" else str(BASE_DIR / "cloudflared"),
+        str(BASE_DIR.parent / "cloudflared.exe") if os.name == "nt" else str(BASE_DIR.parent / "cloudflared"),
+        shutil.which("cloudflared"),
+        shutil.which("cloudflared.exe"),
+    ]
+    # Check parent directory for sibling release or extracted folders (e.g. MammouthDefroster9000-*)
+    try:
+        if BASE_DIR.parent.exists():
+            for sibling in BASE_DIR.parent.glob("*"):
+                if sibling.is_dir() and "Mammouth" in sibling.name:
+                    cand = sibling / ("cloudflared.exe" if os.name == "nt" else "cloudflared")
+                    if cand.exists():
+                        candidates.append(str(cand))
+    except Exception:
+        pass
+
+    # Common Windows installation locations
+    if os.name == "nt":
+        candidates.extend([
+            r"C:\Program Files\cloudflared\cloudflared.exe",
+            r"C:\Program Files (x86)\cloudflared\cloudflared.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\cloudflared\cloudflared.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\cloudflared\cloudflared.exe"),
+            os.path.expandvars(r"%USERPROFILE%\cloudflared.exe"),
+            os.path.expandvars(r"%USERPROFILE%\bin\cloudflared.exe"),
+            os.path.expandvars(r"%USERPROFILE%\scoop\shims\cloudflared.exe"),
+            os.path.expandvars(r"%ProgramData%\chocolatey\bin\cloudflared.exe"),
+            r"C:\cloudflared\cloudflared.exe",
+            r"C:\bin\cloudflared.exe",
+        ])
+
+    for c in candidates:
+        if c and os.path.exists(c) and os.path.isfile(c):
+            return str(Path(c).resolve())
+    return None
+
+
 def generate_self_signed_cert(cert_path: str, key_path: str, hostname: str = "localhost") -> bool:
     """Generate self-signed SSL certificate for local LAN development."""
     try:
@@ -350,13 +456,110 @@ class HostDialog(ctk.CTkToplevel):
         self.destroy()
 
 
+class SplashScreen(ctk.CTkToplevel):
+    """Modern dark-themed loading screen with progress feedback displayed during application startup."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Mammouth Defroster 9000 Loading...")
+        self.overrideredirect(True)
+        self.attributes("-topmost", True)
+        
+        width, height = 500, 280
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        x = max(0, (screen_w - width) // 2)
+        y = max(0, (screen_h - height) // 2)
+        self.geometry(f"{width}x{height}+{x}+{y}")
+        self.configure(fg_color="#0A0A0C")
+
+        container = ctk.CTkFrame(
+            self,
+            fg_color="#0F1014",
+            corner_radius=14,
+            border_width=2,
+            border_color="#3B82F6"
+        )
+        container.pack(fill="both", expand=True, padx=2, pady=2)
+
+        lbl_icon = ctk.CTkLabel(container, text="🦣❄️🔥", font=ctk.CTkFont(size=38))
+        lbl_icon.pack(pady=(28, 6))
+
+        lbl_title = ctk.CTkLabel(
+            container,
+            text="MAMMOUTH DEFROSTER 9000",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_title.pack(pady=(0, 2))
+
+        lbl_sub = ctk.CTkLabel(
+            container,
+            text=f"Sovereign FastMCP Desktop Cockpit • {APP_VERSION}",
+            font=ctk.CTkFont(size=11),
+            text_color="#94A3B8"
+        )
+        lbl_sub.pack(pady=(0, 16))
+
+        self.lbl_status = ctk.CTkLabel(
+            container,
+            text="Initializing FastMCP engine and security shield...",
+            font=ctk.CTkFont(size=11),
+            text_color="#38BDF8"
+        )
+        self.lbl_status.pack(pady=(0, 6))
+
+        self.progress = ctk.CTkProgressBar(
+            container,
+            width=380,
+            height=6,
+            corner_radius=3,
+            progress_color="#3B82F6",
+            fg_color="#1E293B"
+        )
+        self.progress.pack(pady=(0, 16))
+        self.progress.set(0.1)
+
+        lbl_footer = ctk.CTkLabel(
+            container,
+            text="Engineered for Mammouth.ai • Fail-Closed Architecture",
+            font=ctk.CTkFont(size=10),
+            text_color="#475569"
+        )
+        lbl_footer.pack(side="bottom", pady=(0, 12))
+
+        try:
+            self.update()
+        except Exception:
+            pass
+
+    def set_progress(self, val: float, message: str):
+        try:
+            self.progress.set(val)
+            self.lbl_status.configure(text=message)
+            self.update()
+        except Exception:
+            pass
+
+
 class MammouthControlCenter(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.withdraw()  # Hide main window during splash screen loading
         self.title(f"Mammouth Defroster 9000 🦣❄️🔥 ({APP_VERSION})")
         self.geometry("1140x840")
         self.minsize(1050, 740)
         self.configure(fg_color=("#F8FAFC", "#0A0A0C"))
+
+        # Center main window
+        try:
+            screen_w = self.winfo_screenwidth()
+            screen_h = self.winfo_screenheight()
+            win_w, win_h = 1140, 840
+            x = max(0, (screen_w - win_w) // 2)
+            y = max(0, (screen_h - win_h) // 2)
+            self.geometry(f"{win_w}x{win_h}+{x}+{y}")
+        except Exception:
+            pass
 
         # Set window icon if present
         for icon_p in [BASE_DIR / "assets" / "icon.ico", BASE_DIR.parent / "assets" / "icon.ico"]:
@@ -366,6 +569,16 @@ class MammouthControlCenter(ctk.CTk):
                     break
                 except Exception:
                     pass
+
+        # Show splash loading screen
+        splash = None
+        try:
+            splash = SplashScreen(self)
+        except Exception:
+            pass
+
+        if splash:
+            splash.set_progress(0.25, "Loading configuration and security credentials...")
 
         self.config_data = load_config()
         self.appearance_mode = self.config_data.get("server", {}).get("appearance_mode", "Dark")
@@ -378,10 +591,44 @@ class MammouthControlCenter(ctk.CTk):
         self.server_start_time = None
         self.log_filter_mode = "ALL"
 
+        if splash:
+            splash.set_progress(0.50, "Setting up system logging and audit streams...")
+
         self._setup_logging()
+
+        if splash:
+            splash.set_progress(0.75, "Building desktop cockpit user interface...")
+
         self._build_ui()
         self._start_stats_timer()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Register interactive screen capture consent callback
+        try:
+            from modules.screen_capture import set_consent_prompt_callback
+            set_consent_prompt_callback(self._prompt_screen_capture_consent)
+        except Exception:
+            pass
+
+        if splash:
+            splash.set_progress(1.0, "Ready! Starting Mammouth Defroster 9000...")
+
+            def finish_loading():
+                try:
+                    splash.destroy()
+                except Exception:
+                    pass
+                self.deiconify()
+                self.lift()
+                self.focus_force()
+                if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", False):
+                    self.after(200, self._start_server)
+
+            self.after(350, finish_loading)
+        else:
+            self.deiconify()
+            if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", False):
+                self.after(200, self._start_server)
 
     def _setup_logging(self):
         handler = GuiLogHandler(lambda msg: self.after(0, self._log, msg))
@@ -546,7 +793,7 @@ class MammouthControlCenter(ctk.CTk):
 
         ctk.CTkLabel(mode_bar, text="Exposure Mode:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
         
-        tunnel_modes = ["Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"]
+        tunnel_modes = ["Serveo (Public SSH Tunnel)", "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"]
         current_mode = self.config_data.get("server", {}).get("tunnel_mode", "Tailscale Funnel")
         self.dash_mode_menu = ctk.CTkOptionMenu(
             mode_bar,
@@ -627,7 +874,7 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
             border_color=("#A7F3D0", "#1E4B35"),
-            command=self._manual_detect_tailscale
+            command=self._manual_detect_url
         )
         btn_detect_ts.pack(side="left", padx=3)
 
@@ -645,20 +892,6 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_copy_pub.pack(side="left", padx=3)
 
-        btn_copy_key1 = ctk.CTkButton(
-            btn_box1,
-            text="📋 Copy Key",
-            width=95,
-            height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
-            border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
-            command=lambda: self._copy_to_clipboard(self.config_data.get("server", {}).get("api_token", ""), "Bearer Key")
-        )
-        btn_copy_key1.pack(side="left", padx=3)
-
         btn_copy_json = ctk.CTkButton(
             btn_box1,
             text="⚙️ MCP JSON",
@@ -675,7 +908,7 @@ class MammouthControlCenter(ctk.CTk):
 
         # Localhost Endpoint Row
         row2 = ctk.CTkFrame(card, fg_color="transparent")
-        row2.pack(fill="x", padx=15, pady=(4, 12))
+        row2.pack(fill="x", padx=15, pady=(4, 6))
         
         ctk.CTkLabel(row2, text="💻 Localhost URL:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#E5E7EB"), width=160, anchor="w").pack(side="left")
         self.lbl_local_url = ctk.CTkLabel(row2, text=self._calculate_local_endpoint_url(), font=ctk.CTkFont(size=12), text_color=("#475569", "#9CA3AF"))
@@ -697,6 +930,55 @@ class MammouthControlCenter(ctk.CTk):
             command=lambda: self._copy_to_clipboard(self.lbl_local_url.cget("text"), "Localhost URL")
         )
         btn_copy_loc.pack(side="left", padx=3)
+
+        # Active Bearer Token Row
+        row3 = ctk.CTkFrame(card, fg_color="transparent")
+        row3.pack(fill="x", padx=15, pady=(4, 12))
+
+        self.lbl_key_title = ctk.CTkLabel(row3, text="🔑 Bearer API Key:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#E5E7EB"), width=160, anchor="w")
+        self.lbl_key_title.pack(side="left")
+
+        current_token = self.config_data.get("server", {}).get("api_token", "")
+        self.dash_token_visible = True
+        display_tok = current_token if current_token else "(No Key Generated)"
+        self.lbl_dash_key = ctk.CTkLabel(
+            row3,
+            text=display_tok,
+            font=ctk.CTkFont(size=13, weight="bold", family="Consolas" if os.name == "nt" else "Monospace"),
+            text_color=("#059669", "#10B981")
+        )
+        self.lbl_dash_key.pack(side="left", padx=10)
+
+        btn_box3 = ctk.CTkFrame(row3, fg_color="transparent")
+        btn_box3.pack(side="right")
+
+        self.btn_toggle_dash_key = ctk.CTkButton(
+            btn_box3,
+            text="🔒 Hide Key",
+            width=95,
+            height=28,
+            fg_color=("#F1F5F9", "#1E2028"),
+            hover_color=("#E2E8F0", "#282A36"),
+            text_color=("#0F172A", "#F3F4F6"),
+            border_width=1,
+            border_color=("#CBD5E1", "#2A2C38"),
+            command=self._toggle_dash_key_visibility
+        )
+        self.btn_toggle_dash_key.pack(side="left", padx=3)
+
+        btn_copy_dash_key = ctk.CTkButton(
+            btn_box3,
+            text="📋 Copy Key",
+            width=95,
+            height=28,
+            fg_color=("#F1F5F9", "#1E2028"),
+            hover_color=("#E2E8F0", "#282A36"),
+            text_color=("#0F172A", "#F3F4F6"),
+            border_width=1,
+            border_color=("#CBD5E1", "#2A2C38"),
+            command=lambda: self._copy_to_clipboard(self.config_data.get("server", {}).get("api_token", ""), "Bearer Key")
+        )
+        btn_copy_dash_key.pack(side="left", padx=3)
 
         # 2. Fancy Live Telemetry & Progress Strip
         stats_strip = ctk.CTkFrame(self.tab_dashboard, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=8)
@@ -832,12 +1114,13 @@ class MammouthControlCenter(ctk.CTk):
             "memory": 5,
             "tasks_kanban": 4,
             "file_ops": 6,
-            "shell_processes": 5,
+            "shell_processes": 8,
             "putty_ssh": 6,
             "system_monitor": 4,
             "web_tools": 2,
-            "screen_capture": 2,
-            "unreal_engine": 23
+            "screen_capture": 4,
+            "unreal_engine": 23,
+            "desktop_input": 9
         }
         total = 0
         for k, v in mods.items():
@@ -848,6 +1131,10 @@ class MammouthControlCenter(ctk.CTk):
     def _copy_mcp_client_config(self):
         url = self._calculate_active_endpoint_url()
         token = self.config_data.get("server", {}).get("api_token", "")
+        if token and token.startswith("dpapi:"):
+            decrypted = _decrypt_dpapi(token)
+            if decrypted and not decrypted.startswith("dpapi:"):
+                token = decrypted
         cfg_snippet = {
             "mcpServers": {
                 "MammouthDefroster9000": {
@@ -957,6 +1244,14 @@ class MammouthControlCenter(ctk.CTk):
         self.config_data["server"]["tunnel_mode"] = choice
         self.opt_tunnel_mode.set(choice)
         save_config(self.config_data)
+        if self.is_server_running:
+            port = self.config_data.get("server", {}).get("port", 8000)
+            if choice == "Cloudflare Tunnel":
+                self._start_cloudflare_tunnel(port)
+            elif choice == "Serveo (Public SSH Tunnel)":
+                self._start_serveo_tunnel(port)
+            elif choice == "ngrok":
+                self._start_ngrok_tunnel(port)
         self._refresh_all_endpoint_labels()
         self._log(f"Switched exposure tunnel mode to: {choice}")
 
@@ -978,12 +1273,19 @@ class MammouthControlCenter(ctk.CTk):
                 return f"{ts_domain}{path}"
             return f"https://[your-tailscale-node].ts.net{path}"
 
+        elif mode == "Serveo (Public SSH Tunnel)":
+            if getattr(self, "serveo_url", None):
+                return f"{self.serveo_url.rstrip('/')}{path}"
+            return f"https://[random].serveousercontent.com{path} (Starting...)"
+
         elif mode == "Cloudflare Tunnel":
             if self.dynamic_tunnel_url:
                 return f"{self.dynamic_tunnel_url.rstrip('/')}{path}"
             custom_cf = cfg.get("cloudflare_custom_url", "").strip()
             if custom_cf:
                 return f"{custom_cf.rstrip('/')}{path}"
+            if self.is_server_running and getattr(self, "cf_proc", None):
+                return f"https://[connecting].trycloudflare.com{path} (Starting...)"
             return f"https://[your-app].trycloudflare.com{path}"
 
         elif mode == "ngrok":
@@ -1017,20 +1319,81 @@ class MammouthControlCenter(ctk.CTk):
     def _refresh_all_endpoint_labels(self):
         self.lbl_public_url.configure(text=self._calculate_active_endpoint_url())
         self.lbl_local_url.configure(text=self._calculate_local_endpoint_url())
+        if hasattr(self, "lbl_dash_key"):
+            cur_tok = self.config_data.get("server", {}).get("api_token", "")
+            if getattr(self, "dash_token_visible", True):
+                self.lbl_dash_key.configure(text=cur_tok if cur_tok else "(No Key Generated)")
+            else:
+                self.lbl_dash_key.configure(text="•" * 28 if cur_tok else "(No Key Generated)")
 
-    def _manual_detect_tailscale(self):
-        self._log("[DISCOVERY] Querying local Tailscale daemon for domain name...")
-        cfg = self.config_data.get("server", {})
-        domain = get_tailscale_public_domain(cfg.get("tailscale_path", ""))
-        if domain:
-            self._log(f"[DISCOVERY] Successfully detected Tailscale domain: {domain}")
-            self._refresh_all_endpoint_labels()
-            messagebox.showinfo("Tailscale Discovered", f"Successfully detected your Tailscale domain:\n\n{domain}", parent=self)
+    def _toggle_dash_key_visibility(self):
+        self.dash_token_visible = not getattr(self, "dash_token_visible", True)
+        cur_tok = self.config_data.get("server", {}).get("api_token", "")
+        if self.dash_token_visible:
+            self.lbl_dash_key.configure(text=cur_tok if cur_tok else "(No Key Generated)")
+            self.btn_toggle_dash_key.configure(text="🔒 Hide Key")
         else:
-            self._log("[DISCOVERY WARNING] Could not detect active Tailscale domain. Ensure Tailscale is running and connected.")
-            messagebox.showwarning("Tailscale Not Found", "Could not detect active Tailscale node.\n\nMake sure Tailscale is running and connected on this machine.", parent=self)
+            self.lbl_dash_key.configure(text="•" * 28 if cur_tok else "(No Key Generated)")
+            self.btn_toggle_dash_key.configure(text="👁️ Show Key")
+
+    def _manual_detect_url(self):
+        cfg = self.config_data.get("server", {})
+        mode = cfg.get("tunnel_mode", "Tailscale Funnel")
+        
+        if mode == "Tailscale Funnel":
+            self._log("[DISCOVERY] Querying local Tailscale daemon for domain name...")
+            domain = get_tailscale_public_domain(cfg.get("tailscale_path", ""))
+            if domain:
+                self._log(f"[DISCOVERY] Successfully detected Tailscale domain: {domain}")
+                self._refresh_all_endpoint_labels()
+                messagebox.showinfo("Tailscale Discovered", f"Successfully detected your Tailscale domain:\n\n{domain}", parent=self)
+            else:
+                self._log("[DISCOVERY WARNING] Could not detect active Tailscale domain.")
+                messagebox.showwarning("Tailscale Not Found", "Could not detect active Tailscale node.\n\nMake sure Tailscale is running and connected.", parent=self)
+        
+        elif mode == "Cloudflare Tunnel":
+            url = getattr(self, "dynamic_tunnel_url", None)
+            if url:
+                self._refresh_all_endpoint_labels()
+                messagebox.showinfo("Cloudflare Tunnel Discovered", f"Cloudflare Tunnel is active:\n\n{url}", parent=self)
+            elif self.is_server_running:
+                cf_bin = find_cloudflared_binary(cfg.get("cloudflared_path", ""))
+                if not cf_bin:
+                    messagebox.showwarning("cloudflared Not Found", "Could not locate cloudflared binary.\n\nPlease place cloudflared.exe in the app directory or ensure it is on PATH.", parent=self)
+                else:
+                    self._log(f"[DISCOVERY] Found cloudflared at: {cf_bin}. Connecting Cloudflare tunnel now...")
+                    port = cfg.get("port", 8000)
+                    self._start_cloudflare_tunnel(port)
+                    messagebox.showinfo("Cloudflare Tunnel Starting", f"Located cloudflared at:\n{cf_bin}\n\nConnecting quick tunnel in the background. The Public URL will update automatically once established.", parent=self)
+            else:
+                cf_bin = find_cloudflared_binary(cfg.get("cloudflared_path", ""))
+                status = f"cloudflared found at:\n{cf_bin}" if cf_bin else "cloudflared.exe not found on system."
+                messagebox.showinfo("Cloudflare Tunnel", f"{status}\n\nClick '▶ START SERVER' on the left to start the server and connect the Cloudflare tunnel.", parent=self)
+
+        elif mode in ("Serveo (Public SSH Tunnel)", "ngrok"):
+            url = getattr(self, "dynamic_tunnel_url", None)
+            if url:
+                self._refresh_all_endpoint_labels()
+                messagebox.showinfo(f"{mode} Discovered", f"{mode} is active:\n\n{url}", parent=self)
+            elif self.is_server_running:
+                port = cfg.get("port", 8000)
+                if mode == "Serveo (Public SSH Tunnel)":
+                    self._start_serveo_tunnel(port)
+                else:
+                    self._start_ngrok_tunnel(port)
+                messagebox.showinfo(f"{mode} Starting", f"Connecting {mode} in background. The Public URL will update shortly.", parent=self)
+            else:
+                messagebox.showinfo(f"{mode}", f"Click '▶ START SERVER' on the left to start the server and connect {mode}.", parent=self)
+                
+        else:
+            self._refresh_all_endpoint_labels()
+            messagebox.showinfo("URL Refreshed", f"Refreshed URL display for mode: {mode}", parent=self)
 
     def _copy_to_clipboard(self, text: str, label_name: str = "Item"):
+        if text and text.startswith("dpapi:"):
+            decrypted = _decrypt_dpapi(text)
+            if decrypted and not decrypted.startswith("dpapi:"):
+                text = decrypted
         self.clipboard_clear()
         self.clipboard_append(text)
         self._log(f"[CLIPBOARD] Copied {label_name} to clipboard: {text}")
@@ -1104,19 +1467,21 @@ class MammouthControlCenter(ctk.CTk):
             "system_monitor": "📊",
             "web_tools": "🌐",
             "screen_capture": "👁️",
-            "unreal_engine": "🎮"
+            "unreal_engine": "🎮",
+            "desktop_input": "🖱️"
         }
 
         tool_counts = {
             "memory": "5 Tools",
             "tasks_kanban": "4 Tools",
             "file_ops": "6 Tools",
-            "shell_processes": "5 Tools (Privileged)",
+            "shell_processes": "8 Tools (Privileged)",
             "putty_ssh": "6 Tools",
             "system_monitor": "4 Tools",
             "web_tools": "2 Tools (SSRF Shield)",
-            "screen_capture": "2 Tools",
-            "unreal_engine": "23 Tools (ALPHA)"
+            "screen_capture": "4 Tools (Vision Gate)",
+            "unreal_engine": "23 Tools (ALPHA)",
+            "desktop_input": "9 Tools"
         }
 
         for key, mod in modules.items():
@@ -1151,6 +1516,43 @@ class MammouthControlCenter(ctk.CTk):
             lbl_desc = ctk.CTkLabel(left, text=mod.get("description", ""), font=ctk.CTkFont(size=12), text_color=("#475569", "#9CA3AF"), anchor="w")
             lbl_desc.pack(anchor="w", pady=(4, 0))
 
+            if key == "screen_capture":
+                sub_opts = ctk.CTkFrame(left, fg_color=("#F1F5F9", "#1A1B23"), corner_radius=6)
+                sub_opts.pack(fill="x", pady=(8, 0))
+
+                self.var_screen_req_consent = ctk.BooleanVar(value=mod.get("require_consent", True))
+                sw_consent = ctk.CTkSwitch(
+                    sub_opts,
+                    text="🔒 Require Consent",
+                    variable=self.var_screen_req_consent,
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color=("#0F172A", "#E5E7EB"),
+                    progress_color="#F59E0B",
+                    command=self._on_screen_consent_toggled
+                )
+                sw_consent.pack(side="left", padx=10, pady=6)
+
+                self.btn_ui_grant_consent = ctk.CTkButton(
+                    sub_opts,
+                    text="🔓 Grant Session Consent",
+                    width=175,
+                    height=26,
+                    fg_color=("#059669", "#10B981"),
+                    hover_color=("#047857", "#059669"),
+                    text_color="#FFFFFF",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    command=self._on_ui_grant_session_consent
+                )
+                self.btn_ui_grant_consent.pack(side="left", padx=10, pady=6)
+
+                self.lbl_consent_badge = ctk.CTkLabel(
+                    sub_opts,
+                    text="● Status: Pending Consent" if self.var_screen_req_consent.get() else "● Status: Always Allowed",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    text_color="#F59E0B" if self.var_screen_req_consent.get() else "#10B981"
+                )
+                self.lbl_consent_badge.pack(side="left", padx=10, pady=6)
+
             right_ctrl = ctk.CTkFrame(card, fg_color="transparent")
             right_ctrl.pack(side="right", padx=20, pady=12)
 
@@ -1167,6 +1569,65 @@ class MammouthControlCenter(ctk.CTk):
 
             self.module_switches[key] = switch_var
 
+    def _on_screen_consent_toggled(self):
+        val = self.var_screen_req_consent.get()
+        self.config_data.setdefault("modules", {}).setdefault("screen_capture", {})["require_consent"] = val
+        save_config(self.config_data)
+        if hasattr(self, "var_settings_screen_consent"):
+            self.var_settings_screen_consent.set(val)
+        if hasattr(self, "lbl_consent_badge"):
+            if val:
+                self.lbl_consent_badge.configure(text="● Status: Pending Consent", text_color="#F59E0B")
+            else:
+                self.lbl_consent_badge.configure(text="● Status: Always Allowed", text_color="#10B981")
+        self._log(f"[SECURITY] Screen capture 'require_consent' toggled to {val}.")
+
+    def _on_ui_grant_session_consent(self):
+        from modules.screen_capture import screen_grant_consent
+        screen_grant_consent("always")
+        if hasattr(self, "lbl_consent_badge"):
+            self.lbl_consent_badge.configure(text="● Status: Granted (Session)", text_color="#10B981")
+        if hasattr(self, "btn_ui_grant_consent"):
+            self.btn_ui_grant_consent.configure(text="✅ Consent Active", fg_color="#047857")
+        self._log("[SECURITY] Explicit screen capture consent GRANTED for current session.")
+        messagebox.showinfo("Consent Granted", "Screen capture permission has been granted for this session.\n\nConnected AI assistants and MCP clients can now capture screenshots.", parent=self)
+
+    def _prompt_screen_capture_consent(self) -> str:
+        """Thread-safe user prompt when incoming MCP screen capture requests consent."""
+        import threading
+        result = ["denied"]
+        event = threading.Event()
+
+        def ask():
+            try:
+                self.deiconify()
+                self.lift()
+                self.focus_force()
+                ans = messagebox.askyesno(
+                    "Desktop Screen Capture Request",
+                    "A connected AI assistant / MCP client (e.g. Agent Zero, Mammouth.ai) is requesting a screenshot of your desktop.\n\n"
+                    "Do you want to grant screen capture permission for this session?",
+                    parent=self
+                )
+                if ans:
+                    result[0] = "always"
+                    self._log("[VISION] Screen capture permission GRANTED by user via dialog.")
+                    if hasattr(self, "lbl_consent_badge"):
+                        self.lbl_consent_badge.configure(text="● Status: Granted (Session)", text_color="#10B981")
+                    if hasattr(self, "btn_ui_grant_consent"):
+                        self.btn_ui_grant_consent.configure(text="✅ Consent Active", fg_color="#047857")
+                else:
+                    result[0] = "denied"
+                    self._log("[VISION] Screen capture permission DENIED by user.")
+            except Exception as e:
+                self._log(f"[VISION ERROR] Prompt dialog error: {e}")
+            finally:
+                event.set()
+
+        self.after(0, ask)
+        event.wait(timeout=30)
+        return result[0]
+
     def _enable_safe_skills(self):
         for k, v in self.module_switches.items():
             if k == "shell_processes":
@@ -1179,6 +1640,9 @@ class MammouthControlCenter(ctk.CTk):
         for key, var in self.module_switches.items():
             if key in self.config_data["modules"]:
                 self.config_data["modules"][key]["enabled"] = var.get()
+
+        if hasattr(self, "var_screen_req_consent"):
+            self.config_data.setdefault("modules", {}).setdefault("screen_capture", {})["require_consent"] = self.var_screen_req_consent.get()
 
         save_config(self.config_data)
         self._log("Updated module configuration in config.json.")
@@ -1420,7 +1884,7 @@ class MammouthControlCenter(ctk.CTk):
         ctk.CTkLabel(f3, text="Default Tunnel Mode:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
         self.opt_tunnel_mode = ctk.CTkOptionMenu(
             f3,
-            values=["Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"],
+            values=["Serveo (Public SSH Tunnel)", "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"],
             width=180,
             fg_color=("#F1F5F9", "#1F2029"),
             button_color=("#E2E8F0", "#2A2B37"),
@@ -1435,7 +1899,7 @@ class MammouthControlCenter(ctk.CTk):
         self.opt_tunnel_mode.pack(side="left")
 
         f4 = ctk.CTkFrame(net_group, fg_color="transparent")
-        f4.pack(fill="x", padx=15, pady=(5, 15))
+        f4.pack(fill="x", padx=15, pady=5)
         ctk.CTkLabel(f4, text="Default Route Path:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
         self.opt_endpoint_path = ctk.CTkOptionMenu(
             f4,
@@ -1451,6 +1915,55 @@ class MammouthControlCenter(ctk.CTk):
         )
         self.opt_endpoint_path.set(self.config_data.get("server", {}).get("endpoint_path", "/sse"))
         self.opt_endpoint_path.pack(side="left")
+
+        # Cloudflare Binary Path
+        f_cf = ctk.CTkFrame(net_group, fg_color="transparent")
+        f_cf.pack(fill="x", padx=15, pady=(5, 15))
+        ctk.CTkLabel(f_cf, text="Cloudflare Path:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        self.entry_cf_bin = ctk.CTkEntry(
+            f_cf,
+            width=280,
+            placeholder_text="e.g. cloudflared.exe (auto-detected if blank)",
+            fg_color=("#F8FAFC", "#0D0E12"),
+            border_color=("#CBD5E1", "#22242E"),
+            text_color=("#0F172A", "#F3F4F6")
+        )
+        saved_cf = self.config_data.get("server", {}).get("cloudflared_path", "")
+        if saved_cf:
+            self.entry_cf_bin.insert(0, saved_cf)
+        else:
+            detected_cf = find_cloudflared_binary()
+            if detected_cf:
+                self.entry_cf_bin.insert(0, detected_cf)
+        self.entry_cf_bin.pack(side="left", padx=(0, 5))
+
+        btn_browse_cf = ctk.CTkButton(
+            f_cf,
+            text="📁 Browse",
+            width=85,
+            height=28,
+            fg_color=("#F1F5F9", "#1E2028"),
+            hover_color=("#E2E8F0", "#282A36"),
+            text_color=("#0F172A", "#F3F4F6"),
+            border_width=1,
+            border_color=("#CBD5E1", "#2A2C38"),
+            command=self._browse_cloudflared
+        )
+        btn_browse_cf.pack(side="left", padx=(0, 5))
+
+        btn_detect_cf = ctk.CTkButton(
+            f_cf,
+            text="🔄 Detect",
+            width=80,
+            height=28,
+            fg_color=("#F1F5F9", "#1E2028"),
+            hover_color=("#E2E8F0", "#282A36"),
+            text_color=("#0F172A", "#F3F4F6"),
+            border_width=1,
+            border_color=("#CBD5E1", "#2A2C38"),
+            command=self._detect_cloudflared_in_settings
+        )
+        btn_detect_cf.pack(side="left")
 
         # 2. Authentication & Tokens Group (Secure by Default)
         auth_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
@@ -1468,7 +1981,12 @@ class MammouthControlCenter(ctk.CTk):
         f6.pack(fill="x", padx=15, pady=(5, 15))
         ctk.CTkLabel(f6, text="Active Bearer Token:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
         self.entry_token = ctk.CTkEntry(f6, width=280, show="*", fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
-        self.entry_token.insert(0, self.config_data.get("server", {}).get("api_token", ""))
+        tok_val = self.config_data.get("server", {}).get("api_token", "")
+        if tok_val and tok_val.startswith("dpapi:"):
+            decrypted = _decrypt_dpapi(tok_val)
+            if decrypted and not decrypted.startswith("dpapi:"):
+                tok_val = decrypted
+        self.entry_token.insert(0, tok_val)
         self.entry_token.pack(side="left", padx=(0, 5))
 
         self.btn_show_token = ctk.CTkButton(
@@ -1585,6 +2103,41 @@ class MammouthControlCenter(ctk.CTk):
         )
         sw_tls.pack(side="left")
 
+        # 6. Screen Capture & Vision Privacy Gate
+        vis_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        vis_group.pack(fill="x", pady=6)
+
+        ctk.CTkLabel(vis_group, text="👁️ Vision & Desktop Screen Capture Privacy Gate", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+
+        f_vis1 = ctk.CTkFrame(vis_group, fg_color="transparent")
+        f_vis1.pack(fill="x", padx=15, pady=5)
+        self.var_settings_screen_consent = ctk.BooleanVar(value=self.config_data.get("modules", {}).get("screen_capture", {}).get("require_consent", True))
+        sw_vis = ctk.CTkSwitch(
+            f_vis1,
+            text="Require User Consent before capturing screenshots (Privacy Shield)",
+            variable=self.var_settings_screen_consent,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=("#0F172A", "#E5E7EB"),
+            progress_color="#F59E0B",
+            command=self._on_settings_screen_consent_changed
+        )
+        sw_vis.pack(side="left")
+
+        f_vis2 = ctk.CTkFrame(vis_group, fg_color="transparent")
+        f_vis2.pack(fill="x", padx=15, pady=(5, 15))
+        btn_grant_session = ctk.CTkButton(
+            f_vis2,
+            text="🔓 Grant Screen Capture Consent for this Session",
+            width=320,
+            height=30,
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._on_ui_grant_session_consent
+        )
+        btn_grant_session.pack(side="left")
+
         # Save Settings Button
         btn_save_all = ctk.CTkButton(
             scroll,
@@ -1603,6 +2156,24 @@ class MammouthControlCenter(ctk.CTk):
         if folder:
             self.entry_workspace.delete(0, "end")
             self.entry_workspace.insert(0, folder)
+
+    def _browse_cloudflared(self):
+        filename = filedialog.askopenfilename(
+            title="Select cloudflared Executable",
+            filetypes=[("Executable Files", "*.exe;cloudflared*"), ("All Files", "*.*")]
+        )
+        if filename:
+            self.entry_cf_bin.delete(0, "end")
+            self.entry_cf_bin.insert(0, filename)
+
+    def _detect_cloudflared_in_settings(self):
+        detected = find_cloudflared_binary()
+        if detected:
+            self.entry_cf_bin.delete(0, "end")
+            self.entry_cf_bin.insert(0, detected)
+            messagebox.showinfo("cloudflared Detected", f"Found cloudflared binary at:\n\n{detected}", parent=self)
+        else:
+            messagebox.showwarning("cloudflared Not Found", "Could not automatically locate cloudflared.\n\nPlease place cloudflared.exe in the app directory or use Browse to select it.", parent=self)
 
     def _toggle_token_visibility(self):
         if self.entry_token.cget("show") == "*":
@@ -1632,6 +2203,19 @@ class MammouthControlCenter(ctk.CTk):
     def _on_settings_mode_changed(self, choice: str):
         self.dash_mode_menu.set(choice)
 
+    def _on_settings_screen_consent_changed(self):
+        val = self.var_settings_screen_consent.get()
+        self.config_data.setdefault("modules", {}).setdefault("screen_capture", {})["require_consent"] = val
+        save_config(self.config_data)
+        if hasattr(self, "var_screen_req_consent"):
+            self.var_screen_req_consent.set(val)
+        if hasattr(self, "lbl_consent_badge"):
+            if val:
+                self.lbl_consent_badge.configure(text="● Status: Pending Consent", text_color="#F59E0B")
+            else:
+                self.lbl_consent_badge.configure(text="● Status: Always Allowed", text_color="#10B981")
+        self._log(f"[SECURITY] Screen capture 'require_consent' updated to {val} from Settings.")
+
     def _save_settings(self):
         try:
             port = int(self.entry_port.get().strip())
@@ -1643,11 +2227,23 @@ class MammouthControlCenter(ctk.CTk):
         self.config_data["server"]["tunnel_mode"] = self.opt_tunnel_mode.get()
         self.config_data["server"]["endpoint_path"] = self.opt_endpoint_path.get()
         self.config_data["server"]["enforce_auth"] = self.var_enforce_auth.get()
-        self.config_data["server"]["api_token"] = self.entry_token.get().strip()
+        raw_tok = self.entry_token.get().strip()
+        if raw_tok.startswith("dpapi:"):
+            decrypted = _decrypt_dpapi(raw_tok)
+            if decrypted and not decrypted.startswith("dpapi:"):
+                raw_tok = decrypted
+        self.config_data["server"]["api_token"] = raw_tok
         self.config_data["server"]["allow_admin_shell"] = self.var_admin_shell.get()
         self.config_data["server"]["enable_tls"] = self.var_enable_tls.get()
         self.config_data["server"]["enforce_workspace_sandbox"] = self.var_sandbox.get()
         self.config_data["server"]["workspace_root"] = self.entry_workspace.get().strip() or "./workspace"
+        if hasattr(self, "entry_cf_bin"):
+            self.config_data["server"]["cloudflared_path"] = self.entry_cf_bin.get().strip()
+
+        if hasattr(self, "var_settings_screen_consent"):
+            self.config_data.setdefault("modules", {}).setdefault("screen_capture", {})["require_consent"] = self.var_settings_screen_consent.get()
+            if hasattr(self, "var_screen_req_consent"):
+                self.var_screen_req_consent.set(self.var_settings_screen_consent.get())
 
         save_config(self.config_data)
         self.dash_mode_menu.set(self.opt_tunnel_mode.get())
@@ -1671,6 +2267,13 @@ class MammouthControlCenter(ctk.CTk):
 
         if self.config_data.get("server", {}).get("enforce_auth", True):
             token = self.config_data.get("server", {}).get("api_token", "").strip()
+            if token and token.startswith("dpapi:"):
+                dec = _decrypt_dpapi(token)
+                if dec and not dec.startswith("dpapi:"):
+                    token = dec
+                    self.config_data["server"]["api_token"] = token
+                    save_config(self.config_data)
+                    self._refresh_all_endpoint_labels()
             if not token:
                 token = generate_secure_token()
                 self.config_data["server"]["api_token"] = token
@@ -1691,17 +2294,26 @@ class MammouthControlCenter(ctk.CTk):
 
         self._log(f"Starting in-process FastMCP server on {host}:{port}...")
 
-        # Activate Tailscale Funnel in background if configured
-        if self.config_data.get("server", {}).get("tunnel_mode") == "Tailscale Funnel" and self.config_data.get("server", {}).get("auto_tunnel", False):
+        # Activate public tunnel in background if selected
+        tunnel_choice = self.config_data.get("server", {}).get("tunnel_mode")
+        if tunnel_choice == "Tailscale Funnel":
             ts_path = self.config_data.get("server", {}).get("tailscale_path", r"C:\Program Files\Tailscale\tailscale.exe")
             ts_bin = find_tailscale_binary(ts_path)
             if ts_bin:
                 try:
-                    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-                    subprocess.Popen([ts_bin, "funnel", "--bg", str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+                    subprocess.Popen([ts_bin, "funnel", str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     self._log("[NETWORK] Tailscale Funnel background trigger executed.")
                 except Exception as e:
                     self._log(f"[NETWORK WARNING] Tailscale funnel trigger: {e}")
+
+        elif tunnel_choice == "Cloudflare Tunnel":
+            self._start_cloudflare_tunnel(port)
+
+        elif tunnel_choice == "Serveo (Public SSH Tunnel)":
+            self._start_serveo_tunnel(port)
+
+        elif tunnel_choice == "ngrok":
+            self._start_ngrok_tunnel(port)
 
         try:
             import uvicorn
@@ -1711,8 +2323,8 @@ class MammouthControlCenter(ctk.CTk):
             key_file = self.config_data.get("server", {}).get("ssl_keyfile")
 
             if enable_tls and (not cert_file or not os.path.exists(str(cert_file))):
-                default_cert = str(Path(__file__).parent / "cert.pem")
-                default_key = str(Path(__file__).parent / "key.pem")
+                default_cert = str(BASE_DIR / "cert.pem")
+                default_key = str(BASE_DIR / "key.pem")
                 if not os.path.exists(default_cert):
                     self._log("[TLS] Generating self-signed TLS certificate for local network security...")
                     generate_self_signed_cert(default_cert, default_key, host)
@@ -1758,6 +2370,112 @@ class MammouthControlCenter(ctk.CTk):
             self._log(f"[ERROR] Failed to start server: {e}")
             messagebox.showerror("Start Error", f"Failed to start server:\n\n{e}", parent=self)
 
+    def _start_cloudflare_tunnel(self, port: int):
+        if getattr(self, "cf_proc", None) and self.cf_proc.poll() is None:
+            return
+
+        self.dynamic_tunnel_url = None
+        def run_cloudflare():
+            try:
+                cf_path_cfg = self.config_data.get("server", {}).get("cloudflared_path", "")
+                cf_bin = find_cloudflared_binary(cf_path_cfg)
+                if not cf_bin:
+                    self._log("[NETWORK WARNING] cloudflared binary not found on system or app directory. Automatic tunnel aborted.")
+                    return
+
+                self._log(f"[NETWORK] Found cloudflared: {cf_bin}")
+                flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                self.cf_proc = subprocess.Popen(
+                    [cf_bin, "tunnel", "--url", f"http://127.0.0.1:{port}"],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, creationflags=flags
+                )
+                self._log("[NETWORK] Starting Cloudflare Quick Tunnel (trycloudflare.com)...")
+                found = False
+                while self.cf_proc and self.cf_proc.poll() is None:
+                    line = self.cf_proc.stdout.readline()
+                    if not line:
+                        break
+                    line = line.strip()
+                    if "trycloudflare.com" in line:
+                        match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
+                        if match:
+                            url = match.group(0)
+                            self.dynamic_tunnel_url = url
+                            self._log(f"[NETWORK] Cloudflare Tunnel Active: {url}")
+                            self.after(0, self._refresh_all_endpoint_labels)
+                            found = True
+                            break
+
+                if not found and self.cf_proc and self.cf_proc.poll() is not None:
+                    self._log(f"[NETWORK WARNING] cloudflared process exited with code {self.cf_proc.poll()}.")
+
+                # Keep reading output so buffer does not block
+                while self.cf_proc and self.cf_proc.poll() is None:
+                    line = self.cf_proc.stdout.readline()
+                    if not line:
+                        break
+            except Exception as e:
+                self._log(f"[NETWORK WARNING] Cloudflare tunnel trigger: {e}")
+
+        threading.Thread(target=run_cloudflare, daemon=True).start()
+
+    def _start_serveo_tunnel(self, port: int):
+        if getattr(self, "serveo_proc", None) and self.serveo_proc.poll() is None:
+            return
+        self.serveo_url = None
+        def run_serveo():
+            try:
+                flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                self.serveo_proc = subprocess.Popen(
+                    ["ssh", "-o", "StrictHostKeyChecking=no", "-R", f"80:127.0.0.1:{port}", "serveo.net"],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, creationflags=flags
+                )
+                self._log("[NETWORK] Starting Serveo SSH Tunnel...")
+                for line in self.serveo_proc.stdout:
+                    line = line.strip()
+                    if "Forwarding HTTP traffic from" in line:
+                        url = line.split("from")[-1].strip()
+                        self.serveo_url = url
+                        self.dynamic_tunnel_url = url
+                        self._log(f"[NETWORK] Serveo Tunnel Active: {url}")
+                        self.after(0, self._refresh_all_endpoint_labels)
+                        break
+            except Exception as e:
+                self._log(f"[NETWORK WARNING] Serveo tunnel trigger: {e}")
+        threading.Thread(target=run_serveo, daemon=True).start()
+
+    def _start_ngrok_tunnel(self, port: int):
+        if getattr(self, "ngrok_proc", None) and self.ngrok_proc.poll() is None:
+            return
+        self.dynamic_tunnel_url = None
+        def run_ngrok():
+            try:
+                flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                self.ngrok_proc = subprocess.Popen(
+                    ["ngrok", "http", str(port)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags
+                )
+                self._log("[NETWORK] Starting ngrok Tunnel...")
+                for _ in range(10):
+                    time.sleep(1)
+                    try:
+                        resp = httpx.get("http://127.0.0.1:4040/api/tunnels", timeout=2)
+                        if resp.status_code == 200:
+                            tunnels = resp.json().get("tunnels", [])
+                            for t in tunnels:
+                                if t.get("public_url", "").startswith("https://"):
+                                    url = t["public_url"]
+                                    self.dynamic_tunnel_url = url
+                                    self._log(f"[NETWORK] ngrok Tunnel Active: {url}")
+                                    self.after(0, self._refresh_all_endpoint_labels)
+                                    return
+                    except Exception:
+                        pass
+                self._log("[NETWORK WARNING] Could not fetch ngrok URL from local API after 10s.")
+            except Exception as e:
+                self._log(f"[NETWORK WARNING] ngrok tunnel trigger: {e}")
+        threading.Thread(target=run_ngrok, daemon=True).start()
+
     def _stop_server(self):
         if not self.is_server_running:
             return
@@ -1765,6 +2483,31 @@ class MammouthControlCenter(ctk.CTk):
         self._log("Stopping MCP server...")
         if self.uvicorn_server:
             self.uvicorn_server.should_exit = True
+            
+        if getattr(self, "serveo_proc", None):
+            try:
+                self.serveo_proc.terminate()
+                self._log("[NETWORK] Serveo Tunnel closed.")
+            except Exception:
+                pass
+            self.serveo_proc = None
+            
+        if getattr(self, "cf_proc", None):
+            try:
+                self.cf_proc.terminate()
+                self._log("[NETWORK] Cloudflare Tunnel closed.")
+            except Exception:
+                pass
+            self.cf_proc = None
+            
+        if getattr(self, "ngrok_proc", None):
+            try:
+                self.ngrok_proc.terminate()
+                self._log("[NETWORK] ngrok Tunnel closed.")
+            except Exception:
+                pass
+            self.ngrok_proc = None
+            
         self._handle_server_stopped()
 
     def _handle_server_stopped(self):

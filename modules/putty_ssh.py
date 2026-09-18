@@ -9,7 +9,12 @@ import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-HOSTS_FILE = Path(__file__).parent.parent / "hosts.json"
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.parent.resolve()
+
+HOSTS_FILE = BASE_DIR / "hosts.json"
 
 BLOCKED_REMOTE_COMMANDS = [
     r'\brm\s+-[^\s]*[rfRF]',

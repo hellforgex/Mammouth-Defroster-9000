@@ -17,8 +17,10 @@ echo.
 echo Server is running! Press Ctrl+C in this window to stop.
 echo -------------------------------------------------------
 
-if exist "MammouthDefroster9000.exe" (
-    MammouthDefroster9000.exe
+if exist "MammouthDefroster9000-server.exe" (
+    MammouthDefroster9000-server.exe
+) else if exist "MammouthDefroster9000.exe" (
+    MammouthDefroster9000.exe --server-only
 ) else (
     uv run server.py
 )

@@ -46,6 +46,8 @@ except ImportError:
 
 from config import load_config
 
+MCP_API_TOKEN = ""
+
 # Import modular capabilities
 from modules.memory import memory_save, memory_recall, memory_get, memory_delete, memory_list
 from modules.tasks_kanban import task_create, task_update, task_list, task_delete
@@ -59,6 +61,9 @@ from modules.file_ops import (
 )
 from modules.shell_processes import (
     command_run,
+    powershell_exec,
+    cmd_exec,
+    desktop_open,
     process_start_background,
     process_list_background,
     process_get_output,
@@ -80,11 +85,24 @@ from modules.system_monitor import (
 )
 from modules.screen_capture import (
     screen_capture,
-    screen_list_monitors
+    screen_list_monitors,
+    screen_grant_consent,
+    screen_revoke_consent
 )
 from modules.web_tools import (
     web_fetch_url,
     web_check_status
+)
+from modules.desktop_input import (
+    desktop_get_screen_info,
+    mouse_move,
+    mouse_click,
+    mouse_drag,
+    mouse_scroll,
+    mouse_get_position,
+    keyboard_type,
+    keyboard_press,
+    keyboard_hotkey
 )
 from modules.unreal_engine import (
     unreal_ping,
@@ -116,7 +134,7 @@ from modules.unreal_engine import (
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.2.0): Sovereign Windows 11 Desktop Cockpit, Vision & Unreal Engine 5 Automation Platform.
+    Mammouth Defroster 9000 (v0.2.2): Sovereign Windows 11 Desktop Cockpit, Vision & Unreal Engine 5 Automation Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, and Unreal Engine automation exclusively for Mammouth.ai.
     Always prioritize safety, sandboxing, and precision.
     """
@@ -132,7 +150,12 @@ def require_module(mod_name: str):
             enabled = cfg.get("modules", {}).get(mod_name, {}).get("enabled", False)
             if not enabled:
                 raise PermissionError(f"Tool '{fn.__name__}' is disabled because module '{mod_name}' is currently turned off.")
-            return fn(*args, **kwargs)
+            res = fn(*args, **kwargs)
+            # Ensure empty lists emit valid TextContent to prevent MCP client IndexError crashes
+            if isinstance(res, list) and len(res) == 0:
+                from mcp.types import TextContent
+                return [TextContent(type="text", text="[]")]
+            return res
         return wrapper
     return decorator
 
@@ -165,6 +188,9 @@ def register_active_tools():
 
     if mods.get("shell_processes", {}).get("enabled", False):
         mcp.tool()(require_module("shell_processes")(command_run))
+        mcp.tool()(require_module("shell_processes")(powershell_exec))
+        mcp.tool()(require_module("shell_processes")(cmd_exec))
+        mcp.tool()(require_module("shell_processes")(desktop_open))
         mcp.tool()(require_module("shell_processes")(process_start_background))
         mcp.tool()(require_module("shell_processes")(process_list_background))
         mcp.tool()(require_module("shell_processes")(process_get_output))
@@ -187,6 +213,8 @@ def register_active_tools():
     if mods.get("screen_capture", {}).get("enabled", True):
         mcp.tool()(require_module("screen_capture")(screen_capture))
         mcp.tool()(require_module("screen_capture")(screen_list_monitors))
+        mcp.tool()(require_module("screen_capture")(screen_grant_consent))
+        mcp.tool()(require_module("screen_capture")(screen_revoke_consent))
 
     if mods.get("web_tools", {}).get("enabled", True):
         mcp.tool()(require_module("web_tools")(web_fetch_url))
@@ -216,6 +244,17 @@ def register_active_tools():
         mcp.tool()(require_module("unreal_engine")(unreal_delete_asset))
         mcp.tool()(require_module("unreal_engine")(unreal_spawn_light))
         mcp.tool()(require_module("unreal_engine")(unreal_take_screenshot))
+
+    if mods.get("desktop_input", {}).get("enabled", True):
+        mcp.tool()(require_module("desktop_input")(desktop_get_screen_info))
+        mcp.tool()(require_module("desktop_input")(mouse_move))
+        mcp.tool()(require_module("desktop_input")(mouse_click))
+        mcp.tool()(require_module("desktop_input")(mouse_drag))
+        mcp.tool()(require_module("desktop_input")(mouse_scroll))
+        mcp.tool()(require_module("desktop_input")(mouse_get_position))
+        mcp.tool()(require_module("desktop_input")(keyboard_type))
+        mcp.tool()(require_module("desktop_input")(keyboard_press))
+        mcp.tool()(require_module("desktop_input")(keyboard_hotkey))
 
 
 register_active_tools()
@@ -296,6 +335,12 @@ class SecurityAndAuthMiddleware:
             client_ip = scope.get("client", ("unknown", 0))[0]
             method = scope.get("method", "GET")
             path = scope.get("path", "/")
+
+            print(f"--- DEBUG INCOMING REQUEST ---")
+            print(f"Method: {method} Path: {path}")
+            print(f"Headers: {header_map}")
+            print(f"Query: {scope.get('query_string', b'').decode('latin1')}")
+            print(f"------------------------------")
 
             # Wrapped send to inject standard security response headers (L-05)
             async def send_with_security_headers(message):
@@ -491,11 +536,17 @@ if __name__ == "__main__":
     cert_file = server_cfg.get("ssl_certfile")
     key_file = server_cfg.get("ssl_keyfile")
 
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     if enable_tls and (not cert_file or not os.path.exists(str(cert_file))):
-        default_cert = str(Path(__file__).parent / "cert.pem")
-        default_key = str(Path(__file__).parent / "key.pem")
+        default_cert = str(ROOT_DIR / "cert.pem")
+        default_key = str(ROOT_DIR / "key.pem")
         if not os.path.exists(default_cert):
-            print("🔒 Generating self-signed TLS certificate for local network security...")
+            print("[TLS] Generating self-signed TLS certificate for local network security...")
             generate_self_signed_cert(default_cert, default_key, host)
         cert_file = default_cert
         key_file = default_key
@@ -505,18 +556,18 @@ if __name__ == "__main__":
 
     if not enable_tls and host not in ("127.0.0.1", "localhost"):
         print("\n=======================================================")
-        print("⚠️  SECURITY NOTICE: Server is bound to external interface")
+        print("[SECURITY NOTICE] Server is bound to external interface")
         print(f"   without TLS encryption ({host}:{port}).")
         print("   All traffic within your LAN will be transmitted in plaintext.")
         print("   Enable 'server.enable_tls: true' in config for HTTPS.")
         print("=======================================================\n")
 
     if server_cfg.get("enforce_auth", True):
-        print("🔐 Token Authentication: ACTIVE (Secure by Default)")
+        print("[AUTH] Token Authentication: ACTIVE (Secure by Default)")
     else:
-        print("\n⚠️  WARNING: Authentication is DISABLED. Server is open to all clients on your network!")
+        print("\n[WARNING] Authentication is DISABLED. Server is open to all clients on your network!")
         if host == "0.0.0.0":
-            print("🔴 CRITICAL WARNING: Binding to 0.0.0.0 without authentication is dangerous and exposes your machine!\n")
+            print("[CRITICAL WARNING] Binding to 0.0.0.0 without authentication is dangerous and exposes your machine!\n")
 
     uvicorn_kwargs = {
         "app": app,

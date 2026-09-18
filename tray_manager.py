@@ -7,8 +7,11 @@ import subprocess
 import threading
 from pathlib import Path
 
-# Ensure local modules directory is on sys.path
-BASE_DIR = Path(__file__).parent
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.resolve()
+
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 

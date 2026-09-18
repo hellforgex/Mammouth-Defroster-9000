@@ -3,10 +3,16 @@ import re
 import subprocess
 import time
 import uuid
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
-LOGS_DIR = Path(__file__).parent.parent / "process_logs"
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.parent.resolve()
+
+LOGS_DIR = BASE_DIR / "process_logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
 # In-memory registry of background processes
@@ -22,7 +28,6 @@ BLOCKED_COMMAND_PATTERNS = [
     r'\[ScriptBlock\]',
     r'\[System\.Management\.Automation',
     r'\[System\.Diagnostics\.Process\]',
-    r'\b(Start-Process|saps)\b',
     r'\b(DownloadString|DownloadFile|DownloadData)\b',
     r'\b(System\.Net\.WebClient|WebClient|HttpClient)\b',
     r'\b(Net\.Sockets|System\.Net\.Sockets|TcpClient|Socket|UdpClient)\b',
@@ -151,8 +156,24 @@ READONLY_BINARIES = {
     "whoami", "ipconfig", "tasklist", "netstat", "hostname",
     "systeminfo", "dir", "echo", "type", "findstr", "ver",
     "ping", "tracert", "nslookup", "route", "arp",
-    "cat", "gc", "gci", "gi", "ls"
+    "cat", "gc", "gci", "gi", "ls",
+    "qwinsta", "query"
 }
+
+
+def _unwrap_powershell_wrapper(cmd: str) -> str:
+    """Unwrap outer powershell.exe -Command wrapper if invoked redundantly by LLM client."""
+    m = re.match(
+        r'^\s*powershell(?:\.exe)?\s+(?:-NoProfile\s+)?(?:-NonInteractive\s+)?(?:-ExecutionPolicy\s+\S+\s+)?-(?:Command|c)\s+(.+)$',
+        cmd,
+        re.IGNORECASE | re.DOTALL
+    )
+    if m:
+        inner = m.group(1).strip()
+        if (inner.startswith('"') and inner.endswith('"')) or (inner.startswith("'") and inner.endswith("'")):
+            inner = inner[1:-1].strip()
+        return inner
+    return cmd
 
 
 def _deobfuscate_powershell(cmd: str) -> tuple:
@@ -179,6 +200,7 @@ def _is_admin_shell_allowed() -> bool:
 def _validate_shell_command(command: str, allow_admin: Optional[bool] = None) -> str:
     """Validate shell command against dangerous patterns and read-only allowlist."""
     clean = str(command).strip()
+    clean = _unwrap_powershell_wrapper(clean)
     if not clean:
         raise ValueError("Command cannot be empty.")
 
@@ -224,55 +246,141 @@ def _validate_shell_command(command: str, allow_admin: Optional[bool] = None) ->
     return clean
 
 
-def command_run(command: str, cwd: Optional[str] = None, timeout_seconds: int = 60) -> Dict[str, Any]:
-    """Execute a local PowerShell command synchronously and return stdout and stderr.
+def powershell_exec(
+    command: str,
+    working_directory: str = "C:\\",
+    cwd: Optional[str] = None,
+    timeout_seconds: int = 120
+) -> Dict[str, Any]:
+    """Execute a PowerShell command on the Windows host and return stdout, stderr, and exit_code.
     
     Args:
-        command: PowerShell command to run.
-        cwd: Working directory (optional).
-        timeout_seconds: Timeout in seconds (default 60).
+        command: PowerShell command to execute.
+        working_directory: Working directory path (defaults to C:\\ or current directory).
+        cwd: Optional alias for working_directory.
+        timeout_seconds: Execution timeout in seconds (default 120).
     """
     try:
         clean_cmd = _validate_shell_command(command)
     except Exception as ex:
-        return {"exit_code": -1, "stdout": "", "stderr": f"Security Error: {ex}"}
+        return {
+            "stdout": "",
+            "stderr": f"Security Error: {ex}",
+            "exit_code": -1,
+            "error": str(ex)
+        }
 
-    work_dir = cwd if cwd and os.path.exists(cwd) else os.getcwd()
+    work_dir = cwd if cwd and os.path.exists(cwd) else working_directory
+    if not work_dir or not os.path.exists(work_dir):
+        work_dir = "C:\\" if os.path.exists("C:\\") else os.getcwd()
+
     try:
-        proc = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", clean_cmd],
-            cwd=work_dir,
+        process = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", clean_cmd],
             capture_output=True,
             text=True,
+            cwd=work_dir,
             timeout=timeout_seconds,
             encoding="utf-8",
             errors="replace"
         )
         return {
-            "exit_code": proc.returncode,
-            "stdout": proc.stdout,
-            "stderr": proc.stderr
+            "stdout": process.stdout,
+            "stderr": process.stderr,
+            "exit_code": process.returncode
         }
     except subprocess.TimeoutExpired:
         return {
-            "exit_code": -1,
             "stdout": "",
-            "stderr": f"Command timed out after {timeout_seconds} seconds."
+            "stderr": f"Execution timed out after {timeout_seconds}s",
+            "exit_code": -1,
+            "error": f"Execution timed out after {timeout_seconds}s"
         }
     except Exception as e:
         return {
-            "exit_code": -1,
             "stdout": "",
-            "stderr": str(e)
+            "stderr": str(e),
+            "exit_code": -1,
+            "error": str(e)
         }
 
 
-def process_start_background(command: str, cwd: Optional[str] = None, name: Optional[str] = None) -> Dict[str, Any]:
-    """Start a long-running process in the background (e.g. dev server, script).
+def cmd_exec(
+    command: str,
+    working_directory: str = "C:\\",
+    cwd: Optional[str] = None,
+    timeout_seconds: int = 120
+) -> Dict[str, Any]:
+    """Execute a Windows Command Prompt (CMD) command and return stdout, stderr, and exit_code.
+    
+    Args:
+        command: Command prompt command to execute.
+        working_directory: Working directory path (defaults to C:\\ or current directory).
+        cwd: Optional alias for working_directory.
+        timeout_seconds: Execution timeout in seconds (default 120).
+    """
+    try:
+        clean_cmd = _validate_shell_command(command)
+    except Exception as ex:
+        return {
+            "stdout": "",
+            "stderr": f"Security Error: {ex}",
+            "exit_code": -1,
+            "error": str(ex)
+        }
+
+    work_dir = cwd if cwd and os.path.exists(cwd) else working_directory
+    if not work_dir or not os.path.exists(work_dir):
+        work_dir = "C:\\" if os.path.exists("C:\\") else os.getcwd()
+
+    try:
+        process = subprocess.run(
+            ["cmd.exe", "/c", clean_cmd],
+            capture_output=True,
+            text=True,
+            cwd=work_dir,
+            timeout=timeout_seconds,
+            encoding="utf-8",
+            errors="replace"
+        )
+        return {
+            "stdout": process.stdout,
+            "stderr": process.stderr,
+            "exit_code": process.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "stdout": "",
+            "stderr": f"Execution timed out after {timeout_seconds}s",
+            "exit_code": -1,
+            "error": f"Execution timed out after {timeout_seconds}s"
+        }
+    except Exception as e:
+        return {
+            "stdout": "",
+            "stderr": str(e),
+            "exit_code": -1,
+            "error": str(e)
+        }
+
+
+def command_run(command: str, cwd: Optional[str] = None, timeout_seconds: int = 60) -> Dict[str, Any]:
+    """Execute a local PowerShell command synchronously (backward-compatible alias for powershell_exec)."""
+    return powershell_exec(command=command, working_directory=cwd or "C:\\", cwd=cwd, timeout_seconds=timeout_seconds)
+
+
+def process_spawn(
+    command: str,
+    working_directory: str = "C:\\",
+    cwd: Optional[str] = None,
+    name: Optional[str] = None
+) -> Dict[str, Any]:
+    """Spawn a detached background process on the Windows host and track it.
     
     Args:
         command: The command line to execute.
-        cwd: Working directory (optional).
+        working_directory: Working directory path (defaults to C:\\ or current directory).
+        cwd: Optional alias for working_directory.
         name: Short descriptive name for this background task.
     """
     active_count = sum(1 for info in BACKGROUND_PROCESSES.values() if info["proc"].poll() is None)
@@ -287,18 +395,25 @@ def process_start_background(command: str, cwd: Optional[str] = None, name: Opti
     task_id = str(uuid.uuid4())[:8]
     task_name = name or f"task-{task_id}"
     log_file = LOGS_DIR / f"{task_id}.log"
-    work_dir = cwd if cwd and os.path.exists(cwd) else os.getcwd()
+    work_dir = cwd if cwd and os.path.exists(cwd) else working_directory
+    if not work_dir or not os.path.exists(work_dir):
+        work_dir = "C:\\" if os.path.exists("C:\\") else os.getcwd()
     
     try:
-        log_handle = open(log_file, "w", encoding="utf-8")
-        proc = subprocess.Popen(
-            ["powershell.exe", "-NoProfile", "-Command", clean_cmd],
-            cwd=work_dir,
-            stdout=log_handle,
-            stderr=subprocess.STDOUT,
-            text=True,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
-        )
+        creation_flags = 0
+        if os.name == 'nt':
+            no_window = getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)
+            creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | no_window
+
+        with open(log_file, "w", encoding="utf-8") as log_handle:
+            proc = subprocess.Popen(
+                ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", clean_cmd],
+                cwd=work_dir,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                text=True,
+                creationflags=creation_flags
+            )
         
         BACKGROUND_PROCESSES[task_id] = {
             "id": task_id,
@@ -311,14 +426,22 @@ def process_start_background(command: str, cwd: Optional[str] = None, name: Opti
         }
         
         return {
+            "status": "started",
+            "pid": proc.pid,
             "task_id": task_id,
             "name": task_name,
-            "pid": proc.pid,
-            "status": "running",
             "log_file": str(log_file)
         }
     except Exception as e:
-        return {"error": f"Failed to start background process: {e}"}
+        return {"error": f"Failed to spawn background process: {e}"}
+
+
+def process_start_background(command: str, cwd: Optional[str] = None, name: Optional[str] = None) -> Dict[str, Any]:
+    """Start a long-running process in the background (backward-compatible alias for process_spawn)."""
+    res = process_spawn(command=command, working_directory=cwd or "C:\\", cwd=cwd, name=name)
+    if "status" in res and res["status"] == "started":
+        res["status"] = "running"
+    return res
 
 
 def process_list_background() -> List[Dict[str, Any]]:
@@ -378,3 +501,50 @@ def process_kill_background(task_id: str) -> Dict[str, Any]:
         return {"task_id": task_id, "status": "terminated"}
     except Exception as e:
         return {"error": f"Failed to kill process: {e}"}
+
+
+def desktop_open(target: str, arguments: Optional[str] = None) -> Dict[str, Any]:
+    """Open a URL in the default browser, or launch a file/application on the active Windows desktop.
+    
+    Uses Windows ShellExecute (equivalent to double-clicking in File Explorer or running via Start Menu).
+    This reliably opens web links (e.g. YouTube, websites) in the user's default browser (such as Firefox)
+    or launches desktop GUI applications directly in the user's interactive desktop session.
+    
+    Args:
+        target: Web URL (e.g. 'https://www.youtube.com/results?search_query=chill+psydub') or path to an app/document.
+        arguments: Optional command-line arguments to pass to the application.
+    """
+    clean_target = str(target).strip()
+    if not clean_target:
+        return {"status": "error", "error": "Target cannot be empty."}
+
+    # Block potentially dangerous URI schemes
+    lower_target = clean_target.lower()
+    dangerous_schemes = ("javascript:", "data:", "vbscript:", "ms-msdt:", "search-ms:")
+    if any(lower_target.startswith(ds) for ds in dangerous_schemes):
+        return {"status": "error", "error": f"Blocked potentially hazardous target scheme: '{clean_target}'"}
+
+    try:
+        clean_args = str(arguments).strip() if arguments else ""
+        if os.name == "nt":
+            if clean_args:
+                os.startfile(clean_target, "open", clean_args)
+            else:
+                os.startfile(clean_target)
+            return {
+                "status": "success",
+                "message": f"Successfully launched '{clean_target}' on the interactive desktop.",
+                "target": clean_target,
+                "arguments": clean_args
+            }
+        else:
+            import shutil
+            opener = "xdg-open" if shutil.which("xdg-open") else "open"
+            cmd = [opener, clean_target]
+            if clean_args:
+                cmd.extend(clean_args.split())
+            subprocess.Popen(cmd)
+            return {"status": "success", "message": f"Launched '{clean_target}' via {opener}."}
+    except Exception as e:
+        return {"status": "error", "error": f"Failed to open '{clean_target}': {e}"}
+

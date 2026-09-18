@@ -5,6 +5,37 @@ All notable changes to **Mammouth Defroster 9000** will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-09-18
+
+### 🖱️ Desktop Mouse & Keyboard Automation (`modules/desktop_input.py`)
+- **Native Win32 Subsystem & Fallback (`modules/desktop_input.py`):** Fully implemented native Windows User32 API input events (`user32.mouse_event`, `user32.SetCursorPos`, `user32.keybd_event` with `KEYEVENTF_UNICODE`). Bypasses PyAutoGUI failsafe crashes and works robustly on interactive desktop sessions.
+- **Mouse Tools:** `mouse_move`, `mouse_click`, `mouse_drag`, `mouse_scroll`, `mouse_get_position` with smooth interpolation, boundary clamping, and left/right/middle button support.
+- **Keyboard Tools:** `keyboard_type` with full international Unicode character support, `keyboard_press` with key aliases, and `keyboard_hotkey` with multi-key combination sequences.
+- **Screen Bounds Detection:** `desktop_get_screen_info` reporting primary monitor width, height, and real-time cursor coordinates.
+
+### 🔑 Authentication Key Display & Plaintext Token Hygiene
+- **Dashboard Bearer API Key Display (`gui.py`):** Added a dedicated `🔑 Bearer API Key` row directly to the primary Dashboard endpoint card with an interactive show/hide toggle (`🔒 Hide Key` / `👁️ Show Key`) and a direct `📋 Copy Key` button.
+- **Removed DPAPI Key Storage (`config.py`):** Eliminated Windows DPAPI ciphertext encryption (`dpapi:<base64>`) for `api_token` in `config.json`. The original alphanumeric authentication key is now preserved, stored, and displayed cleanly without cryptographic hashing.
+- **Transparent Migration on Load (`config.py`, `gui.py`):** Automatically migrates any legacy `dpapi:` tokens on disk back to original keys upon startup. If a foreign/corrupted DPAPI blob is detected, a fresh 32-character token is seamlessly generated so the app never displays broken ciphertext.
+- **MCP JSON Configuration Client (`gui.py`):** Verified client configuration snippets and clipboard export always bundle the original Bearer key.
+
+### 👁️ Desktop Vision & Interactive Consent Gate (`modules/screen_capture.py`, `gui.py`)
+- **Interactive UI Modal:** When a connected AI or MCP client calls `screen_capture`, a native modal prompt appears on screen asking for explicit confirmation, preventing silent screen scraping.
+- **Session & Setting Controls:** Added `🔒 Require Consent` toggle and `🔓 Grant Session Consent` buttons across both the Modular Capabilities and Settings tabs.
+- **Exposed MCP Tools:** Registered `screen_grant_consent` and `screen_revoke_consent` in `server.py` allowing autonomous AI workflows to negotiate permissions.
+
+### 🖥️ Dual Executable Packaging & CLI Server Mode (`MammouthDefroster9000.spec`, `build.bat`)
+- **Dedicated Console Server (`MammouthDefroster9000-server.exe`):** Built alongside the windowed GUI (`MammouthDefroster9000.exe`), providing real-time streaming Uvicorn logs, batch file compatibility, and graceful Ctrl+C shutdown.
+- **Headless Mode Fix:** Fixed `ImportError` in `--server-only` / `--cli` mode and attached to Windows console when launched from a terminal.
+- **Autostart Support:** Added `--autostart` flag and `"auto_start_server"` configuration option for headless/instant boot.
+
+### 🛡️ FastMCP & MCP Client Compatibility
+- **Empty List Protection (`server.py`):** Intercepted empty list results (`memory_list`, `task_list`) to return valid `[TextContent(text="[]")]`, eliminating client-side `IndexError: list index out of range` crashes.
+- **Flexible Schema Aliases (`modules/file_ops.py`, `modules/tasks_kanban.py`):** Supported `path` as alias for `directory_path` and `file_path`, and `id` for `task_id`.
+
+### 🌐 Network & Tunnel Integrations (`gui.py`, `config.py`)
+- **Direct Tunnel Management:** Support for Tailscale Funnel, Cloudflare Tunnel (`cloudflared`), and ngrok with auto-detection of local binary paths and automatic process lifecycle management.
+
 ---
 
 ## [0.2.1] - 2026-09-01

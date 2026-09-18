@@ -2,11 +2,17 @@ import json
 import copy
 import socket
 import secrets
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
-CONFIG_FILE = Path(__file__).parent / "config.json"
-CONFIG_EXAMPLE_FILE = Path(__file__).parent / "config.example.json"
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.resolve()
+
+CONFIG_FILE = BASE_DIR / "config.json"
+CONFIG_EXAMPLE_FILE = BASE_DIR / "config.example.json"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "server": {
@@ -15,6 +21,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "tunnel_mode": "Tailscale Funnel",  # Options: "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"
         "endpoint_path": "/sse",           # Options: "/sse", "/mcp", "/messages", "/"
         "auto_tunnel": False,              # Safe by Default: Opt-in for public exposure
+        "auto_start_server": False,        # If true, GUI automatically launches server on open
         "api_token": "",                   # Generated securely on initial run
         "enforce_auth": True,              # Secure by Default: Require Bearer token
         "allowed_origins": [
@@ -83,6 +90,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "enabled": True,
             "name": "Unreal Engine 5/4 Live Automation",
             "description": "Python remote execution, scene inspection, actor spawning, and viewport screenshot automation in Unreal Engine Editor."
+        },
+        "desktop_input": {
+            "enabled": True,
+            "name": "Desktop Mouse & Keyboard Automation",
+            "description": "Mouse clicks, movement, drag, scroll, keyboard typing, and hotkeys for browser and desktop automation."
         }
     }
 }
@@ -157,12 +169,17 @@ def load_config() -> Dict[str, Any]:
                     raw_token = cfg["server"].get("api_token", "")
                     if raw_token:
                         token_was_present = True
-                        if not raw_token.startswith("dpapi:"):
-                            # Proactive migration: encrypt plaintext token on disk immediately
-                            cfg["server"]["api_token"] = raw_token
+                        if raw_token.startswith("dpapi:"):
+                            # Migration from legacy DPAPI format back to original plaintext key
+                            decrypted = _decrypt_dpapi(raw_token)
+                            if decrypted and not decrypted.startswith("dpapi:"):
+                                cfg["server"]["api_token"] = decrypted
+                            else:
+                                # Foreign machine or corrupted DPAPI blob: generate fresh token
+                                cfg["server"]["api_token"] = generate_secure_token()
                             save_config(cfg)
                         else:
-                            cfg["server"]["api_token"] = _decrypt_dpapi(raw_token)
+                            cfg["server"]["api_token"] = raw_token
                 if "modules" in user_cfg:
                     for mod_key, mod_val in user_cfg["modules"].items():
                         if mod_key in cfg["modules"]:
@@ -181,12 +198,17 @@ def load_config() -> Dict[str, Any]:
 
 
 def save_config(config_data: Dict[str, Any]) -> bool:
-    """Save configuration to config.json with formatted indentation and DPAPI encrypted token."""
+    """Save configuration to config.json with formatted indentation and plain original token."""
     try:
         disk_cfg = copy.deepcopy(config_data)
         raw_tok = disk_cfg.get("server", {}).get("api_token", "")
-        if raw_tok and not raw_tok.startswith("dpapi:"):
-            disk_cfg["server"]["api_token"] = _encrypt_dpapi(raw_tok)
+        # Ensure any legacy dpapi token string is decrypted to original key before saving
+        if raw_tok and raw_tok.startswith("dpapi:"):
+            decrypted = _decrypt_dpapi(raw_tok)
+            if decrypted and not decrypted.startswith("dpapi:"):
+                disk_cfg["server"]["api_token"] = decrypted
+            else:
+                disk_cfg["server"]["api_token"] = generate_secure_token()
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(disk_cfg, f, indent=2)
         return True

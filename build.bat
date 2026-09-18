@@ -12,25 +12,9 @@ if exist "dist" rd /s /q "dist"
 REM 2. Ensure virtualenv or system python is available
 python -m pip install --upgrade pyinstaller
 
-REM 3. Build standalone GUI executable
-echo Building PyInstaller binary with full asset collection...
-python -m PyInstaller --noconfirm --onedir --windowed ^
-    --name "MammouthDefroster9000" ^
-    --icon "assets\icon.ico" ^
-    --add-data "assets;assets" ^
-    --add-data "modules;modules" ^
-    --add-data "config.example.json;." ^
-    --add-data "hosts.example.json;." ^
-    --collect-all "customtkinter" ^
-    --collect-all "PIL" ^
-    --collect-all "fastmcp" ^
-    --collect-all "uvicorn" ^
-    --collect-all "starlette" ^
-    --collect-all "mss" ^
-    --hidden-import "server" ^
-    --hidden-import "config" ^
-    --hidden-import "pystray" ^
-    gui.py
+REM 3. Build standalone GUI & Server executables using spec file
+echo Building PyInstaller binaries with dual targets (GUI + Console Server)...
+python -m PyInstaller --noconfirm MammouthDefroster9000.spec
 
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] PyInstaller build failed!
@@ -48,10 +32,29 @@ if exist "dist\MammouthDefroster9000\_internal\mcpserv\config.json" (
 
 REM Copy sanitized config.example.json as initial default config.json
 copy "config.example.json" "dist\MammouthDefroster9000\config.json" /Y
+copy "config.example.json" "dist\MammouthDefroster9000\config.example.json" /Y
+copy "hosts.example.json" "dist\MammouthDefroster9000\hosts.example.json" /Y
+copy "start_server.bat" "dist\MammouthDefroster9000\start_server.bat" /Y
+copy "start_gui.bat" "dist\MammouthDefroster9000\start_gui.bat" /Y
+if exist "stop_server.bat" copy "stop_server.bat" "dist\MammouthDefroster9000\stop_server.bat" /Y
+if exist "start_server.ps1" copy "start_server.ps1" "dist\MammouthDefroster9000\start_server.ps1" /Y
 copy "SECURITY.md" "dist\MammouthDefroster9000\SECURITY.md" /Y
 copy "CHANGELOG.md" "dist\MammouthDefroster9000\CHANGELOG.md" /Y
 copy "README.md" "dist\MammouthDefroster9000\README.md" /Y
+if exist "RELEASE_NOTES_v0.2.2.md" copy "RELEASE_NOTES_v0.2.2.md" "dist\MammouthDefroster9000\" /Y
 if exist "LICENSE" copy "LICENSE" "dist\MammouthDefroster9000\LICENSE" /Y
+if exist "cloudflared.exe" copy "cloudflared.exe" "dist\MammouthDefroster9000\" /Y
+
+echo ===================================================
+echo   Packaging release ZIP: MammouthDefroster9000-v0.2.2-windows-x64.zip
+echo ===================================================
+powershell -Command "Compress-Archive -Path 'dist\MammouthDefroster9000\*' -DestinationPath '..\MammouthDefroster9000-v0.2.2-windows-x64.zip' -Force"
+
+echo ===================================================
+echo   Syncing to unpacked test directory: ..\MammouthDefroster9000-v0.2.2
+echo ===================================================
+if not exist "..\MammouthDefroster9000-v0.2.2" mkdir "..\MammouthDefroster9000-v0.2.2"
+robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.2.2" /E /NP /NFL /NDL /R:2 /W:2
 
 echo ===================================================
 echo   Build completed successfully! Output: dist\MammouthDefroster9000

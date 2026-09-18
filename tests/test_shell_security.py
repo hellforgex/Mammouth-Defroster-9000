@@ -173,6 +173,86 @@ class TestShellSecurity(unittest.TestCase):
             res = _validate_remote_command(cmd)
             self.assertEqual(res, cmd)
 
+    def test_powershell_exec_execution(self):
+        """Test powershell_exec runs valid commands and blocks dangerous patterns."""
+        from modules.shell_processes import powershell_exec
+        res = powershell_exec("Write-Output 'Mammouth Defroster FastMCP'")
+        self.assertEqual(res["exit_code"], 0)
+        self.assertIn("Mammouth Defroster FastMCP", res["stdout"])
+
+        res_blocked = powershell_exec("I`e`x 'whoami'")
+        self.assertEqual(res_blocked["exit_code"], -1)
+        self.assertIn("Security Error", res_blocked["stderr"])
+
+    def test_cmd_exec_execution(self):
+        """Test cmd_exec runs valid CMD commands and returns stdout/stderr/exit_code."""
+        from modules.shell_processes import cmd_exec
+        res = cmd_exec("echo MCP CMD Test")
+        self.assertEqual(res["exit_code"], 0)
+        self.assertIn("MCP CMD Test", res["stdout"])
+
+    def test_process_spawn_execution(self):
+        """Test process_spawn creates background process, captures output, and tracks pid/task_id."""
+        import time
+        from modules.shell_processes import process_spawn, process_get_output, process_kill_background
+        res = process_spawn("Write-Output 'MCP Background Log Capture Test'", name="test-bg-task")
+        self.assertEqual(res["status"], "started")
+        self.assertGreater(res["pid"], 0)
+        self.assertTrue(len(res["task_id"]) > 0)
+        
+        # Poll briefly for process completion and verify non-empty log output capture
+        out = None
+        for _ in range(20):
+            time.sleep(0.2)
+            out = process_get_output(res["task_id"])
+            if "status" in out and "finished" in out["status"]:
+                break
+        
+        self.assertIsNotNone(out)
+        self.assertIn("finished", out["status"])
+        self.assertIn("MCP Background Log Capture Test", out["lines"])
+
+    def test_start_process_admin_control(self):
+        """Test Start-Process is allowed when allow_admin=True and blocked when allow_admin=False."""
+        valid_cmd = "Start-Process notepad"
+        res = _validate_shell_command(valid_cmd, allow_admin=True)
+        self.assertEqual(res, valid_cmd)
+
+        with self.assertRaises(PermissionError):
+            _validate_shell_command(valid_cmd, allow_admin=False)
+
+    def test_powershell_wrapper_unwrapping(self):
+        """Test powershell -Command outer wrapper is cleanly unwrapped without security false positive."""
+        from modules.shell_processes import powershell_exec
+        res = powershell_exec('powershell -Command "Write-Output UnwrappedPSOutput"')
+        self.assertEqual(res["exit_code"], 0)
+        self.assertIn("UnwrappedPSOutput", res["stdout"])
+
+    def test_desktop_open_safety(self):
+        """Test desktop_open validates input and rejects dangerous protocols."""
+        from modules.shell_processes import desktop_open
+        res_empty = desktop_open("")
+        self.assertEqual(res_empty["status"], "error")
+
+        res_js = desktop_open("javascript:alert(1)")
+        self.assertEqual(res_js["status"], "error")
+        self.assertIn("Blocked", res_js["error"])
+
+    def test_system_get_processes_session_and_filter(self):
+        """Test system_get_processes includes session_id and respects filter_name."""
+        from modules.system_monitor import system_get_processes
+        procs = system_get_processes(limit=10)
+        self.assertIsInstance(procs, list)
+        self.assertGreater(len(procs), 0)
+        for p in procs:
+            self.assertIn("session_id", p)
+            self.assertIn("name", p)
+            self.assertIn("pid", p)
+
+        # Test filter
+        filtered = system_get_processes(limit=10, filter_name="nonexistent_process_xyz_123")
+        self.assertEqual(len(filtered), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

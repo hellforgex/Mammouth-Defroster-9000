@@ -3,7 +3,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-DB_PATH = Path(__file__).parent.parent / "tasks.db"
+import sys
+
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.parent.resolve()
+
+DB_PATH = BASE_DIR / "tasks.db"
 
 MAX_TITLE_LENGTH = 256
 MAX_DESC_LENGTH = 65536  # 64 KB
@@ -64,11 +71,12 @@ def task_create(title: str, description: str = "", priority: str = "medium") -> 
     }
 
 def task_update(
-    task_id: int,
+    task_id: Optional[int] = None,
     status: Optional[str] = None,
     title: Optional[str] = None,
     description: Optional[str] = None,
-    priority: Optional[str] = None
+    priority: Optional[str] = None,
+    id: Optional[int] = None
 ) -> Dict[str, Any]:
     """Update task status ('todo', 'in_progress', 'done', 'blocked') or details."""
     updates = []
@@ -96,23 +104,27 @@ def task_update(
             updates.append("priority = ?")
             params.append(clean_prio)
             
+    effective_id = task_id if task_id is not None else id
+    if effective_id is None:
+        return {"error": "task_id (or id) parameter is required."}
+
     if not updates:
         return {"error": "No valid fields to update."}
         
     now = datetime.now().isoformat()
     updates.append("updated_at = ?")
     params.append(now)
-    params.append(int(task_id))
+    params.append(int(effective_id))
     
     conn = _get_db()
     with conn:
         cursor = conn.execute(f"UPDATE tasks SET {', '.join(updates)} WHERE id = ?", params)
         if cursor.rowcount == 0:
             conn.close()
-            return {"error": f"Task with ID {task_id} not found."}
+            return {"error": f"Task with ID {effective_id} not found."}
             
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM tasks WHERE id = ?", (int(task_id),))
+    cursor.execute("SELECT * FROM tasks WHERE id = ?", (int(effective_id),))
     row = cursor.fetchone()
     conn.close()
     return dict(row)
@@ -145,11 +157,15 @@ def task_list(status: Optional[str] = None, priority: Optional[str] = None, limi
     conn.close()
     return [dict(r) for r in rows]
 
-def task_delete(task_id: int) -> str:
+def task_delete(task_id: Optional[int] = None, id: Optional[int] = None) -> str:
     """Delete a task from the persistent database."""
+    effective_id = task_id if task_id is not None else id
+    if effective_id is None:
+        return "Error: task_id (or id) parameter is required."
+
     conn = _get_db()
     with conn:
-        cursor = conn.execute("DELETE FROM tasks WHERE id = ?", (int(task_id),))
+        cursor = conn.execute("DELETE FROM tasks WHERE id = ?", (int(effective_id),))
         deleted = cursor.rowcount > 0
     conn.close()
-    return f"Successfully deleted task {task_id}." if deleted else f"Task {task_id} not found."
+    return f"Successfully deleted task {effective_id}." if deleted else f"Task {effective_id} not found."

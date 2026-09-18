@@ -3,7 +3,7 @@ import json
 import platform
 import psutil
 import subprocess
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 def system_get_specs() -> Dict[str, Any]:
     """Get comprehensive system specs (OS, CPU, RAM, Disk partitions)."""
@@ -38,24 +38,46 @@ def system_get_specs() -> Dict[str, Any]:
         "disks": disks,
     }
 
-def system_get_processes(limit: int = 20, sort_by: str = "memory") -> List[Dict[str, Any]]:
-    """List top running processes sorted by memory or CPU.
+def system_get_processes(
+    limit: int = 20,
+    sort_by: str = "memory",
+    filter_name: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """List top running processes sorted by memory or CPU, with Windows Session IDs.
     
     Args:
         limit: Number of top processes to return (default 20, max 100).
         sort_by: 'memory' or 'cpu'.
+        filter_name: Optional case-insensitive substring to filter process names (e.g. 'firefox', 'python', 'Mammouth').
     """
     clean_limit = max(1, min(int(limit), 100))
     clean_sort = "cpu" if str(sort_by).lower() == "cpu" else "memory"
+    filter_pattern = str(filter_name).strip().lower() if filter_name else None
+
+    kernel32 = None
+    if os.name == 'nt':
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
 
     procs = []
     for p in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent', 'memory_info']):
         try:
             info = p.info
+            p_name = info.get('name') or ""
+            if filter_pattern and filter_pattern not in p_name.lower():
+                continue
+
+            session_id = -1
+            if kernel32:
+                sid = ctypes.c_uint()
+                if kernel32.ProcessIdToSessionId(info['pid'], ctypes.byref(sid)):
+                    session_id = sid.value
+
             mem_mb = round(info['memory_info'].rss / (1024 * 1024), 1) if info.get('memory_info') else 0
             procs.append({
                 "pid": info['pid'],
-                "name": info['name'],
+                "name": p_name,
+                "session_id": session_id,
                 "memory_mb": mem_mb,
                 "memory_percent": round(info['memory_percent'] or 0, 1),
                 "cpu_percent": round(info['cpu_percent'] or 0, 1)

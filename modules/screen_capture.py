@@ -1,4 +1,5 @@
 import os
+import sys
 import io
 import time
 from datetime import datetime
@@ -22,7 +23,12 @@ try:
 except Exception:
     FastMCPImage = None
 
-WORKSPACE_DIR = Path(__file__).parent.parent / "workspace" / "screenshots"
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.parent.resolve()
+
+WORKSPACE_DIR = BASE_DIR / "workspace" / "screenshots"
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
 def _cleanup_old_screenshots(max_keep: int = 25, max_age_hours: int = 24):
@@ -87,6 +93,13 @@ def screen_list_monitors() -> List[Dict[str, Any]]:
 _last_screen_capture_time = 0.0
 _user_consent_granted: bool = False
 _consent_mode: str = "none"  # "none", "once", "always"
+_consent_prompt_callback = None
+
+
+def set_consent_prompt_callback(callback):
+    """Register an interactive UI callback (e.g. Tkinter modal dialog) for user consent."""
+    global _consent_prompt_callback
+    _consent_prompt_callback = callback
 
 
 def screen_grant_consent(duration: str = "once") -> Dict[str, Any]:
@@ -149,10 +162,26 @@ def screen_capture(
 
     # M-07: Consent-Gate Check
     if _is_consent_required() and not _user_consent_granted:
-        return {
-            "status": "consent_required",
-            "message": "Desktop screen capture requires explicit user consent. Please confirm via Desktop UI or call screen_grant_consent()."
-        }
+        # If an interactive UI callback is registered (e.g. desktop cockpit GUI), prompt the user directly
+        if _consent_prompt_callback is not None:
+            try:
+                prompt_res = _consent_prompt_callback()
+                if prompt_res in ("always", "once"):
+                    _user_consent_granted = True
+                    _consent_mode = prompt_res
+                elif prompt_res == "denied":
+                    return {
+                        "status": "denied",
+                        "message": "Desktop screen capture was explicitly denied by the user."
+                    }
+            except Exception:
+                pass
+
+        if not _user_consent_granted:
+            return {
+                "status": "consent_required",
+                "message": "Desktop screen capture requires explicit user consent. Please confirm via Desktop UI or call screen_grant_consent()."
+            }
 
     # Consume single-use consent
     if _consent_mode == "once":

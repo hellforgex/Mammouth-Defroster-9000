@@ -53,8 +53,33 @@ class TestScreenCaptureConsent(unittest.TestCase):
             res2 = screen_capture(monitor=1, save_to_workspace=False)
             if isinstance(res1, dict):
                 self.assertNotEqual(res1.get("status"), "consent_required")
-            if isinstance(res2, dict):
-                self.assertNotEqual(res2.get("status"), "consent_required")
+    def test_interactive_consent_prompt_granted(self):
+        """Test interactive UI prompt callback granting consent."""
+        from modules.screen_capture import set_consent_prompt_callback
+        set_consent_prompt_callback(lambda: "always")
+
+        real_img = RealPILImage.new("RGB", (1920, 1080), color=(50, 50, 50))
+        with patch("modules.screen_capture.ImageGrab") as mock_grab, \
+             patch("modules.screen_capture.mss", None):
+            mock_grab.grab.return_value = real_img
+
+            res = screen_capture(monitor=1, save_to_workspace=False)
+            if isinstance(res, dict):
+                self.assertNotEqual(res.get("status"), "consent_required")
+                self.assertNotEqual(res.get("status"), "denied")
+
+        set_consent_prompt_callback(None)
+
+    def test_interactive_consent_prompt_denied(self):
+        """Test interactive UI prompt callback denying consent."""
+        from modules.screen_capture import set_consent_prompt_callback
+        set_consent_prompt_callback(lambda: "denied")
+
+        res = screen_capture(monitor=1, save_to_workspace=False)
+        self.assertIsInstance(res, dict)
+        self.assertEqual(res.get("status"), "denied")
+
+        set_consent_prompt_callback(None)
 
 
 if __name__ == "__main__":

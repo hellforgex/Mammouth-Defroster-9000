@@ -3,7 +3,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-DB_PATH = Path(__file__).parent.parent / "memory.db"
+import sys
+
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.parent.resolve()
+
+DB_PATH = BASE_DIR / "memory.db"
 
 MAX_KEY_LENGTH = 256
 MAX_CATEGORY_LENGTH = 128
@@ -58,15 +65,17 @@ def memory_save(key: str, content: str, category: str = "general") -> str:
     conn.close()
     return f"Successfully saved memory '{clean_key}' in category '{clean_category}'."
 
-def memory_recall(query: str) -> List[Dict[str, Any]]:
+def memory_recall(query: Optional[str] = None, search_query: Optional[str] = None) -> List[Dict[str, Any]]:
     """Search persistent long-term memory by key or content keyword.
     
     Args:
         query: Search term to find in keys or content.
+        search_query: Alias for query.
     """
+    effective_q = query if query is not None else (search_query if search_query is not None else "")
     conn = _get_db()
     cursor = conn.cursor()
-    clean_q = str(query).strip()[:128]
+    clean_q = str(effective_q).strip()[:128]
     like_q = f"%{clean_q}%"
     cursor.execute("""
         SELECT key, content, category, updated_at

@@ -7,3 +7,4 @@ customtkinter>=5.2.0,<6.0.0
 pillow>=10.0.0,<13.0.0
 packaging>=24.0,<25.0
 pyinstaller>=6.10.0,<7.0.0
+pyautogui>=0.9.54,<1.0.0
