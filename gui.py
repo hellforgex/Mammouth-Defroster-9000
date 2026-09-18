@@ -2386,7 +2386,13 @@ class MammouthControlCenter(ctk.CTk):
             ts_bin = find_tailscale_binary(ts_path)
             if ts_bin:
                 try:
-                    subprocess.Popen([ts_bin, "funnel", str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                    self.ts_funnel_proc = subprocess.Popen(
+                        [ts_bin, "funnel", str(port)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        creationflags=flags
+                    )
                     self._log("[NETWORK] Tailscale Funnel background trigger executed.")
                 except Exception as e:
                     self._log(f"[NETWORK WARNING] Tailscale funnel trigger: {e}")
@@ -2572,6 +2578,14 @@ class MammouthControlCenter(ctk.CTk):
         else:
             self._handle_server_stopped()
             
+        if getattr(self, "ts_funnel_proc", None):
+            try:
+                self.ts_funnel_proc.terminate()
+                self._log("[NETWORK] Tailscale Funnel process closed.")
+            except Exception:
+                pass
+            self.ts_funnel_proc = None
+
         if getattr(self, "serveo_proc", None):
             try:
                 self.serveo_proc.terminate()
