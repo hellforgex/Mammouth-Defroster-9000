@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🪶 Packaging & Binary Footprint Optimization
 - **Eliminated Transitive ML/Data-Science Bloat:** Explicitly configured PyInstaller `excludes` in `MammouthDefroster9000.spec` to omit non-essential libraries (`torch`, `torchvision`, `torchaudio`, `transformers`, `accelerate`, `optimum`, `onnxruntime`, `faiss`, `sklearn`, `scipy`, `cv2`, `pandas`, `pyarrow`, `av`, `botocore`, `boto3`, `google`, `anthropic`, `matplotlib`, `nltk`) inadvertently collected from system Python environments.
-- **Drastic Size Reduction:** Release ZIP package compressed size slashed from **540 MB** to **~80 MB** (~85% reduction), and uncompressed footprint reduced from **1.5 GB** to **~280 MB**.
+- **Drastic Size Reduction:** Release ZIP package compressed size slashed from **540 MB** to **~109 MB** (~80% reduction), and uncompressed footprint reduced from **1.5 GB** to **~280 MB**.
+- **Fixed Windowed Server Startup:** Added `SafeStream` wrapper and `log_config=None` to prevent Uvicorn `DefaultFormatter` crashes (`AttributeError: 'NoneType' object has no attribute 'isatty'`) when starting the server from the windowed GUI binary.
 - **Improved Cold-Start Performance:** Significantly reduced DLL scanning and assembly overhead on startup.
+- **Clean Distribution Mirroring:** Added `/PURGE` to `build.bat` robocopy synchronization to ensure no stale development scripts pollute distribution folders.
 - **Full Compatibility & Feature Parity:** Maintained 100% functionality across desktop vision, input automation, and FastMCP server endpoints.
 
 ## [0.2.2] - 2026-09-18

@@ -8,11 +8,12 @@
 
 ## 🚀 What's New in v0.2.3
 
-### 🪶 Binary Footprint Optimization (~85% Size Reduction)
+### 🪶 Binary Footprint Optimization (~80% Size Reduction)
 * **Eliminated Transitive ML/Data-Science Bloat:** Excluded heavy, unneeded libraries (`torch`, `torchvision`, `torchaudio`, `transformers`, `accelerate`, `optimum`, `onnxruntime`, `faiss`, `sklearn`, `scipy`, `cv2`, `pandas`, `pyarrow`, `av`, `botocore`, `boto3`, `google`, `anthropic`, `matplotlib`, `nltk`) inadvertently collected from system Python development environments by PyInstaller.
 * **Massive Bandwidth & Storage Reduction:**
-  * **Compressed ZIP:** Reduced from **~540 MB** down to **~80 MB** (~85% reduction).
+  * **Compressed ZIP:** Reduced from **~540 MB** down to **~109 MB** (~80% reduction).
   * **Unpacked Footprint:** Reduced from **~1.5 GB** down to **~280 MB**.
+* **Fixed Server Startup Crash in Windowed GUI:** Resolved an issue where starting the server from the windowed executable failed with an uncaught `AttributeError: 'NoneType' object has no attribute 'isatty'` / `DefaultFormatter` crash due to `sys.stdout` being `None` in windowed mode. Integrated a `SafeStream` stream shim and explicitly bypassed Uvicorn's tty formatter.
 * **Faster Startup:** Drastically reduced DLL loading overhead, memory consumption, and cold-start latency.
 * **Single Release Documentation:** Unified all versioned release notes into this canonical `RELEASE_NOTES.md`.
 
@@ -59,7 +60,7 @@
 
 | File | Platform | Size | Description |
 | :--- | :---: | :---: | :--- |
-| **`MammouthDefroster9000-v0.2.3-windows-x64.zip`** | **Windows x64** | **~80 MB** | Official optimized standalone release package with executables, modules, and documentation. |
+| **`MammouthDefroster9000-v0.2.3-windows-x64.zip`** | **Windows x64** | **~109 MB** | Official optimized standalone release package with executables, modules, and documentation. |
 
 ---
 

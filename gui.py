@@ -12,6 +12,29 @@ import webbrowser
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
+# Ensure sys.stdout and sys.stderr are never None in frozen windowed binaries
+class SafeStream:
+    def __init__(self, target_path=None):
+        self.target_path = target_path
+    def write(self, s):
+        if not s:
+            return
+        if self.target_path:
+            try:
+                with open(self.target_path, "a", encoding="utf-8", errors="replace") as f:
+                    f.write(s)
+            except Exception:
+                pass
+    def flush(self):
+        pass
+    def isatty(self):
+        return False
+
+if sys.stdout is None:
+    sys.stdout = SafeStream()
+if sys.stderr is None:
+    sys.stderr = SafeStream()
+
 # Add project directories to sys.path
 if getattr(sys, "frozen", False):
     BASE_DIR = Path(sys.executable).parent.resolve()
@@ -28,6 +51,57 @@ if (BASE_DIR / "modules").exists() and str(BASE_DIR / "modules") not in sys.path
 from config import load_config, save_config, get_lan_ip, generate_secure_token, _decrypt_dpapi, CONFIG_FILE
 from server import build_app, app
 
+def generate_self_signed_cert(cert_path: str, key_path: str, hostname: str = "localhost") -> bool:
+    """Generate self-signed SSL certificate for local LAN development."""
+    try:
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+        import datetime
+        import ipaddress
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, hostname),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Mammouth Defroster 9000 Local TLS"),
+        ])
+        
+        alt_names = [x509.DNSName(hostname), x509.DNSName("localhost"), x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]
+        try:
+            ip_obj = ipaddress.ip_address(hostname)
+            alt_names.append(x509.IPAddress(ip_obj))
+        except ValueError:
+            pass
+
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+            .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650))
+            .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
+            .sign(key, hashes.SHA256())
+        )
+
+        with open(key_path, "wb") as f:
+            f.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+
+        with open(cert_path, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+        return True
+    except Exception as e:
+        print(f"[TLS WARNING] Could not generate self-signed certificate: {e}")
+        return False
+
 # If spawned as dedicated server executable or with CLI / server-only flags, run headless server
 is_server_binary = "server" in Path(sys.argv[0]).stem.lower()
 if is_server_binary or "--server-only" in sys.argv or "--cli" in sys.argv or "--headless" in sys.argv:
@@ -42,7 +116,6 @@ if is_server_binary or "--server-only" in sys.argv or "--cli" in sys.argv or "--
             pass
 
     import uvicorn
-    from server import generate_self_signed_cert
 
     cfg = load_config()
     server_cfg = cfg.get("server", {})
@@ -91,7 +164,8 @@ if is_server_binary or "--server-only" in sys.argv or "--cli" in sys.argv or "--
         "host": host,
         "port": port,
         "log_level": "info",
-        "use_colors": False
+        "use_colors": False,
+        "log_config": None
     }
     if enable_tls and cert_file and os.path.exists(cert_file):
         uvicorn_kwargs["ssl_certfile"] = cert_file
@@ -188,56 +262,6 @@ def find_cloudflared_binary(custom_path: str = "") -> Optional[str]:
     return None
 
 
-def generate_self_signed_cert(cert_path: str, key_path: str, hostname: str = "localhost") -> bool:
-    """Generate self-signed SSL certificate for local LAN development."""
-    try:
-        from cryptography import x509
-        from cryptography.x509.oid import NameOID
-        from cryptography.hazmat.primitives import hashes
-        from cryptography.hazmat.primitives.asymmetric import rsa
-        from cryptography.hazmat.primitives import serialization
-        import datetime
-        import ipaddress
-
-        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        subject = issuer = x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, hostname),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Mammouth Defroster 9000 Local TLS"),
-        ])
-        
-        alt_names = [x509.DNSName(hostname), x509.DNSName("localhost"), x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]
-        try:
-            ip_obj = ipaddress.ip_address(hostname)
-            alt_names.append(x509.IPAddress(ip_obj))
-        except ValueError:
-            pass
-
-        cert = (
-            x509.CertificateBuilder()
-            .subject_name(subject)
-            .issuer_name(issuer)
-            .public_key(key.public_key())
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
-            .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650))
-            .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
-            .sign(key, hashes.SHA256())
-        )
-
-        with open(key_path, "wb") as f:
-            f.write(key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.TraditionalOpenSSL,
-                encryption_algorithm=serialization.NoEncryption()
-            ))
-
-        with open(cert_path, "wb") as f:
-            f.write(cert.public_bytes(serialization.Encoding.PEM))
-
-        return True
-    except Exception as e:
-        print(f"[TLS WARNING] Could not generate self-signed certificate: {e}")
-        return False
 
 
 def get_tailscale_public_domain(tailscale_path: str = r"C:\Program Files\Tailscale\tailscale.exe") -> Optional[str]:
@@ -2340,7 +2364,8 @@ class MammouthControlCenter(ctk.CTk):
                 "host": host,
                 "port": port,
                 "log_level": "info",
-                "use_colors": False
+                "use_colors": False,
+                "log_config": None
             }
             if enable_tls and cert_file and os.path.exists(cert_file):
                 uvicorn_kwargs["ssl_certfile"] = cert_file
