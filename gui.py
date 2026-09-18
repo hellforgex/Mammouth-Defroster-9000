@@ -2387,13 +2387,18 @@ class MammouthControlCenter(ctk.CTk):
             if ts_bin:
                 try:
                     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-                    self.ts_funnel_proc = subprocess.Popen(
-                        [ts_bin, "funnel", str(port)],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
+                    res = subprocess.run(
+                        [ts_bin, "funnel", "--bg", "--yes", str(port)],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
                         creationflags=flags
                     )
-                    self._log("[NETWORK] Tailscale Funnel background trigger executed.")
+                    if res.returncode == 0:
+                        self._log("[NETWORK] Tailscale Funnel background proxy activated.")
+                    else:
+                        err = res.stderr.strip() or res.stdout.strip()
+                        self._log(f"[NETWORK WARNING] Tailscale funnel: {err}")
                 except Exception as e:
                     self._log(f"[NETWORK WARNING] Tailscale funnel trigger: {e}")
 
@@ -2578,13 +2583,21 @@ class MammouthControlCenter(ctk.CTk):
         else:
             self._handle_server_stopped()
             
-        if getattr(self, "ts_funnel_proc", None):
-            try:
-                self.ts_funnel_proc.terminate()
-                self._log("[NETWORK] Tailscale Funnel process closed.")
-            except Exception:
-                pass
-            self.ts_funnel_proc = None
+        if self.config_data.get("server", {}).get("tunnel_mode") == "Tailscale Funnel":
+            ts_path = self.config_data.get("server", {}).get("tailscale_path", r"C:\Program Files\Tailscale\tailscale.exe")
+            ts_bin = find_tailscale_binary(ts_path)
+            if ts_bin:
+                try:
+                    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                    subprocess.run(
+                        [ts_bin, "funnel", "--https=443", "off"],
+                        capture_output=True,
+                        timeout=5,
+                        creationflags=flags
+                    )
+                    self._log("[NETWORK] Tailscale Funnel proxy disabled.")
+                except Exception:
+                    pass
 
         if getattr(self, "serveo_proc", None):
             try:
