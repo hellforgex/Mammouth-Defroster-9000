@@ -336,12 +336,6 @@ class SecurityAndAuthMiddleware:
             method = scope.get("method", "GET")
             path = scope.get("path", "/")
 
-            print(f"--- DEBUG INCOMING REQUEST ---")
-            print(f"Method: {method} Path: {path}")
-            print(f"Headers: {header_map}")
-            print(f"Query: {scope.get('query_string', b'').decode('latin1')}")
-            print(f"------------------------------")
-
             # Wrapped send to inject standard security response headers (L-05)
             async def send_with_security_headers(message):
                 if message["type"] == "http.response.start":
@@ -384,6 +378,13 @@ class SecurityAndAuthMiddleware:
                 provided_token = ""
                 if auth_header.startswith("Bearer "):
                     provided_token = auth_header[7:].strip()
+                elif not provided_token:
+                    qs = scope.get("query_string", b"").decode("latin1")
+                    if "token=" in qs:
+                        from urllib.parse import parse_qs
+                        q_map = parse_qs(qs)
+                        if "token" in q_map and q_map["token"]:
+                            provided_token = q_map["token"][0].strip()
 
                 is_valid = secrets.compare_digest(provided_token, self.token) if provided_token else False
 
@@ -405,9 +406,6 @@ class SecurityAndAuthMiddleware:
                 new_headers = [(k, v) for k, v in raw_headers if k.lower() != b"accept"]
                 new_headers.append((b"accept", b"application/json, text/event-stream, */*"))
                 scope["headers"] = new_headers
-
-            # Safe access logging (Method + Path only - NO body dumping to prevent credential/data leaks)
-            print(f"[MCP ACCESS] {method} {path}")
 
             await self.app(scope, receive, send_with_security_headers)
         else:
