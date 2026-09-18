@@ -86,6 +86,10 @@ Start a new chat with Mammouth! It will immediately discover your defrosted tool
 
 ## 🛡️ Sovereign Privacy & Safety Built-In
 
+<p align="center">
+  <img src="assets/cockpit_light.png" alt="Mammouth Defroster 9000 Security & Settings Cockpit (Light Mode)" width="95%">
+</p>
+
 MD-9000 gives AI assistants real Windows power, but keeps **you** in full control:
 
 * 👁️ **Desktop Vision Consent Gate**: When Mammouth requests a desktop screenshot, an interactive prompt pops up asking for your permission before any image is captured. You can grant permission for one capture, the whole session, or revoke it anytime.
