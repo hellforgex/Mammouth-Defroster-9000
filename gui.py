@@ -2327,6 +2327,56 @@ class MammouthControlCenter(ctk.CTk):
         except (ValueError, TypeError):
             port = 8000
 
+        # Check if port is already bound by an existing process
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.3)
+        check_ip = host if host not in ("0.0.0.0", "") else "127.0.0.1"
+        port_in_use = (sock.connect_ex((check_ip, port)) == 0)
+        sock.close()
+
+        if port_in_use:
+            owner_info = ""
+            blocking_pid = None
+            try:
+                import psutil
+                for conn in psutil.net_connections(kind="inet"):
+                    if conn.laddr and conn.laddr.port == port and conn.status == psutil.CONN_LISTEN:
+                        blocking_pid = conn.pid
+                        if blocking_pid:
+                            p = psutil.Process(blocking_pid)
+                            owner_info = f" (PID {blocking_pid}: {p.name()})"
+                        break
+            except Exception:
+                pass
+
+            err_msg = f"Port {port} is already in use by another application{owner_info}!"
+            self._log(f"[PORT CONFLICT] {err_msg}")
+            
+            if blocking_pid and "mammouth" in owner_info.lower() and blocking_pid != os.getpid():
+                ask_kill = messagebox.askyesno(
+                    "Port In Use",
+                    f"Port {port} is currently occupied by a previous Defroster instance{owner_info}.\n\nWould you like to terminate the previous instance and free the port?",
+                    parent=self
+                )
+                if ask_kill:
+                    try:
+                        import psutil
+                        psutil.Process(blocking_pid).terminate()
+                        time.sleep(0.5)
+                        self._log(f"[PORT] Terminated previous instance PID {blocking_pid}. Port {port} is now free.")
+                    except Exception as k_err:
+                        self._log(f"[PORT WARNING] Could not terminate PID {blocking_pid}: {k_err}")
+                else:
+                    return
+            else:
+                messagebox.showerror(
+                    "Port Conflict",
+                    f"{err_msg}\n\nPlease close the blocking application or run 'stop_server.bat' before starting.",
+                    parent=self
+                )
+                return
+
         self._log(f"Starting in-process FastMCP server on {host}:{port}...")
 
         # Activate public tunnel in background if selected
@@ -2560,13 +2610,18 @@ class MammouthControlCenter(ctk.CTk):
             if messagebox.askyesno("Exit Cockpit", "The MCP server is currently running. Stop server and exit?", parent=self):
                 self._stop_server()
                 self.destroy()
+                os._exit(0)
         else:
             self.destroy()
+            os._exit(0)
 
 
 def main():
-    app = MammouthControlCenter()
-    app.mainloop()
+    try:
+        app = MammouthControlCenter()
+        app.mainloop()
+    finally:
+        os._exit(0)
 
 
 if __name__ == "__main__":

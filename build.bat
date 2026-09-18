@@ -54,7 +54,7 @@ echo ===================================================
 echo   Syncing to unpacked test directory: ..\MammouthDefroster9000-v0.2.3
 echo ===================================================
 if not exist "..\MammouthDefroster9000-v0.2.3" mkdir "..\MammouthDefroster9000-v0.2.3"
-robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.2.3" /E /NP /NFL /NDL /R:2 /W:2 /PURGE
+robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.2.3" /E /NP /NFL /NDL /R:1 /W:1 /PURGE
 
 echo ===================================================
 echo   Build completed successfully! Output: dist\MammouthDefroster9000
