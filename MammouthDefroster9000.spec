@@ -18,6 +18,28 @@ tmp_ret = collect_all('mss')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
+excludes = [
+    # Deep Learning & ML frameworks
+    'torch', 'torchvision', 'torchaudio',
+    'transformers', 'huggingface_hub', 'safetensors', 'tokenizers', 'accelerate', 'optimum',
+    'onnxruntime', 'onnx',
+    'faiss', 'faiss_cpu',
+    'sklearn', 'scipy',
+    
+    # Computer Vision (pyscreeze optional hook)
+    'cv2',
+    
+    # Data science, heavy tabular, codecs & plotting
+    'pandas', 'pyarrow', 'numpy.f2py',
+    'av', 'matplotlib',
+    'nltk', 'sympy',
+    
+    # Cloud SDKs & external AI APIs
+    'botocore', 'boto3', 's3transfer',
+    'google', 'google.genai', 'anthropic',
+    'IPython', 'jupyter', 'pytest',
+]
+
 a = Analysis(
     ['gui.py'],
     pathex=[],
@@ -27,7 +49,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excludes,
     noarchive=False,
     optimize=0,
 )

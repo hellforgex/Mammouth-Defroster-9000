@@ -134,7 +134,7 @@ from modules.unreal_engine import (
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.2.2): Sovereign Windows 11 Desktop Cockpit, Vision & Unreal Engine 5 Automation Platform.
+    Mammouth Defroster 9000 (v0.2.3): Sovereign Windows 11 Desktop Cockpit, Vision & Unreal Engine 5 Automation Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, and Unreal Engine automation exclusively for Mammouth.ai.
     Always prioritize safety, sandboxing, and precision.
     """

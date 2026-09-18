@@ -41,20 +41,20 @@ if exist "start_server.ps1" copy "start_server.ps1" "dist\MammouthDefroster9000\
 copy "SECURITY.md" "dist\MammouthDefroster9000\SECURITY.md" /Y
 copy "CHANGELOG.md" "dist\MammouthDefroster9000\CHANGELOG.md" /Y
 copy "README.md" "dist\MammouthDefroster9000\README.md" /Y
-if exist "RELEASE_NOTES_v0.2.2.md" copy "RELEASE_NOTES_v0.2.2.md" "dist\MammouthDefroster9000\" /Y
+if exist "RELEASE_NOTES.md" copy "RELEASE_NOTES.md" "dist\MammouthDefroster9000\" /Y
 if exist "LICENSE" copy "LICENSE" "dist\MammouthDefroster9000\LICENSE" /Y
 if exist "cloudflared.exe" copy "cloudflared.exe" "dist\MammouthDefroster9000\" /Y
 
 echo ===================================================
-echo   Packaging release ZIP: MammouthDefroster9000-v0.2.2-windows-x64.zip
+echo   Packaging release ZIP: MammouthDefroster9000-v0.2.3-windows-x64.zip
 echo ===================================================
-powershell -Command "Compress-Archive -Path 'dist\MammouthDefroster9000\*' -DestinationPath '..\MammouthDefroster9000-v0.2.2-windows-x64.zip' -Force"
+powershell -Command "Compress-Archive -Path 'dist\MammouthDefroster9000\*' -DestinationPath '..\MammouthDefroster9000-v0.2.3-windows-x64.zip' -Force"
 
 echo ===================================================
-echo   Syncing to unpacked test directory: ..\MammouthDefroster9000-v0.2.2
+echo   Syncing to unpacked test directory: ..\MammouthDefroster9000-v0.2.3
 echo ===================================================
-if not exist "..\MammouthDefroster9000-v0.2.2" mkdir "..\MammouthDefroster9000-v0.2.2"
-robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.2.2" /E /NP /NFL /NDL /R:2 /W:2
+if not exist "..\MammouthDefroster9000-v0.2.3" mkdir "..\MammouthDefroster9000-v0.2.3"
+robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.2.3" /E /NP /NFL /NDL /R:2 /W:2
 
 echo ===================================================
 echo   Build completed successfully! Output: dist\MammouthDefroster9000

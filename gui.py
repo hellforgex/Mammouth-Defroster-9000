@@ -127,7 +127,7 @@ ctk.set_appearance_mode(INITIAL_MODE)
 ctk.set_default_color_theme("dark-blue")
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.2.2"
+APP_VERSION = "v0.2.3"
 
 
 def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
