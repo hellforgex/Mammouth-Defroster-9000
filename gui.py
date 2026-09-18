@@ -658,10 +658,21 @@ class MammouthControlCenter(ctk.CTk):
         handler = GuiLogHandler(lambda msg: self.after(0, self._log, msg))
         formatter = logging.Formatter("[%(levelname)s] %(message)s")
         handler.setFormatter(formatter)
-        logging.getLogger("uvicorn").addHandler(handler)
-        logging.getLogger("uvicorn.access").addHandler(handler)
-        logging.getLogger("uvicorn.error").addHandler(handler)
-        logging.getLogger("fastmcp").addHandler(handler)
+
+        # Clear any pre-existing handlers on uvicorn loggers to avoid duplicate lines
+        for log_name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastmcp"):
+            lg = logging.getLogger(log_name)
+            lg.handlers.clear()
+
+        # Attach handler exclusively to top-level uvicorn and fastmcp
+        # Child loggers (uvicorn.error, uvicorn.access) automatically propagate here
+        u_logger = logging.getLogger("uvicorn")
+        u_logger.setLevel(logging.INFO)
+        u_logger.addHandler(handler)
+
+        f_logger = logging.getLogger("fastmcp")
+        f_logger.setLevel(logging.INFO)
+        f_logger.addHandler(handler)
 
     def _build_ui(self):
         # 1. Top Hero Header Banner
@@ -2508,6 +2519,8 @@ class MammouthControlCenter(ctk.CTk):
         self._log("Stopping MCP server...")
         if self.uvicorn_server:
             self.uvicorn_server.should_exit = True
+        else:
+            self._handle_server_stopped()
             
         if getattr(self, "serveo_proc", None):
             try:
@@ -2532,10 +2545,10 @@ class MammouthControlCenter(ctk.CTk):
             except Exception:
                 pass
             self.ngrok_proc = None
-            
-        self._handle_server_stopped()
 
     def _handle_server_stopped(self):
+        if not self.is_server_running:
+            return
         self.is_server_running = False
         self.server_start_time = None
         self.status_badge.configure(text="● Server Stopped", text_color="#EF4444")
