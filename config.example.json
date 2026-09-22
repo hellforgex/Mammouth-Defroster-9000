@@ -59,6 +59,9 @@
     },
     "desktop_input": {
       "enabled": true
+    },
+    "google_drive": {
+      "enabled": true
     }
   }
 }

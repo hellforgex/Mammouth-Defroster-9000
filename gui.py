@@ -184,7 +184,6 @@ import secrets
 import urllib.parse
 import httpx
 import psutil
-import mss
 from PIL import Image as PILImage
 
 try:
@@ -201,7 +200,7 @@ ctk.set_appearance_mode(INITIAL_MODE)
 ctk.set_default_color_theme("dark-blue")
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.2.3"
+APP_VERSION = "v0.3.2"
 
 
 def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
@@ -798,7 +797,7 @@ class MammouthControlCenter(ctk.CTk):
             )
 
         self.tab_dashboard = self.tabview.add("📊 Dashboard & Live Console")
-        self.tab_skills = self.tabview.add("⚡ Modular Capabilities (9 Modules)")
+        self.tab_skills = self.tabview.add("⚡ Modular Capabilities (11 Modules)")
         self.tab_hosts = self.tabview.add("🔑 SSH Fleet & PuTTY Manager")
         self.tab_settings = self.tabview.add("⚙️ Security & Settings")
 
@@ -868,6 +867,14 @@ class MammouthControlCenter(ctk.CTk):
         # Security Status Badges
         pills_box = ctk.CTkFrame(mode_bar, fg_color="transparent")
         pills_box.pack(side="right")
+
+        self.lbl_oauth_status = ctk.CTkLabel(
+            pills_box,
+            text="⚡ OAuth 2.0 Ready",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=("#0284C7", "#38BDF8")
+        )
+        self.lbl_oauth_status.pack(side="left", padx=5)
 
         self.lbl_auth_status = ctk.CTkLabel(
             pills_box,
@@ -974,8 +981,8 @@ class MammouthControlCenter(ctk.CTk):
         self.lbl_key_title.pack(side="left")
 
         current_token = self.config_data.get("server", {}).get("api_token", "")
-        self.dash_token_visible = True
-        display_tok = current_token if current_token else "(No Key Generated)"
+        self.dash_token_visible = False
+        display_tok = "•" * 28 if current_token else "(No Key Generated)"
         self.lbl_dash_key = ctk.CTkLabel(
             row3,
             text=display_tok,
@@ -989,7 +996,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self.btn_toggle_dash_key = ctk.CTkButton(
             btn_box3,
-            text="🔒 Hide Key",
+            text="👁️ Show Key",
             width=95,
             height=28,
             fg_color=("#F1F5F9", "#1E2028"),
@@ -1061,12 +1068,12 @@ class MammouthControlCenter(ctk.CTk):
             text="📸 Capture Desktop",
             width=150,
             height=30,
-            fg_color=("#EFF6FF", "#1C2130"),
-            hover_color=("#DBEAFE", "#283046"),
-            text_color=("#1D4ED8", "#E5E7EB"),
+            fg_color=("#EFF6FF", "#131C2E"),
+            hover_color=("#DBEAFE", "#1E2C4A"),
+            text_color=("#1D4ED8", "#60A5FA"),
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
-            border_color=("#BFDBFE", "#2A324B"),
+            border_color=("#BFDBFE", "#25375A"),
             command=self._test_screenshot
         )
         btn_screen.pack(side="left", padx=(0, 8))
@@ -1076,12 +1083,12 @@ class MammouthControlCenter(ctk.CTk):
             text="🎮 Ping UE5 [ALPHA]",
             width=170,
             height=30,
-            fg_color=("#FAF5FF", "#251F33"),
-            hover_color=("#F3E8FF", "#362C4A"),
-            text_color=("#7E22CE", "#E5E7EB"),
+            fg_color=("#FAF5FF", "#1E162B"),
+            hover_color=("#F3E8FF", "#2E2042"),
+            text_color=("#7E22CE", "#C084FC"),
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
-            border_color=("#E9D5FF", "#3C2F52"),
+            border_color=("#E9D5FF", "#3F2C5A"),
             command=self._test_unreal
         )
         btn_ue.pack(side="left", padx=(0, 8))
@@ -1091,12 +1098,12 @@ class MammouthControlCenter(ctk.CTk):
             text="📂 Open Workspace",
             width=150,
             height=30,
-            fg_color=("#F0FDFA", "#1A2526"),
-            hover_color=("#CCFBF1", "#253738"),
-            text_color=("#0F766E", "#E5E7EB"),
+            fg_color=("#F0FDF4", "#12231A"),
+            hover_color=("#DCFCE7", "#1A3728"),
+            text_color=("#15803D", "#34D399"),
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
-            border_color=("#99F6E4", "#294142"),
+            border_color=("#BBF7D0", "#244E38"),
             command=self._open_workspace_folder
         )
         btn_ws.pack(side="left", padx=(0, 8))
@@ -1134,10 +1141,10 @@ class MammouthControlCenter(ctk.CTk):
             self.tab_dashboard,
             font=ctk.CTkFont(family="Consolas", size=12),
             wrap="word",
-            fg_color=("#FFFFFF", "#08090C"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#FFFFFF", "#0A0B10"),
+            text_color=("#0F172A", "#E2E8F0"),
             border_width=1,
-            border_color=("#CBD5E1", "#1C1D24"),
+            border_color=("#E2E8F0", "#1C1F2B"),
             corner_radius=8
         )
         self.log_textbox.pack(fill="both", expand=True, padx=10, pady=(2, 10))
@@ -1155,7 +1162,8 @@ class MammouthControlCenter(ctk.CTk):
             "web_tools": 2,
             "screen_capture": 4,
             "unreal_engine": 23,
-            "desktop_input": 9
+            "desktop_input": 9,
+            "google_drive": 11
         }
         total = 0
         for k, v in mods.items():
@@ -1356,13 +1364,13 @@ class MammouthControlCenter(ctk.CTk):
         self.lbl_local_url.configure(text=self._calculate_local_endpoint_url())
         if hasattr(self, "lbl_dash_key"):
             cur_tok = self.config_data.get("server", {}).get("api_token", "")
-            if getattr(self, "dash_token_visible", True):
+            if getattr(self, "dash_token_visible", False):
                 self.lbl_dash_key.configure(text=cur_tok if cur_tok else "(No Key Generated)")
             else:
                 self.lbl_dash_key.configure(text="•" * 28 if cur_tok else "(No Key Generated)")
 
     def _toggle_dash_key_visibility(self):
-        self.dash_token_visible = not getattr(self, "dash_token_visible", True)
+        self.dash_token_visible = not getattr(self, "dash_token_visible", False)
         cur_tok = self.config_data.get("server", {}).get("api_token", "")
         if self.dash_token_visible:
             self.lbl_dash_key.configure(text=cur_tok if cur_tok else "(No Key Generated)")
@@ -1503,7 +1511,8 @@ class MammouthControlCenter(ctk.CTk):
             "web_tools": "🌐",
             "screen_capture": "👁️",
             "unreal_engine": "🎮",
-            "desktop_input": "🖱️"
+            "desktop_input": "🖱️",
+            "google_drive": "☁️"
         }
 
         tool_counts = {
@@ -1516,7 +1525,8 @@ class MammouthControlCenter(ctk.CTk):
             "web_tools": "2 Tools (SSRF Shield)",
             "screen_capture": "4 Tools (Vision Gate)",
             "unreal_engine": "23 Tools (ALPHA)",
-            "desktop_input": "9 Tools"
+            "desktop_input": "9 Tools",
+            "google_drive": "11 Tools (Cloud & Docs)"
         }
 
         for key, mod in modules.items():
@@ -1587,6 +1597,71 @@ class MammouthControlCenter(ctk.CTk):
                     text_color="#F59E0B" if self.var_screen_req_consent.get() else "#10B981"
                 )
                 self.lbl_consent_badge.pack(side="left", padx=10, pady=6)
+
+            elif key == "google_drive":
+                sub_opts = ctk.CTkFrame(left, fg_color=("#F1F5F9", "#1A1B23"), corner_radius=6)
+                sub_opts.pack(fill="x", pady=(8, 0))
+
+                try:
+                    from modules.google_drive import gdrive_status
+                    stat = gdrive_status()
+                    is_auth = stat.get("authenticated", False)
+                    user_email = stat.get("user_email", "")
+                except Exception:
+                    is_auth = False
+                    user_email = ""
+
+                status_text = f"● Connected: {user_email}" if is_auth else "● Not Connected"
+                status_color = "#10B981" if is_auth else "#94A3B8"
+
+                self.lbl_gdrive_status = ctk.CTkLabel(
+                    sub_opts,
+                    text=status_text,
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    text_color=status_color
+                )
+                self.lbl_gdrive_status.pack(side="left", padx=10, pady=6)
+
+                self.btn_gdrive_connect = ctk.CTkButton(
+                    sub_opts,
+                    text="🔑 Connect Google Drive" if not is_auth else "🔄 Re-authenticate",
+                    width=170,
+                    height=26,
+                    fg_color=("#059669", "#10B981"),
+                    hover_color=("#047857", "#059669"),
+                    text_color="#FFFFFF",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    command=self._on_gdrive_connect
+                )
+                self.btn_gdrive_connect.pack(side="left", padx=10, pady=6)
+
+                btn_gdrive_creds = ctk.CTkButton(
+                    sub_opts,
+                    text="📂 Select credentials.json",
+                    width=165,
+                    height=26,
+                    fg_color=("#F1F5F9", "#1E2028"),
+                    hover_color=("#E2E8F0", "#282A36"),
+                    text_color=("#0F172A", "#F3F4F6"),
+                    font=ctk.CTkFont(size=11),
+                    border_width=1,
+                    border_color=("#CBD5E1", "#2A2C38"),
+                    command=self._on_gdrive_browse_credentials
+                )
+                btn_gdrive_creds.pack(side="left", padx=5, pady=6)
+
+                btn_gdrive_disconnect = ctk.CTkButton(
+                    sub_opts,
+                    text="🔌 Disconnect",
+                    width=100,
+                    height=26,
+                    fg_color=("#EF4444", "#DC2626"),
+                    hover_color=("#B91C1C", "#991B1B"),
+                    text_color="#FFFFFF",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    command=self._on_gdrive_disconnect
+                )
+                btn_gdrive_disconnect.pack(side="left", padx=5, pady=6)
 
             right_ctrl = ctk.CTkFrame(card, fg_color="transparent")
             right_ctrl.pack(side="right", padx=20, pady=12)
@@ -1687,6 +1762,81 @@ class MammouthControlCenter(ctk.CTk):
             messagebox.showinfo("Saved", "Skills configuration saved!\n\nNote: Please restart the server for active tool updates to take effect.", parent=self)
         else:
             messagebox.showinfo("Saved", "Skills configuration saved successfully!", parent=self)
+
+    def _on_gdrive_connect(self):
+        from modules.google_drive import start_oauth_flow, gdrive_status, CREDENTIALS_FILE, BASE_DIR
+        stat = gdrive_status()
+        if stat.get("authenticated", False):
+            user_email = stat.get("user_email", "Connected")
+            self._log(f"[GDRIVE] Google Drive is already authenticated as: {user_email}")
+            if hasattr(self, "lbl_gdrive_status"):
+                self.lbl_gdrive_status.configure(text=f"● Connected: {user_email}", text_color="#10B981")
+            if hasattr(self, "lbl_settings_gdrive_status"):
+                self.lbl_settings_gdrive_status.configure(text=f"● Status: Connected ({user_email})", text_color="#10B981")
+            if hasattr(self, "btn_gdrive_connect"):
+                self.btn_gdrive_connect.configure(text="🔄 Re-authenticate")
+            messagebox.showinfo("Connected", f"Google Drive is already connected!\n\nAccount: {user_email}", parent=self)
+            return
+
+        res = start_oauth_flow()
+        if not res.get("success"):
+            messagebox.showerror("OAuth Error", res.get("error", "Unknown error"), parent=self)
+            return
+        auth_url = res.get("auth_url")
+        self._log(f"[GDRIVE] Starting automated OAuth loopback login at {res.get('redirect_uri')}...")
+        webbrowser.open(auth_url)
+        messagebox.showinfo(
+            "Browser Opened",
+            "Opening your web browser for Google Drive authorization.\n\nPlease log in and grant permissions. The token exchange and setup will complete automatically.",
+            parent=self
+        )
+
+        def poll_gdrive_auth():
+            stat = gdrive_status()
+            if stat.get("authenticated", False):
+                user_email = stat.get("user_email", "")
+                self._log(f"[GDRIVE] Successfully authenticated with Google Drive! Account: {user_email}")
+                if hasattr(self, "lbl_gdrive_status"):
+                    self.lbl_gdrive_status.configure(text=f"● Connected: {user_email}", text_color="#10B981")
+                if hasattr(self, "lbl_settings_gdrive_status"):
+                    self.lbl_settings_gdrive_status.configure(text=f"● Status: Connected ({user_email})", text_color="#10B981")
+                if hasattr(self, "btn_gdrive_connect"):
+                    self.btn_gdrive_connect.configure(text="🔄 Re-authenticate")
+            else:
+                self.after(2000, poll_gdrive_auth)
+
+        self.after(2000, poll_gdrive_auth)
+
+    def _on_gdrive_browse_credentials(self):
+        from modules.google_drive import CREDENTIALS_FILE
+        f = filedialog.askopenfilename(
+            title="Select Google Cloud credentials.json",
+            filetypes=[("JSON Files (*.json)", "*.json"), ("All Files (*.*)", "*.*")],
+            parent=self
+        )
+        if f:
+            try:
+                shutil.copyfile(f, str(CREDENTIALS_FILE))
+                self._log(f"[GDRIVE] Copied credentials.json to {CREDENTIALS_FILE}")
+                messagebox.showinfo("Credentials Saved", "Successfully imported credentials.json!\n\nYou can now click 'Connect Google Drive'.", parent=self)
+            except Exception as e:
+                messagebox.showerror("Copy Error", f"Could not copy credentials file: {e}", parent=self)
+
+    def _on_gdrive_disconnect(self):
+        from modules.google_drive import disconnect_gdrive
+        disconnect_gdrive()
+        self._log("[GDRIVE] Google Drive disconnected and credentials removed.")
+        if hasattr(self, "lbl_gdrive_status"):
+            self.lbl_gdrive_status.configure(text="● Not Connected", text_color="#94A3B8")
+        if hasattr(self, "lbl_settings_gdrive_status"):
+            self.lbl_settings_gdrive_status.configure(text="● Status: Not Connected", text_color="#94A3B8")
+        if hasattr(self, "btn_gdrive_connect"):
+            self.btn_gdrive_connect.configure(text="🔑 Connect Google Drive")
+        if hasattr(self, "entry_gdrive_client_id"):
+            self.entry_gdrive_client_id.delete(0, "end")
+        if hasattr(self, "entry_gdrive_client_secret"):
+            self.entry_gdrive_client_secret.delete(0, "end")
+        messagebox.showinfo("Disconnected", "Successfully disconnected Google Drive.", parent=self)
 
     # ---------------------------------------------------------
     # TAB 3: SSH HOST MANAGER
@@ -2173,6 +2323,117 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_grant_session.pack(side="left")
 
+        # 7. Google Drive Cloud Integration & Browser Login
+        gdrive_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        gdrive_group.pack(fill="x", pady=6)
+
+        ctk.CTkLabel(gdrive_group, text="📁 Google Drive Cloud Integration & Browser Login", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+
+        # Status row
+        f_gd_stat = ctk.CTkFrame(gdrive_group, fg_color="transparent")
+        f_gd_stat.pack(fill="x", padx=15, pady=5)
+
+        try:
+            from modules.google_drive import gdrive_status
+            stat = gdrive_status()
+            gd_auth = stat.get("authenticated", False)
+            gd_user = stat.get("user_email", "")
+        except Exception:
+            gd_auth = False
+            gd_user = ""
+
+        self.lbl_settings_gdrive_status = ctk.CTkLabel(
+            f_gd_stat,
+            text=f"● Status: Connected ({gd_user})" if gd_auth else "● Status: Not Connected",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#10B981" if gd_auth else "#94A3B8"
+        )
+        self.lbl_settings_gdrive_status.pack(side="left")
+
+        # Buttons row: Launch Browser Login, Import credentials.json, Disconnect
+        f_gd_btns = ctk.CTkFrame(gdrive_group, fg_color="transparent")
+        f_gd_btns.pack(fill="x", padx=15, pady=8)
+
+        btn_launch_login = ctk.CTkButton(
+            f_gd_btns,
+            text="🌐 Launch Login Browser",
+            width=180,
+            height=30,
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._on_gdrive_connect
+        )
+        btn_launch_login.pack(side="left", padx=(0, 8))
+
+        btn_import_creds = ctk.CTkButton(
+            f_gd_btns,
+            text="📂 Import credentials.json",
+            width=180,
+            height=30,
+            fg_color=("#F1F5F9", "#1E2028"),
+            hover_color=("#E2E8F0", "#282A36"),
+            text_color=("#0F172A", "#F3F4F6"),
+            border_width=1,
+            border_color=("#CBD5E1", "#2A2C38"),
+            command=self._on_gdrive_browse_credentials
+        )
+        btn_import_creds.pack(side="left", padx=(0, 8))
+
+        btn_disc_gd = ctk.CTkButton(
+            f_gd_btns,
+            text="🔌 Disconnect",
+            width=100,
+            height=30,
+            fg_color=("#FEF2F2", "#2B191B"),
+            hover_color=("#FEE2E2", "#3D2024"),
+            text_color=("#DC2626", "#F87171"),
+            font=ctk.CTkFont(weight="bold"),
+            border_width=1,
+            border_color=("#FECACA", "#48262C"),
+            command=self._on_gdrive_disconnect
+        )
+        btn_disc_gd.pack(side="left")
+
+        # Custom GCP OAuth Client Credentials (optional)
+        f_gd_cid = ctk.CTkFrame(gdrive_group, fg_color="transparent")
+        f_gd_cid.pack(fill="x", padx=15, pady=5)
+        ctk.CTkLabel(f_gd_cid, text="OAuth Client ID:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        self.entry_gdrive_client_id = ctk.CTkEntry(
+            f_gd_cid,
+            width=320,
+            placeholder_text="Optional: Google Cloud OAuth Client ID",
+            fg_color=("#F8FAFC", "#0D0E12"),
+            border_color=("#CBD5E1", "#22242E"),
+            text_color=("#0F172A", "#F3F4F6")
+        )
+        saved_cid = self.config_data.get("modules", {}).get("google_drive", {}).get("client_id", "")
+        if saved_cid:
+            self.entry_gdrive_client_id.insert(0, saved_cid)
+        self.entry_gdrive_client_id.pack(side="left", padx=(0, 8))
+
+        f_gd_csec = ctk.CTkFrame(gdrive_group, fg_color="transparent")
+        f_gd_csec.pack(fill="x", padx=15, pady=(5, 15))
+        ctk.CTkLabel(f_gd_csec, text="OAuth Client Secret:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        self.entry_gdrive_client_secret = ctk.CTkEntry(
+            f_gd_csec,
+            width=320,
+            show="*",
+            placeholder_text="Optional: Google Cloud Client Secret",
+            fg_color=("#F8FAFC", "#0D0E12"),
+            border_color=("#CBD5E1", "#22242E"),
+            text_color=("#0F172A", "#F3F4F6")
+        )
+        saved_csec = self.config_data.get("modules", {}).get("google_drive", {}).get("client_secret", "")
+        if saved_csec and saved_csec.startswith("dpapi:"):
+            decrypted = _decrypt_dpapi(saved_csec)
+            if decrypted and not decrypted.startswith("dpapi:"):
+                saved_csec = decrypted
+        if saved_csec:
+            self.entry_gdrive_client_secret.insert(0, saved_csec)
+        self.entry_gdrive_client_secret.pack(side="left", padx=(0, 8))
+
         # Save Settings Button
         btn_save_all = ctk.CTkButton(
             scroll,
@@ -2279,6 +2540,15 @@ class MammouthControlCenter(ctk.CTk):
             self.config_data.setdefault("modules", {}).setdefault("screen_capture", {})["require_consent"] = self.var_settings_screen_consent.get()
             if hasattr(self, "var_screen_req_consent"):
                 self.var_screen_req_consent.set(self.var_settings_screen_consent.get())
+
+        if hasattr(self, "entry_gdrive_client_id"):
+            gd_cid = self.entry_gdrive_client_id.get().strip()
+            self.config_data.setdefault("modules", {}).setdefault("google_drive", {})["client_id"] = gd_cid
+        if hasattr(self, "entry_gdrive_client_secret"):
+            gd_csec = self.entry_gdrive_client_secret.get().strip()
+            if gd_csec and not gd_csec.startswith("dpapi:"):
+                gd_csec = _encrypt_dpapi(gd_csec)
+            self.config_data.setdefault("modules", {}).setdefault("google_drive", {})["client_secret"] = gd_csec
 
         save_config(self.config_data)
         self.dash_mode_menu.set(self.opt_tunnel_mode.get())

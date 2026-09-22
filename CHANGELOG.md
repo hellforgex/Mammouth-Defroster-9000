@@ -5,6 +5,29 @@ All notable changes to **Mammouth Defroster 9000** will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-19
+
+### ☁️ Google Drive Cloud Storage & Document Automation (`modules/google_drive.py`)
+- **Native Google Drive Integration:** Added comprehensive Google Drive cloud connectivity to Mammouth Defroster 9000, bringing total modular capabilities to 11 modules and 77 active tools.
+- **Desktop OAuth 2.0 Loopback Flow:** Built-in HTTP loopback authentication server on `http://127.0.0.1:8085` enabling seamless one-click browser authorization without manual copy-pasting of authorization codes.
+- **Token Security with Windows DPAPI:** OAuth refresh and access tokens are encrypted at rest using hardware-backed Windows Data Protection API (`CryptProtectData`).
+- **Service Account Support:** Seamless fallback to Google Cloud Service Account JSON (`service_account.json`) for headless and automated daemon environments.
+- **Read & Write Cloud Tools:**
+  - `gdrive_status`: Real-time connectivity diagnostics, authenticated account info, and cloud storage quota (used/total/trash).
+  - `gdrive_list_files`: Browse folders and query files by name, MIME type, or metadata.
+  - `gdrive_search_files`: Full-text content and filename search across Google Drive.
+  - `gdrive_get_metadata`: Inspect detailed file attributes, owners, web links, and permissions.
+  - `gdrive_read_file`: Read file contents with automatic export for Google Docs (to plain text/markdown) and Google Sheets (to CSV).
+  - `gdrive_write_file`: Create and write new files directly in Google Drive with text/markdown/code content.
+  - `gdrive_update_file`: Overwrite and update existing file contents directly in Google Drive.
+  - `gdrive_download_to_workspace`: Download files directly into the sandboxed local workspace.
+  - `gdrive_upload_from_workspace`: Upload workspace files directly to Google Drive.
+  - `gdrive_create_folder`: Create directory structures in Google Drive.
+  - `gdrive_delete_file`: Safely move files to trash or permanently remove them.
+- **Cockpit GUI Integration (`gui.py`):** Added a dedicated Google Drive card in the Modular Capabilities tab with real-time status badge, "🔑 Connect Google Drive" browser launcher, "📂 Select credentials.json" file importer, and "🔌 Disconnect" button.
+
+---
+
 ## [0.2.3] - 2026-09-18
 
 ### 🪶 Packaging & Binary Footprint Optimization

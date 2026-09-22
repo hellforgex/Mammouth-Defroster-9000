@@ -41,6 +41,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "appearance_mode": "System",       # Options: "System", "Dark", "Light"
         "allow_admin_shell": False,        # Secure by Default: Read-Only shell commands only
         "enable_tls": False,               # Opt-in for LAN HTTPS
+        "registration_token": "",          # Optional: If set, only clients with this token in Authorization header can register OAuth clients
         "ssl_certfile": "",
         "ssl_keyfile": ""
     },
@@ -95,6 +96,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "enabled": True,
             "name": "Desktop Mouse & Keyboard Automation",
             "description": "Mouse clicks, movement, drag, scroll, keyboard typing, and hotkeys for browser and desktop automation."
+        },
+        "google_drive": {
+            "enabled": True,
+            "name": "Google Drive Cloud Storage",
+            "description": "Browse, search, read, download, and upload files to Google Drive with OAuth2/Service Account auth."
         }
     }
 }
@@ -160,6 +166,7 @@ def load_config() -> Dict[str, Any]:
     """Load configuration from config.json, merging with defaults if keys are missing."""
     cfg = copy.deepcopy(DEFAULT_CONFIG)
     token_was_present = False
+    needs_save = False
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -170,14 +177,13 @@ def load_config() -> Dict[str, Any]:
                     if raw_token:
                         token_was_present = True
                         if raw_token.startswith("dpapi:"):
-                            # Migration from legacy DPAPI format back to original plaintext key
+                            # Migrate back to plaintext for portability and human-readability
                             decrypted = _decrypt_dpapi(raw_token)
                             if decrypted and not decrypted.startswith("dpapi:"):
                                 cfg["server"]["api_token"] = decrypted
                             else:
-                                # Foreign machine or corrupted DPAPI blob: generate fresh token
                                 cfg["server"]["api_token"] = generate_secure_token()
-                            save_config(cfg)
+                            needs_save = True
                         else:
                             cfg["server"]["api_token"] = raw_token
                 if "modules" in user_cfg:
@@ -192,17 +198,20 @@ def load_config() -> Dict[str, Any]:
     # Only generate a token if explicitly empty / missing on disk
     if not cfg["server"].get("api_token") and not token_was_present:
         cfg["server"]["api_token"] = generate_secure_token()
+        needs_save = True
+
+    if needs_save:
         save_config(cfg)
 
     return cfg
 
 
 def save_config(config_data: Dict[str, Any]) -> bool:
-    """Save configuration to config.json with formatted indentation and plain original token."""
+    """Save configuration to config.json with formatted indentation and plain readable api_token."""
     try:
         disk_cfg = copy.deepcopy(config_data)
         raw_tok = disk_cfg.get("server", {}).get("api_token", "")
-        # Ensure any legacy dpapi token string is decrypted to original key before saving
+        # Ensure any legacy dpapi token string is decrypted to plaintext before saving
         if raw_tok and raw_tok.startswith("dpapi:"):
             decrypted = _decrypt_dpapi(raw_tok)
             if decrypted and not decrypted.startswith("dpapi:"):
@@ -216,3 +225,4 @@ def save_config(config_data: Dict[str, Any]) -> bool:
         import logging
         logging.getLogger("config").error(f"Failed to save configuration to {CONFIG_FILE}: {e}")
         return False
+

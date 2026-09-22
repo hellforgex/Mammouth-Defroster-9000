@@ -5,35 +5,49 @@ echo ===================================================
 echo   Mammouth Defroster 9000 - Production Build Script
 echo ===================================================
 
+REM 0. Ensure existing processes are closed
+taskkill /F /IM MammouthDefroster9000.exe 2>nul
+taskkill /F /IM MammouthDefroster9000-server.exe 2>nul
+timeout /t 1 /nobreak >nul
+
 REM 1. Clean previous build artifacts
 if exist "build" rd /s /q "build"
 if exist "dist" rd /s /q "dist"
 
 REM 2. Ensure virtualenv or system python is available
-python -m pip install --upgrade pyinstaller
+if exist ".venv\Scripts\python.exe" (
+    set "PYTHON_EXE=.venv\Scripts\python.exe"
+) else (
+    set "PYTHON_EXE=python"
+)
 
 REM 3. Build standalone GUI & Server executables using spec file
 echo Building PyInstaller binaries with dual targets (GUI + Console Server)...
-python -m PyInstaller --noconfirm MammouthDefroster9000.spec
+%PYTHON_EXE% -m PyInstaller --noconfirm MammouthDefroster9000.spec
 
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] PyInstaller build failed!
     exit /b %ERRORLEVEL%
 )
 
-REM 4. Release hygiene: Ensure empty api_token in bundle config
-echo Scrubbing bundle configurations...
+REM 4. Release hygiene: Ensure NO secrets or personal credentials in bundle
+echo Scrubbing bundle configurations and credentials...
 if exist "dist\MammouthDefroster9000\_internal\config.json" (
     del /f /q "dist\MammouthDefroster9000\_internal\config.json"
 )
 if exist "dist\MammouthDefroster9000\_internal\mcpserv\config.json" (
     del /f /q "dist\MammouthDefroster9000\_internal\mcpserv\config.json"
 )
+if exist "dist\MammouthDefroster9000\credentials.json" del /f /q "dist\MammouthDefroster9000\credentials.json"
+if exist "dist\MammouthDefroster9000\gdrive_token.json" del /f /q "dist\MammouthDefroster9000\gdrive_token.json"
+if exist "dist\MammouthDefroster9000\service_account.json" del /f /q "dist\MammouthDefroster9000\service_account.json"
+if exist "dist\MammouthDefroster9000\storage_state.json" del /f /q "dist\MammouthDefroster9000\storage_state.json"
 
-REM Copy sanitized config.example.json as initial default config.json
+REM Copy sanitized configs and examples
 copy "config.example.json" "dist\MammouthDefroster9000\config.json" /Y
 copy "config.example.json" "dist\MammouthDefroster9000\config.example.json" /Y
 copy "hosts.example.json" "dist\MammouthDefroster9000\hosts.example.json" /Y
+if exist "credentials.example.json" copy "credentials.example.json" "dist\MammouthDefroster9000\credentials.example.json" /Y
 copy "start_server.bat" "dist\MammouthDefroster9000\start_server.bat" /Y
 copy "start_gui.bat" "dist\MammouthDefroster9000\start_gui.bat" /Y
 if exist "stop_server.bat" copy "stop_server.bat" "dist\MammouthDefroster9000\stop_server.bat" /Y
@@ -46,15 +60,15 @@ if exist "LICENSE" copy "LICENSE" "dist\MammouthDefroster9000\LICENSE" /Y
 if exist "cloudflared.exe" copy "cloudflared.exe" "dist\MammouthDefroster9000\" /Y
 
 echo ===================================================
-echo   Packaging release ZIP: MammouthDefroster9000-v0.2.3-windows-x64.zip
+echo   Packaging release ZIP: MammouthDefroster9000-v0.3.2-windows-x64.zip
 echo ===================================================
-powershell -Command "Compress-Archive -Path 'dist\MammouthDefroster9000\*' -DestinationPath '..\MammouthDefroster9000-v0.2.3-windows-x64.zip' -Force"
+powershell -Command "Compress-Archive -Path 'dist\MammouthDefroster9000\*' -DestinationPath '..\MammouthDefroster9000-v0.3.2-windows-x64.zip' -Force"
 
 echo ===================================================
-echo   Syncing to unpacked test directory: ..\MammouthDefroster9000-v0.2.3
+echo   Syncing to unpacked test directory: ..\MammouthDefroster9000-v0.3.2
 echo ===================================================
-if not exist "..\MammouthDefroster9000-v0.2.3" mkdir "..\MammouthDefroster9000-v0.2.3"
-robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.2.3" /E /NP /NFL /NDL /R:0 /W:0 /PURGE
+if not exist "..\MammouthDefroster9000-v0.3.2" mkdir "..\MammouthDefroster9000-v0.3.2"
+robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.3.2" /E /NP /NFL /NDL /R:0 /W:0 /PURGE
 
 echo ===================================================
 echo   Build completed successfully! Output: dist\MammouthDefroster9000

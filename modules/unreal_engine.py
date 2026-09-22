@@ -442,7 +442,7 @@ import json
 loc = unreal.Vector({loc[0]}, {loc[1]}, {loc[2]})
 rot = unreal.Rotator({rot[0]}, {rot[1]}, {rot[2]})
 sc = unreal.Vector({sc[0]}, {sc[1]}, {sc[2]})
-target_class = "{actor_class}"
+target_class = {json.dumps(actor_class)}
 
 cls = None
 try:
@@ -457,8 +457,9 @@ if cls:
     actor_obj = unreal.EditorLevelLibrary.spawn_actor_from_class(cls, loc, rot)
     if actor_obj:
         actor_obj.set_actor_scale3d(sc)
-        if "{actor_label}":
-            actor_obj.set_actor_label("{actor_label}")
+        lbl_val = {json.dumps(actor_label or "")}
+        if lbl_val:
+            actor_obj.set_actor_label(lbl_val)
         
         print(json.dumps({{
             "success": True,
@@ -518,19 +519,20 @@ loc = unreal.Vector({loc[0]}, {loc[1]}, {loc[2]})
 rot = unreal.Rotator({rot[0]}, {rot[1]}, {rot[2]})
 sc = unreal.Vector({sc[0]}, {sc[1]}, {sc[2]})
 
-mesh_asset = unreal.EditorAssetLibrary.load_asset("{mesh_path}")
+mesh_asset = unreal.EditorAssetLibrary.load_asset({json.dumps(mesh_path)})
 if not mesh_asset:
-    print(json.dumps({{"success": False, "error": "Failed to load basic mesh '{mesh_path}'."}}))
+    print(json.dumps({{"success": False, "error": f"Failed to load basic mesh '{mesh_path}'."}}))
 else:
     actor = unreal.EditorLevelLibrary.spawn_actor_from_class(unreal.StaticMeshActor, loc, rot)
     if actor:
         actor.set_actor_scale3d(sc)
-        actor.set_actor_label("{lbl}")
+        actor.set_actor_label({json.dumps(lbl)})
         sm_comp = actor.static_mesh_component
         sm_comp.set_static_mesh(mesh_asset)
         
-        if "{material_path}":
-            mat = unreal.EditorAssetLibrary.load_asset("{material_path}")
+        mat_path_val = {json.dumps(material_path or "")}
+        if mat_path_val:
+            mat = unreal.EditorAssetLibrary.load_asset(mat_path_val)
             if mat:
                 sm_comp.set_material(0, mat)
                 
@@ -538,7 +540,7 @@ else:
             "success": True,
             "label": actor.get_actor_label(),
             "name": actor.get_name(),
-            "shape": "{shape_type}",
+            "shape": {json.dumps(shape_type)},
             "location": [{loc[0]}, {loc[1]}, {loc[2]}],
             "scale": [{sc[0]}, {sc[1]}, {sc[2]}]
         }}))
@@ -564,7 +566,7 @@ def unreal_set_actor_transform(
 import unreal
 import json
 
-target = "{actor_name}".lower()
+target = {json.dumps(actor_name)}.lower()
 actors = unreal.EditorLevelLibrary.get_all_level_actors()
 found = False
 
@@ -589,7 +591,7 @@ for a in actors:
         break
 
 if not found:
-    print(json.dumps({{"success": False, "error": f"Actor '{actor_name}' not found in current level."}}))
+    print(json.dumps({{"success": False, "error": f"Actor '{{{json.dumps(actor_name)}}}' not found in current level."}}))
 """
     res = bridge.execute(py_code)
     return res.get("data") or res
@@ -601,7 +603,7 @@ def unreal_delete_actor(actor_name: str) -> Dict[str, Any]:
 import unreal
 import json
 
-target = "{actor_name}".lower()
+target = {json.dumps(actor_name)}.lower()
 actors = unreal.EditorLevelLibrary.get_all_level_actors()
 deleted = False
 
@@ -616,7 +618,7 @@ for a in actors:
         break
 
 if not deleted:
-    print(json.dumps({{"success": False, "error": f"Actor '{actor_name}' not found."}}))
+    print(json.dumps({{"success": False, "error": f"Actor '{{{json.dumps(actor_name)}}}' not found."}}))
 """
     res = bridge.execute(py_code)
     return res.get("data") or res
@@ -676,7 +678,7 @@ def unreal_focus_actor(actor_name: str) -> Dict[str, Any]:
 import unreal
 import json
 
-target = "{actor_name}".lower()
+target = {json.dumps(actor_name)}.lower()
 actors = unreal.EditorLevelLibrary.get_all_level_actors()
 found = None
 
@@ -693,7 +695,7 @@ if found:
     unreal.SystemLibrary.execute_console_command(None, "CAMERA ALIGN")
     print(json.dumps({{"success": True, "focused_actor": found.get_actor_label()}}))
 else:
-    print(json.dumps({{"success": False, "error": f"Actor '{actor_name}' not found."}}))
+    print(json.dumps({{"success": False, "error": f"Actor '{{{json.dumps(actor_name)}}}' not found."}}))
 """
     res = bridge.execute(py_code)
     return res.get("data") or res
@@ -729,7 +731,7 @@ def unreal_load_level(level_asset_path: str) -> Dict[str, Any]:
 import unreal
 import json
 
-path = "{level_asset_path}"
+path = {json.dumps(level_asset_path)}
 success = unreal.EditorLevelLibrary.load_level(path)
 print(json.dumps({{"success": success, "loaded_level": path}}))
 """
@@ -761,7 +763,7 @@ def unreal_new_level(level_asset_path: str) -> Dict[str, Any]:
 import unreal
 import json
 
-path = "{level_asset_path}"
+path = {json.dumps(level_asset_path)}
 success = unreal.EditorLevelLibrary.new_level(path)
 print(json.dumps({{"success": success, "new_level": path}}))
 """
@@ -785,9 +787,9 @@ def unreal_list_assets(directory_path: str = "/Game", recursive: bool = True, as
 import unreal
 import json
 
-dir_path = "{directory_path}"
-rec = {str(recursive)}
-filter_cls = "{asset_class}".lower()
+dir_path = {json.dumps(directory_path)}
+rec = {str(bool(recursive))}
+filter_cls = {json.dumps(asset_class)}.lower()
 
 asset_registry = unreal.AssetRegistryHelpers.get_asset_registry()
 asset_data_list = unreal.EditorAssetLibrary.list_assets(dir_path, recursive=rec, include_folder=False)
@@ -812,9 +814,9 @@ def unreal_get_asset_info(asset_path: str) -> Dict[str, Any]:
 import unreal
 import json
 
-path = "{asset_path}"
+path = {json.dumps(asset_path)}
 if not unreal.EditorAssetLibrary.does_asset_exist(path):
-    print(json.dumps({{"success": False, "error": f"Asset '{path}' does not exist."}}))
+    print(json.dumps({{"success": False, "error": f"Asset '{{{json.dumps(asset_path)}}}' does not exist."}}))
 else:
     data = unreal.EditorAssetLibrary.find_asset_data(path)
     tags = {{str(k): str(v) for k, v in data.get_tags().items()}} if hasattr(data, 'get_tags') else {{}}
@@ -843,8 +845,8 @@ def unreal_create_material(
 import unreal
 import json
 
-mat_name = "{material_name}"
-dest = "{destination_path}"
+mat_name = {json.dumps(material_name)}
+dest = {json.dumps(destination_path)}
 pkg_path = f"{{dest}}/{{mat_name}}"
 
 asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
@@ -854,16 +856,16 @@ mat = asset_tools.create_asset(mat_name, dest, unreal.Material, factory)
 if mat:
     # Set Base Color Vector Constant
     color_node = unreal.MaterialEditingLibrary.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -300, 0)
-    color_node.constant = unreal.LinearColor({b_color[0]}, {b_color[1]}, {b_color[2]}, 1.0)
+    color_node.constant = unreal.LinearColor({float(b_color[0])}, {float(b_color[1])}, {float(b_color[2])}, 1.0)
     unreal.MaterialEditingLibrary.connect_material_property(color_node, "", unreal.MaterialProperty.MP_BASE_COLOR)
     
     # Set Metallic & Roughness
     metal_node = unreal.MaterialEditingLibrary.create_material_expression(mat, unreal.MaterialExpressionConstant, -200, 100)
-    metal_node.r = {metallic}
+    metal_node.r = {float(metallic)}
     unreal.MaterialEditingLibrary.connect_material_property(metal_node, "", unreal.MaterialProperty.MP_METALLIC)
     
     rough_node = unreal.MaterialEditingLibrary.create_material_expression(mat, unreal.MaterialExpressionConstant, -200, 200)
-    rough_node.r = {roughness}
+    rough_node.r = {float(roughness)}
     unreal.MaterialEditingLibrary.connect_material_property(rough_node, "", unreal.MaterialProperty.MP_ROUGHNESS)
     
     unreal.MaterialEditingLibrary.recompile_material(mat)
@@ -883,12 +885,12 @@ def unreal_assign_material_to_actor(actor_name: str, material_path: str, element
 import unreal
 import json
 
-target = "{actor_name}".lower()
-mat_path = "{material_path}"
+target = {json.dumps(actor_name)}.lower()
+mat_path = {json.dumps(material_path)}
 mat_asset = unreal.EditorAssetLibrary.load_asset(mat_path)
 
 if not mat_asset:
-    print(json.dumps({{"success": False, "error": f"Material '{mat_path}' not found."}}))
+    print(json.dumps({{"success": False, "error": f"Material '{{{json.dumps(material_path)}}}' not found."}}))
 else:
     actors = unreal.EditorLevelLibrary.get_all_level_actors()
     found = False
@@ -899,13 +901,13 @@ else:
             found = True
             comp = a.get_component_by_class(unreal.MeshComponent)
             if comp:
-                comp.set_material({element_index}, mat_asset)
+                comp.set_material({int(element_index)}, mat_asset)
                 print(json.dumps({{"success": True, "actor": a.get_actor_label(), "material": mat_path}}))
             else:
                 print(json.dumps({{"success": False, "error": "Actor has no MeshComponent."}}))
             break
     if not found:
-        print(json.dumps({{"success": False, "error": f"Actor '{actor_name}' not found."}}))
+        print(json.dumps({{"success": False, "error": f"Actor '{{{json.dumps(actor_name)}}}' not found."}}))
 """
     res = bridge.execute(py_code)
     return res.get("data") or res
@@ -917,7 +919,7 @@ def unreal_delete_asset(asset_path: str) -> Dict[str, Any]:
 import unreal
 import json
 
-path = "{asset_path}"
+path = {json.dumps(asset_path)}
 deleted = unreal.EditorAssetLibrary.delete_asset(path)
 print(json.dumps({{"success": deleted, "deleted_asset": path}}))
 """
@@ -955,7 +957,7 @@ def unreal_spawn_light(
 import unreal
 import json
 
-l_type = "{light_type}".lower()
+l_type = {json.dumps(light_type)}.lower()
 cls = unreal.PointLight
 if "dir" in l_type:
     cls = unreal.DirectionalLight
@@ -966,25 +968,25 @@ elif "sky" in l_type:
 elif "rect" in l_type:
     cls = unreal.RectLight
 
-loc = unreal.Vector({loc[0]}, {loc[1]}, {loc[2]})
+loc = unreal.Vector({float(loc[0])}, {float(loc[1])}, {float(loc[2])})
 rot = unreal.Rotator(0, 0, 0)
 actor = unreal.EditorLevelLibrary.spawn_actor_from_class(cls, loc, rot)
 
 if actor:
-    actor.set_actor_label("{lbl}")
+    actor.set_actor_label({json.dumps(lbl)})
     comp = actor.get_component_by_class(unreal.LightComponentBase)
     if comp:
-        comp.set_intensity({intensity})
-        comp.set_light_color(unreal.LinearColor({col[0]}, {col[1]}, {col[2]}, 1.0))
+        comp.set_intensity({float(intensity)})
+        comp.set_light_color(unreal.LinearColor({float(col[0])}, {float(col[1])}, {float(col[2])}, 1.0))
         if hasattr(comp, 'set_attenuation_radius'):
-            comp.set_attenuation_radius({attenuation_radius})
+            comp.set_attenuation_radius({float(attenuation_radius)})
             
     print(json.dumps({{
         "success": True,
         "label": actor.get_actor_label(),
-        "type": "{light_type}",
-        "intensity": {intensity},
-        "location": [{loc[0]}, {loc[1]}, {loc[2]}]
+        "type": {json.dumps(light_type)},
+        "intensity": {float(intensity)},
+        "location": [{float(loc[0])}, {float(loc[1])}, {float(loc[2])}]
     }}))
 else:
     print(json.dumps({{"success": False, "error": "Failed to spawn light actor."}}))
@@ -1006,7 +1008,9 @@ import unreal
 import json
 
 try:
-    cmd = "HighResShot {resolution_multiplier}" if not "{fname}" else "HighResShot {fname} {resolution_multiplier}"
+    fname_val = {json.dumps(fname)}
+    res_mult = {int(resolution_multiplier)}
+    cmd = f"HighResShot {{res_mult}}" if not fname_val else f"HighResShot {{fname_val}} {{res_mult}}"
     unreal.EditorLevelLibrary.editor_invalidate_viewports()
     unreal.SystemLibrary.execute_console_command(None, cmd)
     print(json.dumps({{"success": True, "message": "Screenshot triggered successfully.", "command": cmd}}))

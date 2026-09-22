@@ -11,6 +11,11 @@ venv/
 # Secrets & Local Configurations
 config.json
 hosts.json
+credentials.json
+gdrive_token.json
+service_account.json
+storage_state.json
+*.token.json
 *.db
 *.sqlite
 *.sqlite3
