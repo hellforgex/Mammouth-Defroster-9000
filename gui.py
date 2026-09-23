@@ -764,6 +764,22 @@ class MammouthControlCenter(ctk.CTk):
             command=self._show_update_dialog
         )
 
+        # Quick Screenshot Button (copies image to clipboard for instant Ctrl+V into Mammouth)
+        self.btn_header_screen = ctk.CTkButton(
+            right_box,
+            text="📸 Screenshot",
+            width=115,
+            height=32,
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
+            font=ctk.CTkFont(size=12, weight="bold"),
+            border_width=1,
+            border_color=("#CBD5E1", "#4A4B53"),
+            command=self._take_and_copy_screenshot_ui
+        )
+        self.btn_header_screen.pack(side="left", padx=(0, 8))
+
         # Quick Mammouth.ai Connect Button
         self.btn_open_mammouth = ctk.CTkButton(
             right_box,
@@ -850,19 +866,19 @@ class MammouthControlCenter(ctk.CTk):
         )
         self.tabview.pack(fill="both", expand=True, padx=0, pady=0)
 
-        # Remove horizontal segmented button bar in favor of modern Left Rail
-        if hasattr(self.tabview, "_segmented_button"):
-            try:
-                self.tabview._segmented_button.grid_remove()
-            except Exception:
-                pass
-
         self.tab_dashboard = self.tabview.add("📊 Dashboard & Live Console")
         self.tab_skills = self.tabview.add("⚡ Modular Capabilities (11 Modules)")
         self.tab_prompts = self.tabview.add("📖 Prompt-Katalog")
         self.tab_hosts = self.tabview.add("🔑 SSH Fleet & PuTTY Manager")
         self.tab_settings = self.tabview.add("⚙️ Security & Settings")
         self.tab_mammouth = self.tabview.add("💬 Mammouth AI Web")
+
+        # Remove horizontal segmented button bar in favor of modern Left Rail (MUST be called after add)
+        if hasattr(self.tabview, "_segmented_button"):
+            try:
+                self.tabview._segmented_button.grid_remove()
+            except Exception:
+                pass
 
         self._setup_dashboard_tab()
         self._setup_skills_tab()
@@ -986,6 +1002,11 @@ class MammouthControlCenter(ctk.CTk):
     def _select_nav_tab(self, tab_key: str):
         if hasattr(self, "tabview") and hasattr(self.tabview, "set"):
             self.tabview.set(tab_key)
+            if hasattr(self.tabview, "_segmented_button"):
+                try:
+                    self.tabview._segmented_button.grid_remove()
+                except Exception:
+                    pass
         self._update_nav_highlight(tab_key)
         self._on_tab_changed()
 
@@ -1018,12 +1039,41 @@ class MammouthControlCenter(ctk.CTk):
             self.tab_mammouth,
             get_mcp_url_cb=self._calculate_active_endpoint_url_with_token,
             start_url=start_url,
-            profile_dir=user_data_dir
+            profile_dir=user_data_dir,
+            screenshot_cb=self._take_and_copy_screenshot
         )
         self.mammouth_browser.pack(fill="both", expand=True)
 
+    def _take_and_copy_screenshot(self) -> Optional[str]:
+        try:
+            from modules.screen_capture import screen_capture, copy_image_to_clipboard, screen_grant_consent
+            screen_grant_consent("always")
+            res = screen_capture(monitor=1, save_to_workspace=True)
+            saved_p = res.get("saved_path") if isinstance(res, dict) else None
+            if saved_p and os.path.exists(saved_p):
+                copy_image_to_clipboard(saved_p)
+                self._log(f"[VISION] Screenshot captured: {saved_p} (In Clipboard for Ctrl+V)")
+                return saved_p
+            else:
+                self._log(f"[VISION ERROR] Screenshot capture failed: {res}")
+                return None
+        except Exception as e:
+            self._log(f"[VISION ERROR] Screenshot error: {e}")
+            return None
+
+    def _take_and_copy_screenshot_ui(self):
+        saved = self._take_and_copy_screenshot()
+        if saved and hasattr(self, "btn_header_screen"):
+            self.btn_header_screen.configure(text="✓ Im Clipboard!", fg_color="#10B981")
+            self.after(2500, lambda: self.btn_header_screen.configure(text="📸 Screenshot", fg_color=("#F1F5F9", "#36373E")))
+
     def _switch_to_mammouth_tab(self):
         self.tabview.set("💬 Mammouth AI Web")
+        if hasattr(self.tabview, "_segmented_button"):
+            try:
+                self.tabview._segmented_button.grid_remove()
+            except Exception:
+                pass
         self._update_nav_highlight("💬 Mammouth AI Web")
         self._on_tab_changed()
 

@@ -275,3 +275,30 @@ def screen_capture(
         "mime_type": mime_type,
         "base64_preview": f"data:{mime_type};base64,{b64_str[:100]}... [total {len(b64_str)} chars]"
     }
+
+
+def copy_image_to_clipboard(image_or_path) -> bool:
+    """Copies an image (file path or PIL Image object) to the Windows clipboard as CF_DIB."""
+    if os.name != "nt":
+        return False
+    try:
+        from PIL import Image
+        import win32clipboard, io
+        if isinstance(image_or_path, (str, Path)):
+            img = Image.open(str(image_or_path))
+        else:
+            img = image_or_path
+        
+        output = io.BytesIO()
+        img.convert("RGB").save(output, "BMP")
+        data = output.getvalue()[14:]  # 14-byte BMP header stripped for CF_DIB
+        output.close()
+        
+        win32clipboard.OpenClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
+        win32clipboard.CloseClipboard()
+        return True
+    except Exception:
+        return False
+

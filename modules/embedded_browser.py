@@ -49,11 +49,13 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         get_mcp_url_cb: Optional[Callable[[], str]] = None,
         start_url: str = "https://mammouth.ai",
         profile_dir: Optional[str] = None,
+        screenshot_cb: Optional[Callable[[], Optional[str]]] = None,
         **kwargs
     ):
         super().__init__(master, **kwargs)
         self.get_mcp_url_cb = get_mcp_url_cb
         self.start_url = start_url or "https://mammouth.ai"
+        self.screenshot_cb = screenshot_cb
 
         # Persistent profile directory (ensures login/cookies are stored in app root, never in _internal)
         if not profile_dir:
@@ -81,9 +83,9 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             self,
             height=46,
             corner_radius=8,
-            fg_color=("#F8FAFC", "#14151B"),
+            fg_color=("#FFFFFF", "#242428"),
             border_width=1,
-            border_color=("#CBD5E1", "#22242E")
+            border_color=("#CBD5E1", "#38393F")
         )
         self.toolbar.pack(fill="x", padx=6, pady=(4, 6))
 
@@ -95,7 +97,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             title_box,
             text="🦣 Mammouth.ai",
             font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=("#0F172A", "#F3F4F6")
+            text_color=("#0F172A", "#FFFFFF")
         ).pack(side="left")
 
         # Nav Buttons: Back, Forward, Reload, Home
@@ -108,10 +110,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=30,
             height=28,
             corner_radius=6,
-            fg_color=("#E2E8F0", "#1C1D24"),
-            hover_color=("#CBD5E1", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             font=ctk.CTkFont(size=11, weight="bold"),
+            border_width=1,
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self.go_back
         )
         self.btn_back.pack(side="left", padx=2)
@@ -122,10 +126,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=30,
             height=28,
             corner_radius=6,
-            fg_color=("#E2E8F0", "#1C1D24"),
-            hover_color=("#CBD5E1", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             font=ctk.CTkFont(size=11, weight="bold"),
+            border_width=1,
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self.go_forward
         )
         self.btn_forward.pack(side="left", padx=2)
@@ -136,10 +142,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=30,
             height=28,
             corner_radius=6,
-            fg_color=("#E2E8F0", "#1C1D24"),
-            hover_color=("#CBD5E1", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             font=ctk.CTkFont(size=12),
+            border_width=1,
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self.reload
         )
         self.btn_reload.pack(side="left", padx=2)
@@ -150,10 +158,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=30,
             height=28,
             corner_radius=6,
-            fg_color=("#E2E8F0", "#1C1D24"),
-            hover_color=("#CBD5E1", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             font=ctk.CTkFont(size=12),
+            border_width=1,
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self.go_home
         )
         self.btn_home.pack(side="left", padx=2)
@@ -161,9 +171,9 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         # URL / Status Indicator Pill
         self.url_pill = ctk.CTkFrame(
             self.toolbar,
-            fg_color=("#F1F5F9", "#0D0E12"),
+            fg_color=("#F8FAFC", "#1C1C1F"),
             border_width=1,
-            border_color=("#CBD5E1", "#1E2029"),
+            border_color=("#CBD5E1", "#323338"),
             corner_radius=6
         )
         self.url_pill.pack(side="left", fill="x", expand=True, padx=8, pady=7)
@@ -172,14 +182,15 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             self.url_pill,
             text="🔒 https://mammouth.ai",
             font=ctk.CTkFont(size=11),
-            text_color=("#475569", "#9CA3AF")
+            text_color=("#64748B", "#8E909A")
         )
         self.lbl_url.pack(side="left", padx=10)
 
-        # Right Action Buttons: Copy MCP URL & External Browser
+        # Right Action Buttons: Screenshot & External Browser
         btn_action_box = ctk.CTkFrame(self.toolbar, fg_color="transparent")
         btn_action_box.pack(side="right", padx=(4, 8), pady=6)
 
+        # Retain btn_copy_mcp for programmatic access, but do not pack into WebApp view
         self.btn_copy_mcp = ctk.CTkButton(
             btn_action_box,
             text="📋 Copy MCP URL",
@@ -192,18 +203,33 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             font=ctk.CTkFont(size=11, weight="bold"),
             command=self._copy_mcp_url
         )
-        self.btn_copy_mcp.pack(side="left", padx=(0, 6))
+
+        self.btn_screenshot = ctk.CTkButton(
+            btn_action_box,
+            text="📸 Screenshot (Ctrl+V)",
+            width=165,
+            height=28,
+            corner_radius=6,
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._take_screenshot
+        )
+        self.btn_screenshot.pack(side="left", padx=(0, 6))
 
         self.btn_ext_browser = ctk.CTkButton(
             btn_action_box,
             text="🌐 In Browser öffnen",
-            width=130,
+            width=135,
             height=28,
             corner_radius=6,
-            fg_color=("#E2E8F0", "#1C1D24"),
-            hover_color=("#CBD5E1", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             font=ctk.CTkFont(size=11, weight="bold"),
+            border_width=1,
+            border_color=("#CBD5E1", "#4A4B53"),
             command=lambda: webbrowser.open(self.start_url)
         )
         self.btn_ext_browser.pack(side="left")
@@ -359,3 +385,26 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         pyperclip.copy(url)
         self.btn_copy_mcp.configure(text="✓ Kopiert!", fg_color="#10B981")
         self.after(2000, lambda: self.btn_copy_mcp.configure(text="📋 Copy MCP URL", fg_color=("#059669", "#10B981")))
+
+    def _take_screenshot(self):
+        saved_path = None
+        if self.screenshot_cb:
+            try:
+                saved_path = self.screenshot_cb()
+            except Exception:
+                pass
+        if not saved_path:
+            try:
+                from modules.screen_capture import screen_capture, copy_image_to_clipboard, screen_grant_consent
+                screen_grant_consent("always")
+                res = screen_capture(monitor=1, save_to_workspace=True)
+                if isinstance(res, dict) and res.get("saved_path"):
+                    saved_path = res.get("saved_path")
+                    copy_image_to_clipboard(saved_path)
+            except Exception:
+                pass
+
+        if hasattr(self, "btn_screenshot"):
+            self.btn_screenshot.configure(text="✓ Im Clipboard! (Ctrl+V)", fg_color="#10B981")
+            self.after(2500, lambda: self.btn_screenshot.configure(text="📸 Screenshot (Ctrl+V)", fg_color=("#059669", "#10B981")))
+
