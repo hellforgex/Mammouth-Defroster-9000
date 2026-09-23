@@ -358,10 +358,10 @@ class HostDialog(ctk.CTkToplevel):
         self.original_alias = alias
 
         # Header
-        header_card = ctk.CTkFrame(self, fg_color=("#F8FAFC", "#111217"), border_width=1, border_color=("#CBD5E1", "#1E2029"), corner_radius=8)
+        header_card = ctk.CTkFrame(self, fg_color=("#F8FAFC", "#202124"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=8)
         header_card.pack(fill="x", padx=20, pady=(15, 10))
 
-        title_label = ctk.CTkLabel(header_card, text="🔑 Configure SSH Host Alias", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#0F172A", "#F3F4F6"))
+        title_label = ctk.CTkLabel(header_card, text="🔑 Configure SSH Host Alias", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#0F172A", "#FFFFFF"))
         title_label.pack(anchor="w", padx=15, pady=(10, 2))
 
         lbl_sec = ctk.CTkLabel(
@@ -372,61 +372,61 @@ class HostDialog(ctk.CTkToplevel):
         )
         lbl_sec.pack(anchor="w", padx=15, pady=(0, 10))
 
-        form_frame = ctk.CTkFrame(self, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=8)
+        form_frame = ctk.CTkFrame(self, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=8)
         form_frame.pack(padx=20, pady=5, fill="both", expand=True)
 
         # Alias
-        ctk.CTkLabel(form_frame, text="Alias Name:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).grid(row=0, column=0, padx=15, pady=8, sticky="w")
-        self.entry_alias = ctk.CTkEntry(form_frame, placeholder_text="e.g. prod-server, vps-backup", width=310, fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
+        ctk.CTkLabel(form_frame, text="Alias Name:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).grid(row=0, column=0, padx=15, pady=8, sticky="w")
+        self.entry_alias = ctk.CTkEntry(form_frame, placeholder_text="e.g. prod-server, vps-backup", width=310, fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         self.entry_alias.grid(row=0, column=1, padx=15, pady=8, sticky="ew")
         if alias:
             self.entry_alias.insert(0, alias)
             self.entry_alias.configure(state="disabled")
 
         # Host / IP
-        ctk.CTkLabel(form_frame, text="Host / IP:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).grid(row=1, column=0, padx=15, pady=8, sticky="w")
-        self.entry_host = ctk.CTkEntry(form_frame, placeholder_text="e.g. 192.168.1.100 or node.example.com", width=310, fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
+        ctk.CTkLabel(form_frame, text="Host / IP:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).grid(row=1, column=0, padx=15, pady=8, sticky="w")
+        self.entry_host = ctk.CTkEntry(form_frame, placeholder_text="e.g. 192.168.1.100 or node.example.com", width=310, fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         self.entry_host.grid(row=1, column=1, padx=15, pady=8, sticky="ew")
 
         # Port
-        ctk.CTkLabel(form_frame, text="SSH Port:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).grid(row=2, column=0, padx=15, pady=8, sticky="w")
-        self.entry_port = ctk.CTkEntry(form_frame, placeholder_text="22", width=310, fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
+        ctk.CTkLabel(form_frame, text="SSH Port:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).grid(row=2, column=0, padx=15, pady=8, sticky="w")
+        self.entry_port = ctk.CTkEntry(form_frame, placeholder_text="22", width=310, fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         self.entry_port.grid(row=2, column=1, padx=15, pady=8, sticky="ew")
         self.entry_port.insert(0, "22")
 
         # User
-        ctk.CTkLabel(form_frame, text="Username:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).grid(row=3, column=0, padx=15, pady=8, sticky="w")
-        self.entry_user = ctk.CTkEntry(form_frame, placeholder_text="e.g. root, ubuntu, admin", width=310, fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
+        ctk.CTkLabel(form_frame, text="Username:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).grid(row=3, column=0, padx=15, pady=8, sticky="w")
+        self.entry_user = ctk.CTkEntry(form_frame, placeholder_text="e.g. root, ubuntu, admin", width=310, fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         self.entry_user.grid(row=3, column=1, padx=15, pady=8, sticky="ew")
         self.entry_user.insert(0, "root")
 
         # Password
-        ctk.CTkLabel(form_frame, text="Password:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).grid(row=4, column=0, padx=15, pady=8, sticky="w")
-        self.entry_pw = ctk.CTkEntry(form_frame, placeholder_text="(Optional - DPAPI Encrypted)", show="*", width=310, fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
+        ctk.CTkLabel(form_frame, text="Password:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).grid(row=4, column=0, padx=15, pady=8, sticky="w")
+        self.entry_pw = ctk.CTkEntry(form_frame, placeholder_text="(Optional - DPAPI Encrypted)", show="*", width=310, fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         self.entry_pw.grid(row=4, column=1, padx=15, pady=8, sticky="ew")
 
         # Key Path
-        ctk.CTkLabel(form_frame, text="Private Key:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).grid(row=5, column=0, padx=15, pady=8, sticky="w")
+        ctk.CTkLabel(form_frame, text="Private Key:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).grid(row=5, column=0, padx=15, pady=8, sticky="w")
         key_box = ctk.CTkFrame(form_frame, fg_color="transparent")
         key_box.grid(row=5, column=1, padx=15, pady=8, sticky="ew")
-        self.entry_key = ctk.CTkEntry(key_box, placeholder_text="(Recommended: .ppk or id_rsa)", width=230, fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
+        self.entry_key = ctk.CTkEntry(key_box, placeholder_text="(Recommended: .ppk or id_rsa)", width=230, fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         self.entry_key.pack(side="left", fill="x", expand=True, padx=(0, 5))
         btn_browse = ctk.CTkButton(
             key_box,
             text="Browse",
             width=70,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._browse_key
         )
         btn_browse.pack(side="right")
 
         # Description
-        ctk.CTkLabel(form_frame, text="Description:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).grid(row=6, column=0, padx=15, pady=8, sticky="w")
-        self.entry_desc = ctk.CTkEntry(form_frame, placeholder_text="Short description of this server", width=310, fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
+        ctk.CTkLabel(form_frame, text="Description:", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).grid(row=6, column=0, padx=15, pady=8, sticky="w")
+        self.entry_desc = ctk.CTkEntry(form_frame, placeholder_text="Short description of this server", width=310, fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         self.entry_desc.grid(row=6, column=1, padx=15, pady=8, sticky="ew")
 
         if host_data:
@@ -448,11 +448,11 @@ class HostDialog(ctk.CTkToplevel):
         btn_cancel = ctk.CTkButton(
             btn_frame,
             text="Cancel",
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             width=100,
             command=self.destroy
         )
@@ -528,14 +528,14 @@ class SplashScreen(ctk.CTkToplevel):
         x = max(0, (screen_w - width) // 2)
         y = max(0, (screen_h - height) // 2)
         self.geometry(f"{width}x{height}+{x}+{y}")
-        self.configure(fg_color="#0A0A0C")
+        self.configure(fg_color="#202124")
 
         container = ctk.CTkFrame(
             self,
-            fg_color="#0F1014",
+            fg_color="#242428",
             corner_radius=14,
-            border_width=2,
-            border_color="#3B82F6"
+            border_width=1,
+            border_color="#38393F"
         )
         container.pack(fill="both", expand=True, padx=2, pady=2)
 
@@ -554,7 +554,7 @@ class SplashScreen(ctk.CTkToplevel):
             container,
             text=f"Sovereign FastMCP Desktop Cockpit • {APP_VERSION}",
             font=ctk.CTkFont(size=11),
-            text_color="#94A3B8"
+            text_color="#A0A0A5"
         )
         lbl_sub.pack(pady=(0, 16))
 
@@ -562,7 +562,7 @@ class SplashScreen(ctk.CTkToplevel):
             container,
             text="Initializing FastMCP engine and security shield...",
             font=ctk.CTkFont(size=11),
-            text_color="#38BDF8"
+            text_color="#10B981"
         )
         self.lbl_status.pack(pady=(0, 6))
 
@@ -571,8 +571,8 @@ class SplashScreen(ctk.CTkToplevel):
             width=380,
             height=6,
             corner_radius=3,
-            progress_color="#3B82F6",
-            fg_color="#1E293B"
+            progress_color="#10B981",
+            fg_color="#2F2F33"
         )
         self.progress.pack(pady=(0, 16))
         self.progress.set(0.1)
@@ -581,7 +581,7 @@ class SplashScreen(ctk.CTkToplevel):
             container,
             text="Engineered for Mammouth.ai • Fail-Closed Architecture",
             font=ctk.CTkFont(size=10),
-            text_color="#475569"
+            text_color="#6E7079"
         )
         lbl_footer.pack(side="bottom", pady=(0, 12))
 
@@ -604,9 +604,9 @@ class MammouthControlCenter(ctk.CTk):
         super().__init__()
         self.withdraw()  # Hide main window during splash screen loading
         self.title(f"Mammouth Defroster 9000 🦣❄️🔥 ({APP_VERSION})")
-        self.geometry("1140x840")
-        self.minsize(1050, 740)
-        self.configure(fg_color=("#F8FAFC", "#0A0A0C"))
+        self.geometry("1160x840")
+        self.minsize(1060, 740)
+        self.configure(fg_color=("#F8FAFC", "#202124"))
 
         # Center main window
         try:
@@ -714,15 +714,15 @@ class MammouthControlCenter(ctk.CTk):
         f_logger.addHandler(handler)
 
     def _build_ui(self):
-        # 1. Top Hero Header Banner
-        header = ctk.CTkFrame(self, height=86, corner_radius=0, fg_color=("#F8FAFC", "#0F1014"), border_width=1, border_color=("#CBD5E1", "#1C1D24"))
+        # 1. Top Hero Header Banner (Mammouth Charcoal #202124)
+        header = ctk.CTkFrame(self, height=66, corner_radius=0, fg_color=("#FFFFFF", "#202124"), border_width=1, border_color=("#E2E8F0", "#38393F"))
         header.pack(fill="x", side="top")
 
         # App Logo & Title
         title_box = ctk.CTkFrame(header, fg_color="transparent")
-        title_box.pack(side="left", padx=(15, 5), pady=10)
+        title_box.pack(side="left", padx=(18, 5), pady=10)
         
-        lbl_icon = ctk.CTkLabel(title_box, text="🦣🔥", font=ctk.CTkFont(size=34))
+        lbl_icon = ctk.CTkLabel(title_box, text="🦣", font=ctk.CTkFont(size=26))
         lbl_icon.pack(side="left", padx=(0, 10))
 
         title_text_box = ctk.CTkFrame(title_box, fg_color="transparent")
@@ -731,25 +731,25 @@ class MammouthControlCenter(ctk.CTk):
         title_top_row = ctk.CTkFrame(title_text_box, fg_color="transparent")
         title_top_row.pack(anchor="w")
         
-        lbl_title = ctk.CTkLabel(title_top_row, text="Mammouth Defroster 9000", font=ctk.CTkFont(size=19, weight="bold"), text_color=("#0F172A", "#F3F4F6"))
+        lbl_title = ctk.CTkLabel(title_top_row, text="Mammouth Defroster 9000", font=ctk.CTkFont(size=16, weight="bold"), text_color=("#0F172A", "#FFFFFF"))
         lbl_title.pack(side="left", padx=(0, 8))
 
         # Version Pill Badge
-        badge_ver = ctk.CTkFrame(title_top_row, fg_color=("#ECFDF5", "#12261C"), border_width=1, border_color=("#A7F3D0", "#1B4332"), corner_radius=6)
+        badge_ver = ctk.CTkFrame(title_top_row, fg_color=("#ECFDF5", "#1B2E24"), border_width=1, border_color=("#A7F3D0", "#244E38"), corner_radius=6)
         badge_ver.pack(side="left")
         ctk.CTkLabel(badge_ver, text=f" {APP_VERSION} ", font=ctk.CTkFont(size=11, weight="bold"), text_color=("#059669", "#10B981")).pack(padx=4, pady=1)
 
         lbl_subtitle = ctk.CTkLabel(
             title_text_box,
-            text="❄️ Defrost Your Machine • Sovereign Neural Vision, Automation & UE5 Matrix",
+            text="❄️ Sovereign FastMCP Desktop Cockpit & Agent Bridge",
             font=ctk.CTkFont(size=11),
-            text_color=("#475569", "#9CA3AF")
+            text_color=("#64748B", "#8E909A")
         )
         lbl_subtitle.pack(anchor="w")
 
-        # Top Right Controls: Theme Selector, Quick Web Launcher, Status badge & Big Start Button
+        # Top Right Controls: Theme Selector, Quick Web Launcher, Status badge & Start/Stop Button
         right_box = ctk.CTkFrame(header, fg_color="transparent")
-        right_box.pack(side="right", padx=15, pady=10)
+        right_box.pack(side="right", padx=16, pady=10)
 
         # Update Available Badge Button (Initially hidden)
         self.btn_update_badge = ctk.CTkButton(
@@ -768,99 +768,244 @@ class MammouthControlCenter(ctk.CTk):
         self.btn_open_mammouth = ctk.CTkButton(
             right_box,
             text="💬 Mammouth AI",
-            width=120,
+            width=125,
             height=32,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
-            font=ctk.CTkFont(weight="bold"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
+            font=ctk.CTkFont(size=12, weight="bold"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._switch_to_mammouth_tab
         )
-        self.btn_open_mammouth.pack(side="left", padx=(0, 8))
+        self.btn_open_mammouth.pack(side="left", padx=(0, 10))
 
         # Theme Switcher
         theme_box = ctk.CTkFrame(right_box, fg_color="transparent")
-        theme_box.pack(side="left", padx=(0, 8))
-        ctk.CTkLabel(theme_box, text="🎨 Theme:", font=ctk.CTkFont(size=11, weight="bold"), text_color=("#475569", "#9CA3AF")).pack(anchor="w")
+        theme_box.pack(side="left", padx=(0, 12))
         self.theme_menu = ctk.CTkOptionMenu(
             theme_box,
             values=["Dark", "System", "Light"],
             width=85,
-            height=28,
-            fg_color=("#F1F5F9", "#1B1C24"),
-            button_color=("#E2E8F0", "#262732"),
-            button_hover_color=("#CBD5E1", "#333544"),
-            text_color=("#0F172A", "#F3F4F6"),
-            dropdown_fg_color=("#FFFFFF", "#14151B"),
-            dropdown_text_color=("#0F172A", "#F3F4F6"),
-            dropdown_hover_color=("#F1F5F9", "#22242E"),
+            height=30,
+            fg_color=("#F1F5F9", "#2F2F33"),
+            button_color=("#E2E8F0", "#36373E"),
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
+            dropdown_fg_color=("#FFFFFF", "#242428"),
+            dropdown_text_color=("#0F172A", "#FFFFFF"),
+            dropdown_hover_color=("#F1F5F9", "#2F2F33"),
             command=self._on_theme_changed
         )
         self.theme_menu.set(self.appearance_mode)
         self.theme_menu.pack(anchor="w")
 
         # Status badge frame
-        status_box = ctk.CTkFrame(right_box, fg_color="transparent")
+        status_box = ctk.CTkFrame(right_box, fg_color=("#F8FAFC", "#242428"), border_width=1, border_color=("#E2E8F0", "#38393F"), corner_radius=6)
         status_box.pack(side="left", padx=(0, 10))
-        ctk.CTkLabel(status_box, text="Status:", font=ctk.CTkFont(size=11, weight="bold"), text_color=("#475569", "#9CA3AF")).pack(anchor="w")
         self.status_badge = ctk.CTkLabel(
             status_box,
             text="● Server Stopped",
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color="#EF4444"
         )
-        self.status_badge.pack(anchor="w")
+        self.status_badge.pack(padx=10, pady=4)
 
         # Main Power Toggle Button
         self.btn_toggle_server = ctk.CTkButton(
             right_box,
             text="▶ START SERVER",
-            font=ctk.CTkFont(size=13, weight="bold"),
+            font=ctk.CTkFont(size=12, weight="bold"),
             fg_color=("#059669", "#10B981"),
             hover_color=("#047857", "#059669"),
             text_color="#FFFFFF",
             width=135,
-            height=36,
-            corner_radius=8,
+            height=34,
+            corner_radius=6,
             command=self.toggle_server
         )
         self.btn_toggle_server.pack(side="left")
 
-        # 2. Main Tabview (With High Contrast Tabs in Light & Dark Mode)
+        # 2. Main Body Container (Left Nav Rail + Right Canvas)
+        body_container = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
+        body_container.pack(fill="both", expand=True)
+
+        self._build_sidebar(body_container)
+
+        content_area = ctk.CTkFrame(body_container, fg_color=("#F1F5F9", "#2F2F33"), corner_radius=0)
+        content_area.pack(side="left", fill="both", expand=True)
+
+        # 3. Main Tabview (Hides segmented button in favor of Left Navigation Rail)
         self.tabview = ctk.CTkTabview(
-            self,
-            corner_radius=10,
-            fg_color=("#FFFFFF", "#0D0E12"),
+            content_area,
+            corner_radius=0,
+            fg_color="transparent",
             segmented_button_selected_color=("#059669", "#10B981"),
             segmented_button_selected_hover_color=("#047857", "#059669"),
-            segmented_button_unselected_color=("#E2E8F0", "#1C1D24"),
-            segmented_button_unselected_hover_color=("#CBD5E1", "#282A36"),
-            segmented_button_fg_color=("#E2E8F0", "#14151B"),
-            text_color=("#0F172A", "#F3F4F6"),
+            segmented_button_unselected_color=("#E2E8F0", "#242428"),
+            segmented_button_unselected_hover_color=("#CBD5E1", "#2F2F33"),
+            segmented_button_fg_color=("#E2E8F0", "#202124"),
+            text_color=("#0F172A", "#FFFFFF"),
             command=self._on_tab_changed
         )
-        self.tabview.pack(fill="both", expand=True, padx=15, pady=10)
+        self.tabview.pack(fill="both", expand=True, padx=0, pady=0)
 
-        # Explicitly configure segmented button for high contrast text on unselected tabs
+        # Remove horizontal segmented button bar in favor of modern Left Rail
         if hasattr(self.tabview, "_segmented_button"):
-            self.tabview._segmented_button.configure(
-                font=ctk.CTkFont(size=12, weight="bold"),
-                text_color=("#0F172A", "#F3F4F6")
-            )
+            try:
+                self.tabview._segmented_button.grid_remove()
+            except Exception:
+                pass
 
         self.tab_dashboard = self.tabview.add("📊 Dashboard & Live Console")
-        self.tab_mammouth = self.tabview.add("💬 Mammouth AI Web")
         self.tab_skills = self.tabview.add("⚡ Modular Capabilities (11 Modules)")
+        self.tab_prompts = self.tabview.add("📖 Prompt-Katalog")
         self.tab_hosts = self.tabview.add("🔑 SSH Fleet & PuTTY Manager")
         self.tab_settings = self.tabview.add("⚙️ Security & Settings")
+        self.tab_mammouth = self.tabview.add("💬 Mammouth AI Web")
 
         self._setup_dashboard_tab()
-        self._setup_mammouth_tab()
         self._setup_skills_tab()
+        self._setup_prompts_tab()
         self._setup_hosts_tab()
         self._setup_settings_tab()
+        self._setup_mammouth_tab()
+
+        self._update_nav_highlight("📊 Dashboard & Live Console")
+
+    def _build_sidebar(self, parent):
+        self.sidebar = ctk.CTkFrame(
+            parent,
+            width=225,
+            corner_radius=0,
+            fg_color=("#FFFFFF", "#202124"),
+            border_width=1,
+            border_color=("#E2E8F0", "#38393F")
+        )
+        self.sidebar.pack(side="left", fill="y")
+        self.sidebar.pack_propagate(False)
+
+        # Nav Section Label
+        lbl_nav = ctk.CTkLabel(
+            self.sidebar,
+            text="NAVIGATION",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#64748B", "#8E909A")
+        )
+        lbl_nav.pack(anchor="w", padx=16, pady=(16, 8))
+
+        # Nav Buttons list
+        self._nav_buttons = {}
+        nav_items = [
+            ("📊 Dashboard & Live Console", "⚡ Dashboard & Status"),
+            ("⚡ Modular Capabilities (11 Modules)", "🛠️ Werkzeuge (11)"),
+            ("📖 Prompt-Katalog", "📖 Prompt-Katalog"),
+            ("🔑 SSH Fleet & PuTTY Manager", "🔑 SSH & PuTTY Fleet"),
+            ("⚙️ Security & Settings", "⚙️ Einstellungen"),
+            ("💬 Mammouth AI Web", "💬 Mammouth WebApp"),
+        ]
+
+        for tab_key, label in nav_items:
+            btn = ctk.CTkButton(
+                self.sidebar,
+                text=f"  {label}",
+                anchor="w",
+                height=38,
+                corner_radius=8,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="transparent",
+                hover_color=("#F1F5F9", "#2F2F33"),
+                text_color=("#475569", "#A0A0A5"),
+                command=lambda k=tab_key: self._select_nav_tab(k)
+            )
+            btn.pack(fill="x", padx=10, pady=3)
+            self._nav_buttons[tab_key] = btn
+
+        # Bottom Mini Telemetry Card
+        bottom_box = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        bottom_box.pack(side="bottom", fill="x", padx=10, pady=12)
+
+        mini_card = ctk.CTkFrame(
+            bottom_box,
+            fg_color=("#F8FAFC", "#242428"),
+            border_width=1,
+            border_color=("#E2E8F0", "#38393F"),
+            corner_radius=8
+        )
+        mini_card.pack(fill="x", pady=(0, 8))
+
+        inner_card = ctk.CTkFrame(mini_card, fg_color="transparent")
+        inner_card.pack(fill="x", padx=10, pady=8)
+
+        self.lbl_nav_tools = ctk.CTkLabel(
+            inner_card,
+            text=f"⚡ {self._count_active_tools()} Werkzeuge aktiv",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#059669", "#10B981")
+        )
+        self.lbl_nav_tools.pack(anchor="w", pady=(0, 4))
+
+        self.lbl_nav_cpu = ctk.CTkLabel(
+            inner_card,
+            text="CPU: 0.0%",
+            font=ctk.CTkFont(size=10),
+            text_color=("#64748B", "#8E909A")
+        )
+        self.lbl_nav_cpu.pack(anchor="w")
+        self.bar_nav_cpu = ctk.CTkProgressBar(inner_card, height=4, progress_color="#10B981", fg_color=("#E2E8F0", "#2F2F33"))
+        self.bar_nav_cpu.set(0.0)
+        self.bar_nav_cpu.pack(fill="x", pady=(1, 4))
+
+        self.lbl_nav_ram = ctk.CTkLabel(
+            inner_card,
+            text="RAM: 0.0%",
+            font=ctk.CTkFont(size=10),
+            text_color=("#64748B", "#8E909A")
+        )
+        self.lbl_nav_ram.pack(anchor="w")
+        self.bar_nav_ram = ctk.CTkProgressBar(inner_card, height=4, progress_color="#38BDF8", fg_color=("#E2E8F0", "#2F2F33"))
+        self.bar_nav_ram.set(0.0)
+        self.bar_nav_ram.pack(fill="x", pady=(1, 2))
+
+        btn_quick_ws = ctk.CTkButton(
+            bottom_box,
+            text="📂 Workspace Ordner",
+            anchor="center",
+            height=32,
+            corner_radius=6,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
+            border_width=1,
+            border_color=("#CBD5E1", "#4A4B53"),
+            command=self._open_workspace_folder
+        )
+        btn_quick_ws.pack(fill="x")
+
+    def _select_nav_tab(self, tab_key: str):
+        if hasattr(self, "tabview") and hasattr(self.tabview, "set"):
+            self.tabview.set(tab_key)
+        self._update_nav_highlight(tab_key)
+        self._on_tab_changed()
+
+    def _update_nav_highlight(self, current_tab: str):
+        if not hasattr(self, "_nav_buttons"):
+            return
+        for tab_key, btn in self._nav_buttons.items():
+            if tab_key == current_tab:
+                btn.configure(
+                    fg_color=("#E2E8F0", "#36373E"),
+                    text_color=("#0F172A", "#FFFFFF"),
+                    border_width=1,
+                    border_color=("#CBD5E1", "#4A4B53")
+                )
+            else:
+                btn.configure(
+                    fg_color="transparent",
+                    text_color=("#475569", "#A0A0A5"),
+                    border_width=0
+                )
 
     def _setup_mammouth_tab(self):
         browser_cfg = self.config_data.get("embedded_browser", {})
@@ -879,10 +1024,12 @@ class MammouthControlCenter(ctk.CTk):
 
     def _switch_to_mammouth_tab(self):
         self.tabview.set("💬 Mammouth AI Web")
+        self._update_nav_highlight("💬 Mammouth AI Web")
         self._on_tab_changed()
 
     def _on_tab_changed(self):
         current = self.tabview.get()
+        self._update_nav_highlight(current)
         if hasattr(self, "mammouth_browser"):
             if current == "💬 Mammouth AI Web":
                 self.mammouth_browser.ensure_initialized()
@@ -932,13 +1079,14 @@ class MammouthControlCenter(ctk.CTk):
         dlg.title("Update verfügbar")
         dlg.geometry("520x480")
         dlg.resizable(False, False)
+        dlg.configure(fg_color=("#F8FAFC", "#202124"))
         dlg.transient(self)
         dlg.grab_set()
 
-        ctk.CTkLabel(dlg, text="🎉 Neues Update verfügbar!", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(pady=(20, 4))
+        ctk.CTkLabel(dlg, text="🎉 Neues Update verfügbar!", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(pady=(20, 4))
         ctk.CTkLabel(dlg, text=f"Version {ver} (ca. {size_mb} MB) • Aktuell installiert: {APP_VERSION}", font=ctk.CTkFont(size=12), text_color=("#64748B", "#94A3B8")).pack(pady=(0, 10))
 
-        tb = ctk.CTkTextbox(dlg, width=470, height=200, corner_radius=8, font=ctk.CTkFont(size=11))
+        tb = ctk.CTkTextbox(dlg, width=470, height=200, corner_radius=8, font=ctk.CTkFont(size=11), fg_color=("#F8FAFC", "#1C1C1F"), border_width=1, border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         tb.pack(padx=20, pady=5)
         tb.insert("1.0", notes)
         tb.configure(state="disabled")
@@ -946,7 +1094,7 @@ class MammouthControlCenter(ctk.CTk):
         lbl_progress = ctk.CTkLabel(dlg, text="", font=ctk.CTkFont(size=11), text_color=("#64748B", "#94A3B8"))
         lbl_progress.pack(pady=(5, 0))
 
-        progress_bar = ctk.CTkProgressBar(dlg, width=470)
+        progress_bar = ctk.CTkProgressBar(dlg, width=470, progress_color="#10B981", fg_color=("#E2E8F0", "#2F2F33"))
         progress_bar.set(0)
 
         btn_box = ctk.CTkFrame(dlg, fg_color="transparent")
@@ -976,10 +1124,28 @@ class MammouthControlCenter(ctk.CTk):
 
             threading.Thread(target=dl_worker, daemon=True).start()
 
-        btn_cancel = ctk.CTkButton(btn_box, text="Später", width=100, fg_color=("#E2E8F0", "#1C1D24"), text_color=("#0F172A", "#F3F4F6"), command=dlg.destroy)
+        btn_cancel = ctk.CTkButton(
+            btn_box,
+            text="Später",
+            width=100,
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
+            border_width=1,
+            border_color=("#CBD5E1", "#4A4B53"),
+            command=dlg.destroy
+        )
         btn_cancel.pack(side="left")
 
-        btn_install = ctk.CTkButton(btn_box, text="⬇️ Jetzt herunterladen & installieren", font=ctk.CTkFont(weight="bold"), fg_color=("#059669", "#10B981"), hover_color=("#047857", "#059669"), command=start_download)
+        btn_install = ctk.CTkButton(
+            btn_box,
+            text="⬇️ Jetzt herunterladen & installieren",
+            font=ctk.CTkFont(weight="bold"),
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            command=start_download
+        )
         btn_install.pack(side="right")
 
 
@@ -997,9 +1163,9 @@ class MammouthControlCenter(ctk.CTk):
         # Update Notice Banner (packed dynamically when update is available)
         self.update_banner = ctk.CTkFrame(
             self.tab_dashboard,
-            fg_color=("#ECFDF5", "#064E3B"),
+            fg_color=("#ECFDF5", "#1B2E24"),
             border_width=1,
-            border_color=("#10B981", "#059669"),
+            border_color=("#10B981", "#10B981"),
             corner_radius=8
         )
         self.lbl_update_banner_text = ctk.CTkLabel(
@@ -1036,16 +1202,16 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_banner_action.pack(side="right", padx=(10, 4), pady=8)
 
-        # 1. Endpoint Card
-        card = ctk.CTkFrame(self.tab_dashboard, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
-        card.pack(fill="x", padx=10, pady=(10, 8))
+        # 1. Hero Engine & Endpoint Card
+        card = ctk.CTkFrame(self.tab_dashboard, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
+        card.pack(fill="x", padx=15, pady=(12, 10))
         self.endpoint_card = card
 
-        # Mode Selection Bar inside Dashboard
+        # Mode Selection Bar inside Hero Card
         mode_bar = ctk.CTkFrame(card, fg_color="transparent")
-        mode_bar.pack(fill="x", padx=15, pady=(12, 6))
+        mode_bar.pack(fill="x", padx=15, pady=(12, 8))
 
-        ctk.CTkLabel(mode_bar, text="Exposure Mode:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        ctk.CTkLabel(mode_bar, text="Exposure Mode:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
         
         tunnel_modes = ["Serveo (Public SSH Tunnel)", "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"]
         current_mode = self.config_data.get("server", {}).get("tunnel_mode", "Tailscale Funnel")
@@ -1053,32 +1219,32 @@ class MammouthControlCenter(ctk.CTk):
             mode_bar,
             values=tunnel_modes,
             width=170,
-            fg_color=("#F1F5F9", "#1F2029"),
-            button_color=("#E2E8F0", "#2A2B37"),
-            button_hover_color=("#CBD5E1", "#333544"),
-            text_color=("#0F172A", "#F3F4F6"),
-            dropdown_fg_color=("#FFFFFF", "#14151B"),
-            dropdown_text_color=("#0F172A", "#F3F4F6"),
-            dropdown_hover_color=("#F1F5F9", "#22242E"),
+            fg_color=("#F1F5F9", "#2F2F33"),
+            button_color=("#E2E8F0", "#36373E"),
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
+            dropdown_fg_color=("#FFFFFF", "#242428"),
+            dropdown_text_color=("#0F172A", "#FFFFFF"),
+            dropdown_hover_color=("#F1F5F9", "#2F2F33"),
             command=self._on_dash_mode_changed
         )
         self.dash_mode_menu.set(current_mode)
         self.dash_mode_menu.pack(side="left", padx=10)
 
-        ctk.CTkLabel(mode_bar, text="Route Path:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left", padx=(10, 5))
+        ctk.CTkLabel(mode_bar, text="Route Path:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left", padx=(10, 5))
         paths = ["/sse", "/mcp", "/messages", "/"]
         current_path = self.config_data.get("server", {}).get("endpoint_path", "/sse")
         self.dash_path_menu = ctk.CTkOptionMenu(
             mode_bar,
             values=paths,
             width=100,
-            fg_color=("#F1F5F9", "#1F2029"),
-            button_color=("#E2E8F0", "#2A2B37"),
-            button_hover_color=("#CBD5E1", "#333544"),
-            text_color=("#0F172A", "#F3F4F6"),
-            dropdown_fg_color=("#FFFFFF", "#14151B"),
-            dropdown_text_color=("#0F172A", "#F3F4F6"),
-            dropdown_hover_color=("#F1F5F9", "#22242E"),
+            fg_color=("#F1F5F9", "#2F2F33"),
+            button_color=("#E2E8F0", "#36373E"),
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
+            dropdown_fg_color=("#FFFFFF", "#242428"),
+            dropdown_text_color=("#0F172A", "#FFFFFF"),
+            dropdown_hover_color=("#F1F5F9", "#2F2F33"),
             command=self._on_dash_path_changed
         )
         self.dash_path_menu.set(current_path)
@@ -1116,7 +1282,7 @@ class MammouthControlCenter(ctk.CTk):
         row1 = ctk.CTkFrame(card, fg_color="transparent")
         row1.pack(fill="x", padx=15, pady=6)
         
-        self.lbl_primary_title = ctk.CTkLabel(row1, text="🌐 Public SSE URL:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#E5E7EB"), width=160, anchor="w")
+        self.lbl_primary_title = ctk.CTkLabel(row1, text="🌐 Public SSE URL:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#FFFFFF"), width=160, anchor="w")
         self.lbl_primary_title.pack(side="left")
         
         self.lbl_public_url = ctk.CTkLabel(row1, text=self._calculate_active_endpoint_url(), font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0284C7", "#38BDF8"))
@@ -1130,12 +1296,12 @@ class MammouthControlCenter(ctk.CTk):
             text="🔄 Detect",
             width=80,
             height=28,
-            fg_color=("#ECFDF5", "#14281E"),
-            hover_color=("#D1FAE5", "#1C3D2D"),
+            fg_color=("#ECFDF5", "#1B2E24"),
+            hover_color=("#D1FAE5", "#244E38"),
             text_color=("#047857", "#10B981"),
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
-            border_color=("#A7F3D0", "#1E4B35"),
+            border_color=("#A7F3D0", "#244E38"),
             command=self._manual_detect_url
         )
         btn_detect_ts.pack(side="left", padx=3)
@@ -1145,11 +1311,11 @@ class MammouthControlCenter(ctk.CTk):
             text="📋 Copy URL",
             width=95,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=lambda: self._copy_to_clipboard(self._calculate_active_endpoint_url_with_token(), "Public URL (+ Token)")
         )
         btn_copy_pub.pack(side="left", padx=3)
@@ -1159,11 +1325,11 @@ class MammouthControlCenter(ctk.CTk):
             text="⚙️ MCP JSON",
             width=95,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._copy_mcp_client_config
         )
         btn_copy_json.pack(side="left", padx=3)
@@ -1172,8 +1338,8 @@ class MammouthControlCenter(ctk.CTk):
         row2 = ctk.CTkFrame(card, fg_color="transparent")
         row2.pack(fill="x", padx=15, pady=(4, 6))
         
-        ctk.CTkLabel(row2, text="💻 Localhost URL:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#E5E7EB"), width=160, anchor="w").pack(side="left")
-        self.lbl_local_url = ctk.CTkLabel(row2, text=self._calculate_local_endpoint_url(), font=ctk.CTkFont(size=12), text_color=("#475569", "#9CA3AF"))
+        ctk.CTkLabel(row2, text="💻 Localhost URL:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#FFFFFF"), width=160, anchor="w").pack(side="left")
+        self.lbl_local_url = ctk.CTkLabel(row2, text=self._calculate_local_endpoint_url(), font=ctk.CTkFont(size=12), text_color=("#64748B", "#A0A0A5"))
         self.lbl_local_url.pack(side="left", padx=10)
         
         btn_box2 = ctk.CTkFrame(row2, fg_color="transparent")
@@ -1184,11 +1350,11 @@ class MammouthControlCenter(ctk.CTk):
             text="📋 Copy URL",
             width=95,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=lambda: self._copy_to_clipboard(self.lbl_local_url.cget("text"), "Localhost URL")
         )
         btn_copy_loc.pack(side="left", padx=3)
@@ -1197,7 +1363,7 @@ class MammouthControlCenter(ctk.CTk):
         row3 = ctk.CTkFrame(card, fg_color="transparent")
         row3.pack(fill="x", padx=15, pady=(4, 12))
 
-        self.lbl_key_title = ctk.CTkLabel(row3, text="🔑 Bearer API Key:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#E5E7EB"), width=160, anchor="w")
+        self.lbl_key_title = ctk.CTkLabel(row3, text="🔑 Bearer API Key:", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#FFFFFF"), width=160, anchor="w")
         self.lbl_key_title.pack(side="left")
 
         current_token = self.config_data.get("server", {}).get("api_token", "")
@@ -1219,11 +1385,11 @@ class MammouthControlCenter(ctk.CTk):
             text="👁️ Show Key",
             width=95,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._toggle_dash_key_visibility
         )
         self.btn_toggle_dash_key.pack(side="left", padx=3)
@@ -1233,67 +1399,68 @@ class MammouthControlCenter(ctk.CTk):
             text="📋 Copy Key",
             width=95,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=lambda: self._copy_to_clipboard(self.config_data.get("server", {}).get("api_token", ""), "Bearer Key")
         )
         btn_copy_dash_key.pack(side="left", padx=3)
 
-        # 2. Fancy Live Telemetry & Progress Strip
-        stats_strip = ctk.CTkFrame(self.tab_dashboard, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=8)
-        stats_strip.pack(fill="x", padx=10, pady=(0, 6))
+        # 2. Four Clean Flat Metric Tiles (Horizontal Row)
+        metrics_frame = ctk.CTkFrame(self.tab_dashboard, fg_color="transparent")
+        metrics_frame.pack(fill="x", padx=15, pady=(0, 10))
 
-        stats_inner = ctk.CTkFrame(stats_strip, fg_color="transparent")
-        stats_inner.pack(fill="x", padx=15, pady=8)
+        # Tile 1: Tools
+        tile1 = ctk.CTkFrame(metrics_frame, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
+        tile1.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        ctk.CTkLabel(tile1, text="WERKZEUGE", font=ctk.CTkFont(size=10, weight="bold"), text_color=("#64748B", "#8E909A")).pack(anchor="w", padx=14, pady=(10, 2))
+        self.lbl_stat_tools = ctk.CTkLabel(tile1, text=f"⚡ {self._count_active_tools()} Tools aktiv", font=ctk.CTkFont(size=14, weight="bold"), text_color=("#059669", "#10B981"))
+        self.lbl_stat_tools.pack(anchor="w", padx=14, pady=(0, 10))
 
-        # CPU Meter
-        cpu_box = ctk.CTkFrame(stats_inner, fg_color="transparent")
-        cpu_box.pack(side="left", fill="x", expand=True, padx=(0, 15))
-        self.lbl_stat_cpu = ctk.CTkLabel(cpu_box, text="💻 CPU: 0.0%", font=ctk.CTkFont(size=12, weight="bold"), text_color=("#0F172A", "#E5E7EB"))
-        self.lbl_stat_cpu.pack(anchor="w")
-        self.bar_cpu = ctk.CTkProgressBar(cpu_box, height=8, progress_color="#10B981")
+        # Tile 2: CPU
+        tile2 = ctk.CTkFrame(metrics_frame, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
+        tile2.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        ctk.CTkLabel(tile2, text="CPU AUSLASTUNG", font=ctk.CTkFont(size=10, weight="bold"), text_color=("#64748B", "#8E909A")).pack(anchor="w", padx=14, pady=(10, 2))
+        self.lbl_stat_cpu = ctk.CTkLabel(tile2, text="💻 CPU: 0.0%", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#FFFFFF"))
+        self.lbl_stat_cpu.pack(anchor="w", padx=14)
+        self.bar_cpu = ctk.CTkProgressBar(tile2, height=5, progress_color="#10B981", fg_color=("#E2E8F0", "#2F2F33"))
         self.bar_cpu.set(0.0)
-        self.bar_cpu.pack(fill="x", pady=(2, 0))
+        self.bar_cpu.pack(fill="x", padx=14, pady=(3, 10))
 
-        # RAM Meter
-        ram_box = ctk.CTkFrame(stats_inner, fg_color="transparent")
-        ram_box.pack(side="left", fill="x", expand=True, padx=(0, 15))
-        self.lbl_stat_ram = ctk.CTkLabel(ram_box, text="🧠 RAM: 0.0%", font=ctk.CTkFont(size=12, weight="bold"), text_color=("#0F172A", "#E5E7EB"))
-        self.lbl_stat_ram.pack(anchor="w")
-        self.bar_ram = ctk.CTkProgressBar(ram_box, height=8, progress_color="#3B82F6")
+        # Tile 3: RAM
+        tile3 = ctk.CTkFrame(metrics_frame, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
+        tile3.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        ctk.CTkLabel(tile3, text="SPEICHER (RAM)", font=ctk.CTkFont(size=10, weight="bold"), text_color=("#64748B", "#8E909A")).pack(anchor="w", padx=14, pady=(10, 2))
+        self.lbl_stat_ram = ctk.CTkLabel(tile3, text="🧠 RAM: 0.0%", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#FFFFFF"))
+        self.lbl_stat_ram.pack(anchor="w", padx=14)
+        self.bar_ram = ctk.CTkProgressBar(tile3, height=5, progress_color="#38BDF8", fg_color=("#E2E8F0", "#2F2F33"))
         self.bar_ram.set(0.0)
-        self.bar_ram.pack(fill="x", pady=(2, 0))
+        self.bar_ram.pack(fill="x", padx=14, pady=(3, 10))
 
-        # Active Tools
-        tools_box = ctk.CTkFrame(stats_inner, fg_color="transparent")
-        tools_box.pack(side="left", padx=(0, 15))
-        self.lbl_stat_tools = ctk.CTkLabel(tools_box, text=f"⚡ Active Tools: {self._count_active_tools()}", font=ctk.CTkFont(size=12, weight="bold"), text_color=("#059669", "#10B981"))
-        self.lbl_stat_tools.pack(anchor="w", pady=(4, 0))
-
-        # Uptime Clock
-        uptime_box = ctk.CTkFrame(stats_inner, fg_color="transparent")
-        uptime_box.pack(side="left")
-        self.lbl_stat_uptime = ctk.CTkLabel(uptime_box, text="⏱️ Uptime: 00:00:00", font=ctk.CTkFont(size=12, weight="bold"), text_color=("#475569", "#9CA3AF"))
-        self.lbl_stat_uptime.pack(anchor="w", pady=(4, 0))
+        # Tile 4: Uptime
+        tile4 = ctk.CTkFrame(metrics_frame, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
+        tile4.pack(side="left", fill="both", expand=True)
+        ctk.CTkLabel(tile4, text="SERVER LAUFZEIT", font=ctk.CTkFont(size=10, weight="bold"), text_color=("#64748B", "#8E909A")).pack(anchor="w", padx=14, pady=(10, 2))
+        self.lbl_stat_uptime = ctk.CTkLabel(tile4, text="⏱️ Uptime: 00:00:00", font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#FFFFFF"))
+        self.lbl_stat_uptime.pack(anchor="w", padx=14, pady=(0, 10))
 
         # 3. Quick Action Buttons Bar
         actions_bar = ctk.CTkFrame(self.tab_dashboard, fg_color="transparent")
-        actions_bar.pack(fill="x", padx=10, pady=(2, 6))
+        actions_bar.pack(fill="x", padx=15, pady=(0, 8))
 
         btn_screen = ctk.CTkButton(
             actions_bar,
             text="📸 Capture Desktop",
-            width=150,
+            width=140,
             height=30,
-            fg_color=("#EFF6FF", "#131C2E"),
-            hover_color=("#DBEAFE", "#1E2C4A"),
-            text_color=("#1D4ED8", "#60A5FA"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
-            border_color=("#BFDBFE", "#25375A"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._test_screenshot
         )
         btn_screen.pack(side="left", padx=(0, 8))
@@ -1301,14 +1468,14 @@ class MammouthControlCenter(ctk.CTk):
         btn_ue = ctk.CTkButton(
             actions_bar,
             text="🎮 Ping UE5 [ALPHA]",
-            width=170,
+            width=150,
             height=30,
-            fg_color=("#FAF5FF", "#1E162B"),
-            hover_color=("#F3E8FF", "#2E2042"),
-            text_color=("#7E22CE", "#C084FC"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
-            border_color=("#E9D5FF", "#3F2C5A"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._test_unreal
         )
         btn_ue.pack(side="left", padx=(0, 8))
@@ -1316,14 +1483,14 @@ class MammouthControlCenter(ctk.CTk):
         btn_ws = ctk.CTkButton(
             actions_bar,
             text="📂 Open Workspace",
-            width=150,
+            width=140,
             height=30,
-            fg_color=("#F0FDF4", "#12231A"),
-            hover_color=("#DCFCE7", "#1A3728"),
-            text_color=("#15803D", "#34D399"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
-            border_color=("#BBF7D0", "#244E38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._open_workspace_folder
         )
         btn_ws.pack(side="left", padx=(0, 8))
@@ -1333,11 +1500,11 @@ class MammouthControlCenter(ctk.CTk):
             text="💾 Save Log",
             width=100,
             height=30,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._export_logs
         )
         btn_export.pack(side="right", padx=(8, 0))
@@ -1347,28 +1514,170 @@ class MammouthControlCenter(ctk.CTk):
             text="🧹 Clear Logs",
             width=100,
             height=30,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._clear_logs
         )
         btn_clear.pack(side="right")
 
-        # 4. Text Console with Cyber Monospace Styling
+        # 4. Text Console with Modern Monospace Styling
         self.log_textbox = ctk.CTkTextbox(
             self.tab_dashboard,
-            font=ctk.CTkFont(family="Consolas", size=12),
+            font=ctk.CTkFont(family="Consolas" if os.name == "nt" else "Monospace", size=12),
             wrap="word",
-            fg_color=("#FFFFFF", "#0A0B10"),
+            fg_color=("#FFFFFF", "#1C1C1F"),
             text_color=("#0F172A", "#E2E8F0"),
             border_width=1,
-            border_color=("#E2E8F0", "#1C1F2B"),
+            border_color=("#CBD5E1", "#323338"),
             corner_radius=8
         )
-        self.log_textbox.pack(fill="both", expand=True, padx=10, pady=(2, 10))
+        self.log_textbox.pack(fill="both", expand=True, padx=15, pady=(0, 15))
         self._log(f"Mammouth Defroster 9000 {APP_VERSION} initialized. Sovereign Cockpit Ready.")
+
+    def _setup_prompts_tab(self):
+        top_bar = ctk.CTkFrame(self.tab_prompts, fg_color="transparent")
+        top_bar.pack(fill="x", padx=15, pady=(12, 10))
+
+        title_box = ctk.CTkFrame(top_bar, fg_color="transparent")
+        title_box.pack(side="left")
+        ctk.CTkLabel(
+            title_box,
+            text="📖 Mammouth.ai Prompt-Katalog",
+            font=ctk.CTkFont(size=17, weight="bold"),
+            text_color=("#0F172A", "#FFFFFF")
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            title_box,
+            text="Optimierte Vorlagen für Mammouth.ai. Mit 1 Klick in die Zwischenablage kopieren & im Chat abschicken.",
+            font=ctk.CTkFont(size=12),
+            text_color=("#64748B", "#8E909A")
+        ).pack(anchor="w")
+
+        scroll = ctk.CTkScrollableFrame(self.tab_prompts, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=15, pady=(0, 15))
+
+        prompts = [
+            (
+                "🖥️ Bildschirm-Inspektion & OCR",
+                "Vision",
+                "Lässt Mammouth deinen Bildschirm erfassen, Menüs und Fehler analysieren.",
+                "Nutze das Tool screen_capture (monitor=1), erstelle einen Screenshot meines Bildschirms und analysiere die aktuell sichtbaren Fenster, Fehlermeldungen und Inhalte."
+            ),
+            (
+                "📊 Systemdiagnose & Top-Prozesse",
+                "System",
+                "Ermittelt laufende Hintergrundprozesse und deren Ressourcenverbrauch.",
+                "Führe mit system_get_processes eine Systemdiagnose durch und zeige mir die Top 5 Prozesse nach Arbeitsspeicher- und CPU-Verbrauch in einer übersichtlichen Tabelle an."
+            ),
+            (
+                "📁 Workspace Projekt-Generierung",
+                "Dateien",
+                "Erstellt ein neues Skript oder eine Konfiguration direkt im lokalen Workspace.",
+                "Erstelle mit file_write im lokalen Workspace eine neue Python-Datei 'pipeline.py'. Implementiere eine saubere Pipeline mit Fehlerbehandlung und Dokumentation."
+            ),
+            (
+                "🎮 Unreal Engine 5 Inspektion",
+                "Game Dev",
+                "Prüft die Remote Execution Verbindung zu Unreal Engine 5 und liest Daten aus.",
+                "Prüfe mit unreal_ping die Verbindung zu meinem Unreal Engine 5 Editor. Wenn online, führe ein sicheres Skript aus, um alle Actors in der aktuellen Welt aufzulisten."
+            ),
+            (
+                "☁️ Google Drive Dateisuche",
+                "Cloud",
+                "Durchsucht angebundene Google Drive Dokumente nach Schlüsselwörtern.",
+                "Nutze gdrive_list_files mit einer Suchanfrage nach aktuellen Dokumenten und liste mir Dateinamen, Links und das letzte Änderungsdatum übersichtlich auf."
+            ),
+            (
+                "🐧 SSH Linux Server Check",
+                "Remote",
+                "Führt über PuTTY/SSH gespeicherte Host-Profile Statuskommandos aus.",
+                "Nutze putty_ssh_exec auf meinem gespeicherten Linux-Host, um 'uptime && df -h && free -m' auszuführen und fasse mir den Serverzustand zusammen."
+            ),
+        ]
+
+        for title, category, desc, prompt_text in prompts:
+            card = ctk.CTkFrame(
+                scroll,
+                fg_color=("#FFFFFF", "#242428"),
+                border_width=1,
+                border_color=("#CBD5E1", "#38393F"),
+                corner_radius=10
+            )
+            card.pack(fill="x", pady=6)
+
+            left = ctk.CTkFrame(card, fg_color="transparent")
+            left.pack(side="left", padx=15, pady=12, fill="x", expand=True)
+
+            t_row = ctk.CTkFrame(left, fg_color="transparent")
+            t_row.pack(anchor="w")
+
+            ctk.CTkLabel(
+                t_row,
+                text=title,
+                font=ctk.CTkFont(size=14, weight="bold"),
+                text_color=("#0F172A", "#FFFFFF")
+            ).pack(side="left")
+
+            badge = ctk.CTkFrame(
+                t_row,
+                fg_color=("#F1F5F9", "#1E2028"),
+                border_width=1,
+                border_color=("#CBD5E1", "#38393F"),
+                corner_radius=5
+            )
+            badge.pack(side="left", padx=8)
+            ctk.CTkLabel(
+                badge,
+                text=f" {category} ",
+                font=ctk.CTkFont(size=10, weight="bold"),
+                text_color=("#059669", "#10B981")
+            ).pack(padx=3, pady=1)
+
+            ctk.CTkLabel(
+                left,
+                text=desc,
+                font=ctk.CTkFont(size=12),
+                text_color=("#64748B", "#A0A0A5"),
+                anchor="w"
+            ).pack(anchor="w", pady=(2, 6))
+
+            prompt_box = ctk.CTkFrame(
+                left,
+                fg_color=("#F8FAFC", "#1C1C1F"),
+                border_width=1,
+                border_color=("#E2E8F0", "#323338"),
+                corner_radius=6
+            )
+            prompt_box.pack(fill="x")
+
+            ctk.CTkLabel(
+                prompt_box,
+                text=prompt_text,
+                font=ctk.CTkFont(size=11, family="Consolas" if os.name == "nt" else "Monospace"),
+                text_color=("#334155", "#E2E8F0"),
+                wraplength=600,
+                justify="left",
+                anchor="w"
+            ).pack(fill="x", padx=10, pady=8)
+
+            btn_box = ctk.CTkFrame(card, fg_color="transparent")
+            btn_box.pack(side="right", padx=15, pady=12)
+
+            btn_copy = ctk.CTkButton(
+                btn_box,
+                text="📋 Prompt kopieren",
+                width=140,
+                height=32,
+                fg_color=("#059669", "#10B981"),
+                hover_color=("#047857", "#059669"),
+                text_color="#FFFFFF",
+                font=ctk.CTkFont(weight="bold"),
+                command=lambda p=prompt_text: self._copy_to_clipboard(p, "Prompt")
+            )
+            btn_copy.pack(side="right")
 
     def _count_active_tools(self) -> int:
         mods = self.config_data.get("modules", {})
@@ -1441,13 +1750,29 @@ class MammouthControlCenter(ctk.CTk):
                 import psutil
                 cpu = psutil.cpu_percent(interval=None)
                 ram = psutil.virtual_memory().percent
-                self.lbl_stat_cpu.configure(text=f"💻 CPU: {cpu:.1f}%")
-                self.lbl_stat_ram.configure(text=f"🧠 RAM: {ram:.1f}%")
-                self.bar_cpu.set(cpu / 100.0)
-                self.bar_ram.set(ram / 100.0)
-                
+                if hasattr(self, "lbl_stat_cpu"):
+                    self.lbl_stat_cpu.configure(text=f"💻 CPU: {cpu:.1f}%")
+                if hasattr(self, "lbl_stat_ram"):
+                    self.lbl_stat_ram.configure(text=f"🧠 RAM: {ram:.1f}%")
+                if hasattr(self, "bar_cpu"):
+                    self.bar_cpu.set(cpu / 100.0)
+                if hasattr(self, "bar_ram"):
+                    self.bar_ram.set(ram / 100.0)
+
+                if hasattr(self, "lbl_nav_cpu"):
+                    self.lbl_nav_cpu.configure(text=f"CPU: {cpu:.1f}%")
+                if hasattr(self, "lbl_nav_ram"):
+                    self.lbl_nav_ram.configure(text=f"RAM: {ram:.1f}%")
+                if hasattr(self, "bar_nav_cpu"):
+                    self.bar_nav_cpu.set(cpu / 100.0)
+                if hasattr(self, "bar_nav_ram"):
+                    self.bar_nav_ram.set(ram / 100.0)
+
+                active_cnt = self._count_active_tools()
                 if hasattr(self, "lbl_stat_tools"):
-                    self.lbl_stat_tools.configure(text=f"⚡ Active Tools: {self._count_active_tools()}")
+                    self.lbl_stat_tools.configure(text=f"⚡ {active_cnt} Tools aktiv")
+                if hasattr(self, "lbl_nav_tools"):
+                    self.lbl_nav_tools.configure(text=f"⚡ {active_cnt} Werkzeuge aktiv")
 
                 if self.is_server_running and self.server_start_time:
                     elapsed = int(time.time() - self.server_start_time)
@@ -1707,12 +2032,12 @@ class MammouthControlCenter(ctk.CTk):
             text="✅ Enable Safe Tools",
             width=140,
             height=32,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._enable_safe_skills
         )
         btn_enable_safe.pack(side="left", padx=5)
@@ -1765,7 +2090,7 @@ class MammouthControlCenter(ctk.CTk):
         }
 
         for key, mod in modules.items():
-            card = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+            card = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
             card.pack(fill="x", pady=6)
 
             left = ctk.CTkFrame(card, fg_color="transparent")
@@ -1781,7 +2106,7 @@ class MammouthControlCenter(ctk.CTk):
             if key == "unreal_engine" and "ALPHA" not in disp_name:
                 disp_name += "  [ALPHA]"
 
-            lbl_name = ctk.CTkLabel(title_row, text=disp_name, font=ctk.CTkFont(size=14, weight="bold"), text_color=("#0F172A", "#F3F4F6"))
+            lbl_name = ctk.CTkLabel(title_row, text=disp_name, font=ctk.CTkFont(size=14, weight="bold"), text_color=("#0F172A", "#FFFFFF"))
             lbl_name.pack(side="left")
 
             if key == "unreal_engine":
@@ -1789,15 +2114,15 @@ class MammouthControlCenter(ctk.CTk):
                 badge_alpha.pack(side="left", padx=6)
                 ctk.CTkLabel(badge_alpha, text=" EXPERIMENTAL ", font=ctk.CTkFont(size=10, weight="bold"), text_color=("#B45309", "#F59E0B")).pack(padx=4, pady=1)
 
-            badge_cnt = ctk.CTkFrame(title_row, fg_color=("#F1F5F9", "#1C1D24"), border_width=1, border_color=("#E2E8F0", "#2A2B37"), corner_radius=5)
+            badge_cnt = ctk.CTkFrame(title_row, fg_color=("#F1F5F9", "#1E2028"), border_width=1, border_color=("#E2E8F0", "#38393F"), corner_radius=5)
             badge_cnt.pack(side="left", padx=6)
-            ctk.CTkLabel(badge_cnt, text=f" {cnt} ", font=ctk.CTkFont(size=11), text_color=("#475569", "#9CA3AF")).pack(padx=4, pady=1)
+            ctk.CTkLabel(badge_cnt, text=f" {cnt} ", font=ctk.CTkFont(size=11), text_color=("#64748B", "#8E909A")).pack(padx=4, pady=1)
 
-            lbl_desc = ctk.CTkLabel(left, text=mod.get("description", ""), font=ctk.CTkFont(size=12), text_color=("#475569", "#9CA3AF"), anchor="w")
+            lbl_desc = ctk.CTkLabel(left, text=mod.get("description", ""), font=ctk.CTkFont(size=12), text_color=("#64748B", "#8E909A"), anchor="w")
             lbl_desc.pack(anchor="w", pady=(4, 0))
 
             if key == "screen_capture":
-                sub_opts = ctk.CTkFrame(left, fg_color=("#F1F5F9", "#1A1B23"), corner_radius=6)
+                sub_opts = ctk.CTkFrame(left, fg_color=("#F8FAFC", "#1C1C1F"), corner_radius=6)
                 sub_opts.pack(fill="x", pady=(8, 0))
 
                 self.var_screen_req_consent = ctk.BooleanVar(value=mod.get("require_consent", True))
@@ -1834,7 +2159,7 @@ class MammouthControlCenter(ctk.CTk):
                 self.lbl_consent_badge.pack(side="left", padx=10, pady=6)
 
             elif key == "shell_processes":
-                sub_opts = ctk.CTkFrame(left, fg_color=("#F1F5F9", "#1A1B23"), corner_radius=6)
+                sub_opts = ctk.CTkFrame(left, fg_color=("#F8FAFC", "#1C1C1F"), corner_radius=6)
                 sub_opts.pack(fill="x", pady=(8, 0))
                 self.var_admin_shell = ctk.BooleanVar(value=self.config_data.get("server", {}).get("allow_admin_shell", False))
                 sw_admin_shell = ctk.CTkSwitch(
@@ -1852,12 +2177,12 @@ class MammouthControlCenter(ctk.CTk):
                     sub_opts,
                     text="Get-*/ipconfig only  vs  Set-*/Remove-*/sc/schtasks",
                     font=ctk.CTkFont(size=11),
-                    text_color=("#64748B", "#9CA3AF")
+                    text_color=("#64748B", "#8E909A")
                 )
                 self.lbl_admin_shell_hint.pack(side="left", padx=10, pady=6)
 
             elif key == "google_drive":
-                sub_opts = ctk.CTkFrame(left, fg_color=("#F1F5F9", "#1A1B23"), corner_radius=6)
+                sub_opts = ctk.CTkFrame(left, fg_color=("#F8FAFC", "#1C1C1F"), corner_radius=6)
                 sub_opts.pack(fill="x", pady=(8, 0))
 
                 try:
@@ -1898,12 +2223,12 @@ class MammouthControlCenter(ctk.CTk):
                     text="📂 Select credentials.json",
                     width=165,
                     height=26,
-                    fg_color=("#F1F5F9", "#1E2028"),
-                    hover_color=("#E2E8F0", "#282A36"),
-                    text_color=("#0F172A", "#F3F4F6"),
+                    fg_color=("#F1F5F9", "#36373E"),
+                    hover_color=("#E2E8F0", "#42434B"),
+                    text_color=("#0F172A", "#FFFFFF"),
                     font=ctk.CTkFont(size=11),
                     border_width=1,
-                    border_color=("#CBD5E1", "#2A2C38"),
+                    border_color=("#CBD5E1", "#4A4B53"),
                     command=self._on_gdrive_browse_credentials
                 )
                 btn_gdrive_creds.pack(side="left", padx=5, pady=6)
@@ -2108,7 +2433,7 @@ class MammouthControlCenter(ctk.CTk):
 
         title_box = ctk.CTkFrame(top_bar, fg_color="transparent")
         title_box.pack(side="left")
-        ctk.CTkLabel(title_box, text="Configured SSH Servers & PuTTY Aliases", font=ctk.CTkFont(size=17, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w")
+        ctk.CTkLabel(title_box, text="Configured SSH Servers & PuTTY Aliases", font=ctk.CTkFont(size=17, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(anchor="w")
         ctk.CTkLabel(title_box, text="🔒 Passwords stored with Windows DPAPI hardware encryption", font=ctk.CTkFont(size=12, weight="bold"), text_color=("#059669", "#10B981")).pack(anchor="w")
 
         btn_add = ctk.CTkButton(
@@ -2146,18 +2471,18 @@ class MammouthControlCenter(ctk.CTk):
 
         hosts = self._load_hosts_file()
         if not hosts:
-            empty_card = ctk.CTkFrame(self.hosts_scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+            empty_card = ctk.CTkFrame(self.hosts_scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
             empty_card.pack(fill="x", pady=20, padx=10)
             ctk.CTkLabel(
                 empty_card,
                 text="No remote SSH hosts configured yet.\nClick '➕ Add Server' above to configure server login profiles for plink / pscp.",
                 font=ctk.CTkFont(size=13),
-                text_color=("#475569", "#9CA3AF")
+                text_color=("#64748B", "#8E909A")
             ).pack(padx=20, pady=25)
             return
 
         for alias, info in hosts.items():
-            card = ctk.CTkFrame(self.hosts_scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+            card = ctk.CTkFrame(self.hosts_scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
             card.pack(fill="x", pady=6)
 
             left = ctk.CTkFrame(card, fg_color="transparent")
@@ -2167,18 +2492,18 @@ class MammouthControlCenter(ctk.CTk):
             host_row.pack(anchor="w")
 
             host_str = f"🐧 {alias}  —  {info.get('username', 'root')}@{info.get('host', 'localhost')}:{info.get('port', 22)}"
-            ctk.CTkLabel(host_row, text=host_str, font=ctk.CTkFont(size=14, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(side="left")
+            ctk.CTkLabel(host_row, text=host_str, font=ctk.CTkFont(size=14, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
 
             has_pw = str(info.get("password", "")).strip() != ""
             if has_pw:
-                badge_sec = ctk.CTkFrame(host_row, fg_color=("#ECFDF5", "#13281E"), border_width=1, border_color=("#A7F3D0", "#1B4332"), corner_radius=5)
+                badge_sec = ctk.CTkFrame(host_row, fg_color=("#ECFDF5", "#1B2E24"), border_width=1, border_color=("#A7F3D0", "#244E38"), corner_radius=5)
                 badge_sec.pack(side="left", padx=8)
                 ctk.CTkLabel(badge_sec, text=" 🔒 DPAPI Protected ", font=ctk.CTkFont(size=10, weight="bold"), text_color=("#047857", "#10B981")).pack(padx=3, pady=1)
 
             desc = info.get("description") or "No description"
             has_key = f"Key: {Path(info.get('private_key_path', '')).name}" if info.get("private_key_path") else "No key file"
             subtext = f"{desc} | {has_key}"
-            ctk.CTkLabel(left, text=subtext, font=ctk.CTkFont(size=12), text_color=("#475569", "#9CA3AF"), anchor="w").pack(anchor="w", pady=(4, 0))
+            ctk.CTkLabel(left, text=subtext, font=ctk.CTkFont(size=12), text_color=("#64748B", "#8E909A"), anchor="w").pack(anchor="w", pady=(4, 0))
 
             btn_box = ctk.CTkFrame(card, fg_color="transparent")
             btn_box.pack(side="right", padx=15, pady=12)
@@ -2201,12 +2526,12 @@ class MammouthControlCenter(ctk.CTk):
                 text="Edit",
                 width=65,
                 height=28,
-                fg_color=("#EFF6FF", "#1C2130"),
-                hover_color=("#DBEAFE", "#283046"),
-                text_color=("#1D4ED8", "#E5E7EB"),
+                fg_color=("#F1F5F9", "#36373E"),
+                hover_color=("#E2E8F0", "#42434B"),
+                text_color=("#0F172A", "#FFFFFF"),
                 font=ctk.CTkFont(weight="bold"),
                 border_width=1,
-                border_color=("#BFDBFE", "#2A324B"),
+                border_color=("#CBD5E1", "#4A4B53"),
                 command=lambda a=alias, d=info: self._edit_host(a, d)
             )
             btn_edit.pack(side="left", padx=3)
@@ -2216,12 +2541,12 @@ class MammouthControlCenter(ctk.CTk):
                 text="Delete",
                 width=65,
                 height=28,
-                fg_color=("#FEF2F2", "#2B191B"),
-                hover_color=("#FEE2E2", "#3D2024"),
+                fg_color=("#FEF2F2", "#3B1D22"),
+                hover_color=("#FEE2E2", "#4C242B"),
                 text_color=("#DC2626", "#F87171"),
                 font=ctk.CTkFont(weight="bold"),
                 border_width=1,
-                border_color=("#FECACA", "#48262C"),
+                border_color=("#FECACA", "#5C2B34"),
                 command=lambda a=alias: self._delete_host(a)
             )
             btn_del.pack(side="left", padx=3)
@@ -2295,50 +2620,50 @@ class MammouthControlCenter(ctk.CTk):
         scroll.pack(fill="both", expand=True, padx=15, pady=10)
 
         # 1. Network Settings Group
-        net_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        net_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
         net_group.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(net_group, text="🌐 Network & Server Binding", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+        ctk.CTkLabel(net_group, text="🌐 Network & Server Binding", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(anchor="w", padx=15, pady=(15, 10))
 
         f1 = ctk.CTkFrame(net_group, fg_color="transparent")
         f1.pack(fill="x", padx=15, pady=5)
-        ctk.CTkLabel(f1, text="Server Port:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
-        self.entry_port = ctk.CTkEntry(f1, width=120, fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
+        ctk.CTkLabel(f1, text="Server Port:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
+        self.entry_port = ctk.CTkEntry(f1, width=120, fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         self.entry_port.insert(0, str(self.config_data.get("server", {}).get("port", 8000)))
         self.entry_port.pack(side="left")
 
         f2 = ctk.CTkFrame(net_group, fg_color="transparent")
         f2.pack(fill="x", padx=15, pady=5)
-        ctk.CTkLabel(f2, text="Bind Address:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        ctk.CTkLabel(f2, text="Bind Address:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
         self.opt_host = ctk.CTkOptionMenu(
             f2,
             values=["127.0.0.1", "0.0.0.0"],
             width=120,
-            fg_color=("#F1F5F9", "#1F2029"),
-            button_color=("#E2E8F0", "#2A2B37"),
-            button_hover_color=("#CBD5E1", "#333544"),
-            text_color=("#0F172A", "#F3F4F6"),
-            dropdown_fg_color=("#FFFFFF", "#14151B"),
-            dropdown_text_color=("#0F172A", "#F3F4F6"),
-            dropdown_hover_color=("#F1F5F9", "#22242E")
+            fg_color=("#F1F5F9", "#2F2F33"),
+            button_color=("#E2E8F0", "#36373E"),
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
+            dropdown_fg_color=("#FFFFFF", "#242428"),
+            dropdown_text_color=("#0F172A", "#FFFFFF"),
+            dropdown_hover_color=("#F1F5F9", "#36373E")
         )
         self.opt_host.set(self.config_data.get("server", {}).get("host", "127.0.0.1"))
         self.opt_host.pack(side="left")
 
         f3 = ctk.CTkFrame(net_group, fg_color="transparent")
         f3.pack(fill="x", padx=15, pady=5)
-        ctk.CTkLabel(f3, text="Default Tunnel Mode:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        ctk.CTkLabel(f3, text="Default Tunnel Mode:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
         self.opt_tunnel_mode = ctk.CTkOptionMenu(
             f3,
             values=["Serveo (Public SSH Tunnel)", "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"],
-            width=180,
-            fg_color=("#F1F5F9", "#1F2029"),
-            button_color=("#E2E8F0", "#2A2B37"),
-            button_hover_color=("#CBD5E1", "#333544"),
-            text_color=("#0F172A", "#F3F4F6"),
-            dropdown_fg_color=("#FFFFFF", "#14151B"),
-            dropdown_text_color=("#0F172A", "#F3F4F6"),
-            dropdown_hover_color=("#F1F5F9", "#22242E"),
+            width=200,
+            fg_color=("#F1F5F9", "#2F2F33"),
+            button_color=("#E2E8F0", "#36373E"),
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
+            dropdown_fg_color=("#FFFFFF", "#242428"),
+            dropdown_text_color=("#0F172A", "#FFFFFF"),
+            dropdown_hover_color=("#F1F5F9", "#36373E"),
             command=self._on_settings_mode_changed
         )
         self.opt_tunnel_mode.set(self.config_data.get("server", {}).get("tunnel_mode", "Tailscale Funnel"))
@@ -2346,18 +2671,18 @@ class MammouthControlCenter(ctk.CTk):
 
         f4 = ctk.CTkFrame(net_group, fg_color="transparent")
         f4.pack(fill="x", padx=15, pady=5)
-        ctk.CTkLabel(f4, text="Default Route Path:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        ctk.CTkLabel(f4, text="Default Route Path:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
         self.opt_endpoint_path = ctk.CTkOptionMenu(
             f4,
             values=["/sse", "/mcp", "/messages", "/"],
             width=120,
-            fg_color=("#F1F5F9", "#1F2029"),
-            button_color=("#E2E8F0", "#2A2B37"),
-            button_hover_color=("#CBD5E1", "#333544"),
-            text_color=("#0F172A", "#F3F4F6"),
-            dropdown_fg_color=("#FFFFFF", "#14151B"),
-            dropdown_text_color=("#0F172A", "#F3F4F6"),
-            dropdown_hover_color=("#F1F5F9", "#22242E")
+            fg_color=("#F1F5F9", "#2F2F33"),
+            button_color=("#E2E8F0", "#36373E"),
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
+            dropdown_fg_color=("#FFFFFF", "#242428"),
+            dropdown_text_color=("#0F172A", "#FFFFFF"),
+            dropdown_hover_color=("#F1F5F9", "#36373E")
         )
         self.opt_endpoint_path.set(self.config_data.get("server", {}).get("endpoint_path", "/sse"))
         self.opt_endpoint_path.pack(side="left")
@@ -2365,14 +2690,14 @@ class MammouthControlCenter(ctk.CTk):
         # Cloudflare Binary Path
         f_cf = ctk.CTkFrame(net_group, fg_color="transparent")
         f_cf.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f_cf, text="Cloudflare Path:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        ctk.CTkLabel(f_cf, text="Cloudflare Path:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
         self.entry_cf_bin = ctk.CTkEntry(
             f_cf,
             width=280,
             placeholder_text="e.g. cloudflared.exe (auto-detected if blank)",
-            fg_color=("#F8FAFC", "#0D0E12"),
-            border_color=("#CBD5E1", "#22242E"),
-            text_color=("#0F172A", "#F3F4F6")
+            fg_color=("#F8FAFC", "#1C1C1F"),
+            border_color=("#CBD5E1", "#38393F"),
+            text_color=("#0F172A", "#FFFFFF")
         )
         saved_cf = self.config_data.get("server", {}).get("cloudflared_path", "")
         if saved_cf:
@@ -2388,11 +2713,11 @@ class MammouthControlCenter(ctk.CTk):
             text="📁 Browse",
             width=85,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._browse_cloudflared
         )
         btn_browse_cf.pack(side="left", padx=(0, 5))
@@ -2402,31 +2727,31 @@ class MammouthControlCenter(ctk.CTk):
             text="🔄 Detect",
             width=80,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._detect_cloudflared_in_settings
         )
         btn_detect_cf.pack(side="left")
 
         # 2. Authentication & Tokens Group (Secure by Default)
-        auth_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        auth_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
         auth_group.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(auth_group, text="🔒 Authentication & API Tokens (Secure by Default)", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+        ctk.CTkLabel(auth_group, text="🔒 Authentication & API Tokens (Secure by Default)", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(anchor="w", padx=15, pady=(15, 10))
 
         f5 = ctk.CTkFrame(auth_group, fg_color="transparent")
         f5.pack(fill="x", padx=15, pady=5)
         self.var_enforce_auth = ctk.BooleanVar(value=self.config_data.get("server", {}).get("enforce_auth", True))
-        sw_auth = ctk.CTkSwitch(f5, text="Require Bearer Token Authentication (Authorization Header)", variable=self.var_enforce_auth, font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#E5E7EB"), progress_color="#10B981")
+        sw_auth = ctk.CTkSwitch(f5, text="Require Bearer Token Authentication (Authorization Header)", variable=self.var_enforce_auth, font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#FFFFFF"), progress_color="#10B981")
         sw_auth.pack(side="left")
 
         f6 = ctk.CTkFrame(auth_group, fg_color="transparent")
         f6.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f6, text="Active Bearer Token:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
-        self.entry_token = ctk.CTkEntry(f6, width=280, show="*", fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
+        ctk.CTkLabel(f6, text="Active Bearer Token:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
+        self.entry_token = ctk.CTkEntry(f6, width=280, show="*", fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         tok_val = self.config_data.get("server", {}).get("api_token", "")
         if tok_val and tok_val.startswith("dpapi:"):
             decrypted = _decrypt_dpapi(tok_val)
@@ -2440,11 +2765,11 @@ class MammouthControlCenter(ctk.CTk):
             text="👁️",
             width=36,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._toggle_token_visibility
         )
         self.btn_show_token.pack(side="left", padx=(0, 5))
@@ -2454,11 +2779,11 @@ class MammouthControlCenter(ctk.CTk):
             text="📋 Copy Key",
             width=95,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=lambda: self._copy_to_clipboard(self.entry_token.get(), "Bearer Key")
         )
         self.btn_copy_tok.pack(side="left", padx=(0, 5))
@@ -2468,33 +2793,31 @@ class MammouthControlCenter(ctk.CTk):
             text="🎲 Generate",
             width=95,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._generate_new_token
         )
         btn_gen_tok.pack(side="left")
 
-        # Shell admin mode lives in Tab 2 (PowerShell & Background Daemons card).
-
         # 4. Workspace & Sandbox Security Group
-        ws_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        ws_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
         ws_group.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(ws_group, text="📁 Workspace & Sandboxing Security", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+        ctk.CTkLabel(ws_group, text="📁 Workspace & Sandboxing Security", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(anchor="w", padx=15, pady=(15, 10))
 
         f_ws1 = ctk.CTkFrame(ws_group, fg_color="transparent")
         f_ws1.pack(fill="x", padx=15, pady=5)
         self.var_sandbox = ctk.BooleanVar(value=self.config_data.get("server", {}).get("enforce_workspace_sandbox", True))
-        sw_sandbox = ctk.CTkSwitch(f_ws1, text="Enforce Workspace Sandbox (Restricts file access to ./workspace)", variable=self.var_sandbox, font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#E5E7EB"), progress_color="#10B981")
+        sw_sandbox = ctk.CTkSwitch(f_ws1, text="Enforce Workspace Sandbox (Restricts file access to ./workspace)", variable=self.var_sandbox, font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0F172A", "#FFFFFF"), progress_color="#10B981")
         sw_sandbox.pack(side="left")
 
         f_ws2 = ctk.CTkFrame(ws_group, fg_color="transparent")
         f_ws2.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f_ws2, text="Workspace Path:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
-        self.entry_workspace = ctk.CTkEntry(f_ws2, width=280, fg_color=("#F8FAFC", "#0D0E12"), border_color=("#CBD5E1", "#22242E"), text_color=("#0F172A", "#F3F4F6"))
+        ctk.CTkLabel(f_ws2, text="Workspace Path:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
+        self.entry_workspace = ctk.CTkEntry(f_ws2, width=280, fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         self.entry_workspace.insert(0, str(self.config_data.get("server", {}).get("workspace_root", "./workspace")))
         self.entry_workspace.pack(side="left", padx=(0, 5))
 
@@ -2503,20 +2826,20 @@ class MammouthControlCenter(ctk.CTk):
             text="📂 Browse",
             width=85,
             height=28,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._browse_workspace
         )
         btn_browse_ws.pack(side="left")
 
         # 5. LAN TLS Encryption Group
-        tls_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        tls_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
         tls_group.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(tls_group, text="🛡️ LAN HTTPS / TLS Encryption", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+        ctk.CTkLabel(tls_group, text="🛡️ LAN HTTPS / TLS Encryption", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(anchor="w", padx=15, pady=(15, 10))
 
         f_tls1 = ctk.CTkFrame(tls_group, fg_color="transparent")
         f_tls1.pack(fill="x", padx=15, pady=(5, 15))
@@ -2526,16 +2849,16 @@ class MammouthControlCenter(ctk.CTk):
             text="Enable Local HTTPS TLS (Uses auto-generated cert.pem if missing)",
             variable=self.var_enable_tls,
             font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=("#0F172A", "#E5E7EB"),
+            text_color=("#0F172A", "#FFFFFF"),
             progress_color="#10B981"
         )
         sw_tls.pack(side="left")
 
         # 6. Screen Capture & Vision Privacy Gate
-        vis_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        vis_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
         vis_group.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(vis_group, text="👁️ Vision & Desktop Screen Capture Privacy Gate", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+        ctk.CTkLabel(vis_group, text="👁️ Vision & Desktop Screen Capture Privacy Gate", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(anchor="w", padx=15, pady=(15, 10))
 
         f_vis1 = ctk.CTkFrame(vis_group, fg_color="transparent")
         f_vis1.pack(fill="x", padx=15, pady=5)
@@ -2545,7 +2868,7 @@ class MammouthControlCenter(ctk.CTk):
             text="Require User Consent before capturing screenshots (Privacy Shield)",
             variable=self.var_settings_screen_consent,
             font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=("#0F172A", "#E5E7EB"),
+            text_color=("#0F172A", "#FFFFFF"),
             progress_color="#F59E0B",
             command=self._on_settings_screen_consent_changed
         )
@@ -2567,10 +2890,10 @@ class MammouthControlCenter(ctk.CTk):
         btn_grant_session.pack(side="left")
 
         # 7. Google Drive Cloud Integration & Browser Login
-        gdrive_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        gdrive_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
         gdrive_group.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(gdrive_group, text="📁 Google Drive Cloud Integration & Browser Login", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+        ctk.CTkLabel(gdrive_group, text="📁 Google Drive Cloud Integration & Browser Login", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(anchor="w", padx=15, pady=(15, 10))
 
         # Status row
         f_gd_stat = ctk.CTkFrame(gdrive_group, fg_color="transparent")
@@ -2615,11 +2938,11 @@ class MammouthControlCenter(ctk.CTk):
             text="📂 Import credentials.json",
             width=180,
             height=30,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             command=self._on_gdrive_browse_credentials
         )
         btn_import_creds.pack(side="left", padx=(0, 8))
@@ -2629,12 +2952,12 @@ class MammouthControlCenter(ctk.CTk):
             text="🔌 Disconnect",
             width=100,
             height=30,
-            fg_color=("#FEF2F2", "#2B191B"),
-            hover_color=("#FEE2E2", "#3D2024"),
+            fg_color=("#FEF2F2", "#3B1D22"),
+            hover_color=("#FEE2E2", "#4D242B"),
             text_color=("#DC2626", "#F87171"),
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
-            border_color=("#FECACA", "#48262C"),
+            border_color=("#FECACA", "#5C2B34"),
             command=self._on_gdrive_disconnect
         )
         btn_disc_gd.pack(side="left")
@@ -2642,14 +2965,14 @@ class MammouthControlCenter(ctk.CTk):
         # Custom GCP OAuth Client Credentials (optional)
         f_gd_cid = ctk.CTkFrame(gdrive_group, fg_color="transparent")
         f_gd_cid.pack(fill="x", padx=15, pady=5)
-        ctk.CTkLabel(f_gd_cid, text="OAuth Client ID:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        ctk.CTkLabel(f_gd_cid, text="OAuth Client ID:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
         self.entry_gdrive_client_id = ctk.CTkEntry(
             f_gd_cid,
             width=320,
             placeholder_text="Optional: Google Cloud OAuth Client ID",
-            fg_color=("#F8FAFC", "#0D0E12"),
-            border_color=("#CBD5E1", "#22242E"),
-            text_color=("#0F172A", "#F3F4F6")
+            fg_color=("#F8FAFC", "#1C1C1F"),
+            border_color=("#CBD5E1", "#38393F"),
+            text_color=("#0F172A", "#FFFFFF")
         )
         saved_cid = self.config_data.get("modules", {}).get("google_drive", {}).get("client_id", "")
         if saved_cid:
@@ -2658,15 +2981,15 @@ class MammouthControlCenter(ctk.CTk):
 
         f_gd_csec = ctk.CTkFrame(gdrive_group, fg_color="transparent")
         f_gd_csec.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f_gd_csec, text="OAuth Client Secret:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        ctk.CTkLabel(f_gd_csec, text="OAuth Client Secret:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
         self.entry_gdrive_client_secret = ctk.CTkEntry(
             f_gd_csec,
             width=320,
             show="*",
             placeholder_text="Optional: Google Cloud Client Secret",
-            fg_color=("#F8FAFC", "#0D0E12"),
-            border_color=("#CBD5E1", "#22242E"),
-            text_color=("#0F172A", "#F3F4F6")
+            fg_color=("#F8FAFC", "#1C1C1F"),
+            border_color=("#CBD5E1", "#38393F"),
+            text_color=("#0F172A", "#FFFFFF")
         )
         saved_csec = self.config_data.get("modules", {}).get("google_drive", {}).get("client_secret", "")
         if saved_csec and saved_csec.startswith("dpapi:"):
@@ -2678,10 +3001,10 @@ class MammouthControlCenter(ctk.CTk):
         self.entry_gdrive_client_secret.pack(side="left", padx=(0, 8))
 
         # 8. In-App Browser & Mammouth.ai
-        browser_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        browser_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
         browser_group.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(browser_group, text="💬 In-App Browser & Mammouth.ai", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+        ctk.CTkLabel(browser_group, text="💬 In-App Browser & Mammouth.ai", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(anchor="w", padx=15, pady=(15, 10))
 
         f_br1 = ctk.CTkFrame(browser_group, fg_color="transparent")
         f_br1.pack(fill="x", padx=15, pady=5)
@@ -2691,30 +3014,30 @@ class MammouthControlCenter(ctk.CTk):
             text="Automatisch Mammouth AI Web-Tab öffnen wenn Server startet",
             variable=self.var_browser_auto_open,
             font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=("#0F172A", "#E5E7EB"),
+            text_color=("#0F172A", "#FFFFFF"),
             progress_color="#10B981"
         )
         sw_browser_auto.pack(side="left")
 
         f_br2 = ctk.CTkFrame(browser_group, fg_color="transparent")
         f_br2.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f_br2, text="Start-URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        ctk.CTkLabel(f_br2, text="Start-URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
         self.entry_browser_start_url = ctk.CTkEntry(
             f_br2,
             width=320,
-            fg_color=("#F8FAFC", "#0D0E12"),
-            border_color=("#CBD5E1", "#22242E"),
-            text_color=("#0F172A", "#F3F4F6")
+            fg_color=("#F8FAFC", "#1C1C1F"),
+            border_color=("#CBD5E1", "#38393F"),
+            text_color=("#0F172A", "#FFFFFF")
         )
         start_page_val = self.config_data.get("embedded_browser", {}).get("start_page", "https://mammouth.ai")
         self.entry_browser_start_url.insert(0, start_page_val)
         self.entry_browser_start_url.pack(side="left", padx=(0, 8))
 
         # 9. Software Updates
-        upd_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        upd_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
         upd_group.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(upd_group, text="🔄 Software Updates & Version", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+        ctk.CTkLabel(upd_group, text="🔄 Software Updates & Version", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(anchor="w", padx=15, pady=(15, 10))
 
         f_upd1 = ctk.CTkFrame(upd_group, fg_color="transparent")
         f_upd1.pack(fill="x", padx=15, pady=5)
@@ -2724,7 +3047,7 @@ class MammouthControlCenter(ctk.CTk):
             text="Automatisch beim Start nach Updates suchen (GitHub Releases)",
             variable=self.var_auto_check_updates,
             font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=("#0F172A", "#E5E7EB"),
+            text_color=("#0F172A", "#FFFFFF"),
             progress_color="#10B981"
         )
         sw_auto_upd.pack(side="left")
@@ -2737,11 +3060,11 @@ class MammouthControlCenter(ctk.CTk):
             text="🔍 Jetzt nach Updates suchen",
             width=220,
             height=30,
-            fg_color=("#F1F5F9", "#1E2028"),
-            hover_color=("#E2E8F0", "#282A36"),
-            text_color=("#0F172A", "#F3F4F6"),
+            fg_color=("#F1F5F9", "#36373E"),
+            hover_color=("#E2E8F0", "#42434B"),
+            text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
-            border_color=("#CBD5E1", "#2A2C38"),
+            border_color=("#CBD5E1", "#4A4B53"),
             font=ctk.CTkFont(weight="bold"),
             command=lambda: self._check_updates_async(manual=True)
         )
