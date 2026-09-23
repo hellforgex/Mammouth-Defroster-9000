@@ -1,6 +1,6 @@
 [project]
 name = "mammouth-defroster-9000"
-version = "0.3.2"
+version = "0.4.0"
 description = "Mammouth Defroster 9000: FastMCP Desktop Cockpit & Windows 11 DevOps Automation for Mammouth.ai"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,6 +17,9 @@ dependencies = [
     "pyautogui>=0.9.54",
     "mss>=9.0.0",
     "pystray>=0.19.5",
+    "pywebview>=5.0.0",
+    "pythonnet>=3.0.0",
+    "pyperclip>=1.8.2",
 ]
 
 [tool.setuptools.packages.find]

@@ -25,8 +25,13 @@ from starlette.responses import JSONResponse, Response, HTMLResponse, RedirectRe
 from starlette.routing import Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-# Fix sys.path for standalone bundled environment
-ROOT_DIR = Path(__file__).parent.resolve()
+# Fix sys.path and application root for standalone bundled environment
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.resolve()
+
+ROOT_DIR = BASE_DIR
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
@@ -154,7 +159,7 @@ from modules.google_drive import (
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.3.2): Sovereign Windows 11 Desktop Cockpit, Vision, Google Drive & Unreal Engine 5 Automation Platform.
+    Mammouth Defroster 9000 (v0.4.0): Sovereign Windows 11 Desktop Cockpit, Vision, Google Drive & Unreal Engine 5 Automation Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, Google Drive cloud integration, and Unreal Engine automation exclusively for Mammouth.ai.
     Always prioritize safety, sandboxing, and precision.
     """
@@ -371,7 +376,7 @@ register_active_tools()
 # ==========================================
 
 # Persistent log path for server operations
-log_path = Path(__file__).parent / "server.log"
+log_path = BASE_DIR / "server.log"
 
 _failed_ip_attempts: Dict[str, Dict[str, Any]] = {}
 MAX_LOCKOUT_ENTRIES = 1000
@@ -946,6 +951,8 @@ class SecurityAndAuthMiddleware:
                     headers.append((b"x-xss-protection", b"1; mode=block"))
                     headers.append((b"cache-control", b"no-store, no-cache, must-revalidate, private"))
                     headers.append((b"pragma", b"no-cache"))
+                    # Support Chromium Private Network Access (PNA) for in-app browser & local network
+                    headers.append((b"access-control-allow-private-network", b"true"))
                     if message.get("status") == 401:
                         headers.append((b"www-authenticate", b'Bearer error="unauthorized", resource_metadata="/.well-known/oauth-protected-resource"'))
                     message["headers"] = headers
@@ -1068,16 +1075,11 @@ def build_app(token: Optional[str] = None):
             CORSMiddleware,
             allow_origins=configured_origins,
             allow_origin_regex=r"^https://([a-zA-Z0-9-]+\.)?mammouth\.ai$|^http://(localhost|127\.0\.0\.1)(:\d+)?$",
-            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-            allow_headers=[
-                "Authorization",
-                "Content-Type",
-                "Accept",
-                "X-Request-ID",
-                "Origin",
-                "User-Agent",
-            ],
+            allow_methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"],
+            allow_headers=["*"],
+            expose_headers=["*"],
             allow_credentials=True,
+            allow_private_network=True,
         ),
         Middleware(SecurityAndAuthMiddleware, token=effective_token or "", enforce_auth=enforce_auth),
     ]

@@ -8,10 +8,12 @@
     "enable_tls": false,
     "ssl_certfile": "",
     "ssl_keyfile": "",
+    "auto_check_updates": true,
     "tunnel_mode": "Tailscale Funnel",
+
     "endpoint_path": "/sse",
     "auto_tunnel": false,
-    "auto_start_server": false,
+    "auto_start_server": true,
     "tailscale_path": "",
     "cloudflare_custom_url": "",
     "ngrok_custom_url": "",
@@ -63,5 +65,12 @@
     "google_drive": {
       "enabled": true
     }
+  },
+  "embedded_browser": {
+    "enabled": true,
+    "start_page": "https://mammouth.ai",
+    "auto_open_on_server_start": true,
+    "user_data_dir": "./data/browser_profile"
   }
 }
+

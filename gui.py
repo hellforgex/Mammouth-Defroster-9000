@@ -1,5 +1,16 @@
 import os
 import sys
+
+# Ensure Windows COM ApartmentState is STA before Tkinter or WebView2 initialization
+if sys.platform == "win32":
+    try:
+        import clr
+        clr.AddReference("System.Threading")
+        from System.Threading import Thread, ApartmentState
+        Thread.CurrentThread.SetApartmentState(ApartmentState.STA)
+    except Exception:
+        pass
+
 import re
 import json
 import time
@@ -11,6 +22,7 @@ import subprocess
 import webbrowser
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+
 
 # Ensure sys.stdout and sys.stderr are never None in frozen windowed binaries
 class SafeStream:
@@ -50,6 +62,9 @@ if (BASE_DIR / "modules").exists() and str(BASE_DIR / "modules") not in sys.path
 
 from config import load_config, save_config, get_lan_ip, generate_secure_token, _decrypt_dpapi, CONFIG_FILE
 from server import build_app, app
+from modules.embedded_browser import MammouthBrowserFrame, HAS_WEBVIEW2
+from modules.updater import check_for_update, download_and_verify_update, apply_update_and_restart
+
 
 def generate_self_signed_cert(cert_path: str, key_path: str, hostname: str = "localhost") -> bool:
     """Generate self-signed SSL certificate for local LAN development."""
@@ -200,7 +215,7 @@ ctk.set_appearance_mode(INITIAL_MODE)
 ctk.set_default_color_theme("dark-blue")
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.3.2"
+APP_VERSION = "v0.4.0"
 
 
 def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
@@ -295,6 +310,26 @@ def get_tailscale_public_domain(tailscale_path: str = r"C:\Program Files\Tailsca
     return None
 
 
+_REDACT_PATTERNS = (
+    (re.compile(r"mcp_at_[A-Za-z0-9_\-.=]+"), "mcp_at_[REDACTED]"),
+    (re.compile(r"mcp_rt_[A-Za-z0-9_\-.=]+"), "mcp_rt_[REDACTED]"),
+    (re.compile(r"\bmc_[A-Za-z0-9_\-.=]{8,}"), "mc_[REDACTED]"),
+    (re.compile(r"(?i)(refresh_token|access_token|id_token|api_token|api_key|token|code)=([^&\s\"']+)"), r"\1=[REDACTED]"),
+    (re.compile(r"(?i)(Authorization:\s*Bearer\s+)(\S+)"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)(Bearer\s+)([A-Za-z0-9_\-.=]{12,})"), r"\1[REDACTED]"),
+)
+
+
+def redact_secrets(text: str) -> str:
+    """Mask OAuth tokens, auth codes and Bearer headers in log output."""
+    if not text:
+        return text
+    out = str(text)
+    for pattern, repl in _REDACT_PATTERNS:
+        out = pattern.sub(repl, out)
+    return out
+
+
 class GuiLogHandler(logging.Handler):
     """Custom logging handler to route python/uvicorn logs directly to the GUI console."""
     def __init__(self, callback):
@@ -303,7 +338,7 @@ class GuiLogHandler(logging.Handler):
 
     def emit(self, record):
         try:
-            msg = self.format(record)
+            msg = redact_secrets(self.format(record))
             self.callback(msg)
         except Exception:
             pass
@@ -646,12 +681,17 @@ class MammouthControlCenter(ctk.CTk):
                 self.focus_force()
                 if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", False):
                     self.after(200, self._start_server)
+                if self.config_data.get("server", {}).get("auto_check_updates", True):
+                    self.after(2500, self._check_updates_async)
 
             self.after(350, finish_loading)
         else:
             self.deiconify()
             if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", False):
                 self.after(200, self._start_server)
+            if self.config_data.get("server", {}).get("auto_check_updates", True):
+                self.after(2500, self._check_updates_async)
+
 
     def _setup_logging(self):
         handler = GuiLogHandler(lambda msg: self.after(0, self._log, msg))
@@ -711,11 +751,24 @@ class MammouthControlCenter(ctk.CTk):
         right_box = ctk.CTkFrame(header, fg_color="transparent")
         right_box.pack(side="right", padx=15, pady=10)
 
-        # Quick Mammouth.ai Connect Button
-        btn_open_mammouth = ctk.CTkButton(
+        # Update Available Badge Button (Initially hidden)
+        self.btn_update_badge = ctk.CTkButton(
             right_box,
-            text="🌐 Mammouth",
-            width=100,
+            text="🔄 Update verfügbar",
+            width=140,
+            height=32,
+            fg_color=("#3B82F6", "#2563EB"),
+            hover_color=("#2563EB", "#1D4ED8"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._show_update_dialog
+        )
+
+        # Quick Mammouth.ai Connect Button
+        self.btn_open_mammouth = ctk.CTkButton(
+            right_box,
+            text="💬 Mammouth AI",
+            width=120,
             height=32,
             fg_color=("#F1F5F9", "#1E2028"),
             hover_color=("#E2E8F0", "#282A36"),
@@ -723,9 +776,9 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
             border_color=("#CBD5E1", "#2A2C38"),
-            command=lambda: webbrowser.open("https://mammouth.ai")
+            command=self._switch_to_mammouth_tab
         )
-        btn_open_mammouth.pack(side="left", padx=(0, 8))
+        self.btn_open_mammouth.pack(side="left", padx=(0, 8))
 
         # Theme Switcher
         theme_box = ctk.CTkFrame(right_box, fg_color="transparent")
@@ -785,7 +838,8 @@ class MammouthControlCenter(ctk.CTk):
             segmented_button_unselected_color=("#E2E8F0", "#1C1D24"),
             segmented_button_unselected_hover_color=("#CBD5E1", "#282A36"),
             segmented_button_fg_color=("#E2E8F0", "#14151B"),
-            text_color=("#0F172A", "#F3F4F6")
+            text_color=("#0F172A", "#F3F4F6"),
+            command=self._on_tab_changed
         )
         self.tabview.pack(fill="both", expand=True, padx=15, pady=10)
 
@@ -797,14 +851,137 @@ class MammouthControlCenter(ctk.CTk):
             )
 
         self.tab_dashboard = self.tabview.add("📊 Dashboard & Live Console")
+        self.tab_mammouth = self.tabview.add("💬 Mammouth AI Web")
         self.tab_skills = self.tabview.add("⚡ Modular Capabilities (11 Modules)")
         self.tab_hosts = self.tabview.add("🔑 SSH Fleet & PuTTY Manager")
         self.tab_settings = self.tabview.add("⚙️ Security & Settings")
 
         self._setup_dashboard_tab()
+        self._setup_mammouth_tab()
         self._setup_skills_tab()
         self._setup_hosts_tab()
         self._setup_settings_tab()
+
+    def _setup_mammouth_tab(self):
+        browser_cfg = self.config_data.get("embedded_browser", {})
+        start_url = browser_cfg.get("start_page", "https://mammouth.ai")
+        user_data_dir = browser_cfg.get("user_data_dir", "./data/browser_profile")
+        if not os.path.isabs(user_data_dir):
+            user_data_dir = str(BASE_DIR / user_data_dir)
+
+        self.mammouth_browser = MammouthBrowserFrame(
+            self.tab_mammouth,
+            get_mcp_url_cb=self._calculate_active_endpoint_url_with_token,
+            start_url=start_url,
+            profile_dir=user_data_dir
+        )
+        self.mammouth_browser.pack(fill="both", expand=True)
+
+    def _switch_to_mammouth_tab(self):
+        self.tabview.set("💬 Mammouth AI Web")
+        self._on_tab_changed()
+
+    def _on_tab_changed(self):
+        current = self.tabview.get()
+        if hasattr(self, "mammouth_browser"):
+            if current == "💬 Mammouth AI Web":
+                self.mammouth_browser.ensure_initialized()
+                self.mammouth_browser.set_tab_visible(True)
+            else:
+                self.mammouth_browser.set_tab_visible(False)
+
+    def _check_updates_async(self, manual: bool = False):
+        def worker():
+            try:
+                update_info = check_for_update(APP_VERSION)
+                if update_info:
+                    self.after(0, self._on_update_found, update_info)
+                elif manual:
+                    self.after(0, lambda: messagebox.showinfo("Up to Date", f"Mammouth Defroster 9000 ist auf dem neuesten Stand ({APP_VERSION})!", parent=self))
+            except Exception as e:
+                if manual:
+                    self.after(0, lambda: messagebox.showwarning("Update Check", f"Update-Prüfung fehlgeschlagen: {e}", parent=self))
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
+    def _on_update_found(self, update_info: Dict[str, Any]):
+        self.available_update = update_info
+        ver = update_info.get("version", "vNeu")
+        self.btn_update_badge.configure(text=f"🔄 Update: {ver}")
+        self.btn_update_badge.pack(side="left", padx=(0, 8))
+        self._log(f"[UPDATER] Eine neuere Version ist verfügbar: {ver} (Aktuell: {APP_VERSION})")
+        if hasattr(self, "update_banner") and hasattr(self, "lbl_update_banner_text") and hasattr(self, "endpoint_card"):
+            self.lbl_update_banner_text.configure(
+                text=f"🎉 Neues Update verfügbar: {ver} (Installiert: {APP_VERSION}) — Schneller & stabiler mit Mammouth.ai!"
+            )
+            self.update_banner.pack(fill="x", padx=10, pady=(10, 0), before=self.endpoint_card)
+
+    def _show_update_dialog(self):
+        if not getattr(self, "available_update", None):
+            self._check_updates_async(manual=True)
+            return
+
+        upd = self.available_update
+        ver = upd.get("version", "")
+        name = upd.get("name", ver)
+        notes = upd.get("body", "Keine Release Notes verfügbar.")
+        size_mb = round(upd.get("zip_size", 0) / (1024 * 1024), 1)
+
+        dlg = ctk.CTkToplevel(self)
+        dlg.title("Update verfügbar")
+        dlg.geometry("520x480")
+        dlg.resizable(False, False)
+        dlg.transient(self)
+        dlg.grab_set()
+
+        ctk.CTkLabel(dlg, text="🎉 Neues Update verfügbar!", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(pady=(20, 4))
+        ctk.CTkLabel(dlg, text=f"Version {ver} (ca. {size_mb} MB) • Aktuell installiert: {APP_VERSION}", font=ctk.CTkFont(size=12), text_color=("#64748B", "#94A3B8")).pack(pady=(0, 10))
+
+        tb = ctk.CTkTextbox(dlg, width=470, height=200, corner_radius=8, font=ctk.CTkFont(size=11))
+        tb.pack(padx=20, pady=5)
+        tb.insert("1.0", notes)
+        tb.configure(state="disabled")
+
+        lbl_progress = ctk.CTkLabel(dlg, text="", font=ctk.CTkFont(size=11), text_color=("#64748B", "#94A3B8"))
+        lbl_progress.pack(pady=(5, 0))
+
+        progress_bar = ctk.CTkProgressBar(dlg, width=470)
+        progress_bar.set(0)
+
+        btn_box = ctk.CTkFrame(dlg, fg_color="transparent")
+        btn_box.pack(fill="x", padx=20, pady=15)
+
+        def start_download():
+            btn_install.configure(state="disabled")
+            progress_bar.pack(pady=5)
+
+            def dl_worker():
+                def prog_cb(pct, msg):
+                    self.after(0, lambda: [progress_bar.set(pct), lbl_progress.configure(text=msg)])
+
+                success, result = download_and_verify_update(upd, progress_cb=prog_cb)
+                if not success:
+                    self.after(0, lambda: messagebox.showerror("Update Fehler", f"Download oder Verifikation fehlgeschlagen:\n\n{result}", parent=dlg))
+                    self.after(0, lambda: btn_install.configure(state="normal"))
+                else:
+                    self.after(0, lambda: lbl_progress.configure(text="Installiere Update & starte neu..."))
+                    target_dir = str(BASE_DIR)
+                    pid = os.getpid()
+                    applied = apply_update_and_restart(result, target_dir, pid)
+                    if applied:
+                        self.after(500, self._on_close)
+                    else:
+                        self.after(0, lambda: messagebox.showerror("Update Fehler", "Konnte Updater-Skript nicht starten.", parent=dlg))
+
+            threading.Thread(target=dl_worker, daemon=True).start()
+
+        btn_cancel = ctk.CTkButton(btn_box, text="Später", width=100, fg_color=("#E2E8F0", "#1C1D24"), text_color=("#0F172A", "#F3F4F6"), command=dlg.destroy)
+        btn_cancel.pack(side="left")
+
+        btn_install = ctk.CTkButton(btn_box, text="⬇️ Jetzt herunterladen & installieren", font=ctk.CTkFont(weight="bold"), fg_color=("#059669", "#10B981"), hover_color=("#047857", "#059669"), command=start_download)
+        btn_install.pack(side="right")
+
 
     def _on_theme_changed(self, choice: str):
         ctk.set_appearance_mode(choice)
@@ -817,9 +994,52 @@ class MammouthControlCenter(ctk.CTk):
     # TAB 1: DASHBOARD & LIVE LOGS
     # ---------------------------------------------------------
     def _setup_dashboard_tab(self):
+        # Update Notice Banner (packed dynamically when update is available)
+        self.update_banner = ctk.CTkFrame(
+            self.tab_dashboard,
+            fg_color=("#ECFDF5", "#064E3B"),
+            border_width=1,
+            border_color=("#10B981", "#059669"),
+            corner_radius=8
+        )
+        self.lbl_update_banner_text = ctk.CTkLabel(
+            self.update_banner,
+            text="",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=("#065F46", "#A7F3D0")
+        )
+        self.lbl_update_banner_text.pack(side="left", padx=(15, 10), pady=10)
+
+        btn_banner_dismiss = ctk.CTkButton(
+            self.update_banner,
+            text="✕",
+            width=28,
+            height=28,
+            fg_color="transparent",
+            hover_color=("#D1FAE5", "#047857"),
+            text_color=("#065F46", "#A7F3D0"),
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=lambda: self.update_banner.pack_forget()
+        )
+        btn_banner_dismiss.pack(side="right", padx=(4, 10), pady=8)
+
+        btn_banner_action = ctk.CTkButton(
+            self.update_banner,
+            text="⬇️ Jetzt aktualisieren",
+            width=150,
+            height=28,
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._show_update_dialog
+        )
+        btn_banner_action.pack(side="right", padx=(10, 4), pady=8)
+
         # 1. Endpoint Card
         card = ctk.CTkFrame(self.tab_dashboard, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
         card.pack(fill="x", padx=10, pady=(10, 8))
+        self.endpoint_card = card
 
         # Mode Selection Bar inside Dashboard
         mode_bar = ctk.CTkFrame(card, fg_color="transparent")
@@ -930,7 +1150,7 @@ class MammouthControlCenter(ctk.CTk):
             text_color=("#0F172A", "#F3F4F6"),
             border_width=1,
             border_color=("#CBD5E1", "#2A2C38"),
-            command=lambda: self._copy_to_clipboard(self.lbl_public_url.cget("text"), "Public URL")
+            command=lambda: self._copy_to_clipboard(self._calculate_active_endpoint_url_with_token(), "Public URL (+ Token)")
         )
         btn_copy_pub.pack(side="left", padx=3)
 
@@ -1305,6 +1525,20 @@ class MammouthControlCenter(ctk.CTk):
         self._refresh_all_endpoint_labels()
         self._log(f"Switched endpoint route path to: {choice}")
 
+    def _calculate_active_endpoint_url_with_token(self) -> str:
+        base_url = self._calculate_active_endpoint_url()
+        cfg = self.config_data.get("server", {})
+        if cfg.get("enforce_auth", True):
+            token = cfg.get("api_token", "")
+            if token and token.startswith("dpapi:"):
+                decrypted = _decrypt_dpapi(token)
+                if decrypted and not decrypted.startswith("dpapi:"):
+                    token = decrypted
+            if token:
+                delimiter = "&" if "?" in base_url else "?"
+                return f"{base_url}{delimiter}token={token}"
+        return base_url
+
     def _calculate_active_endpoint_url(self) -> str:
         cfg = self.config_data.get("server", {})
         mode = cfg.get("tunnel_mode", "Tailscale Funnel")
@@ -1444,6 +1678,7 @@ class MammouthControlCenter(ctk.CTk):
 
     def _log(self, message: str):
         clean_msg = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', str(message))
+        clean_msg = redact_secrets(clean_msg)
         timestamp = time.strftime("[%H:%M:%S]")
         self.log_textbox.insert("end", f"{timestamp} {clean_msg}\n")
         self.log_textbox.see("end")
@@ -1597,6 +1832,29 @@ class MammouthControlCenter(ctk.CTk):
                     text_color="#F59E0B" if self.var_screen_req_consent.get() else "#10B981"
                 )
                 self.lbl_consent_badge.pack(side="left", padx=10, pady=6)
+
+            elif key == "shell_processes":
+                sub_opts = ctk.CTkFrame(left, fg_color=("#F1F5F9", "#1A1B23"), corner_radius=6)
+                sub_opts.pack(fill="x", pady=(8, 0))
+                self.var_admin_shell = ctk.BooleanVar(value=self.config_data.get("server", {}).get("allow_admin_shell", False))
+                sw_admin_shell = ctk.CTkSwitch(
+                    sub_opts,
+                    text="⚡ Admin / Modifizierend (Vollzugriff)" if self.var_admin_shell.get() else "🔒 Nur Diagnose & Read-Only",
+                    variable=self.var_admin_shell,
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color=("#0F172A", "#E5E7EB"),
+                    progress_color="#EF4444",
+                    command=self._on_admin_shell_toggle
+                )
+                sw_admin_shell.pack(side="left", padx=10, pady=6)
+                self.sw_admin_shell = sw_admin_shell
+                self.lbl_admin_shell_hint = ctk.CTkLabel(
+                    sub_opts,
+                    text="Get-*/ipconfig only  vs  Set-*/Remove-*/sc/schtasks",
+                    font=ctk.CTkFont(size=11),
+                    text_color=("#64748B", "#9CA3AF")
+                )
+                self.lbl_admin_shell_hint.pack(side="left", padx=10, pady=6)
 
             elif key == "google_drive":
                 sub_opts = ctk.CTkFrame(left, fg_color=("#F1F5F9", "#1A1B23"), corner_radius=6)
@@ -1753,6 +2011,9 @@ class MammouthControlCenter(ctk.CTk):
 
         if hasattr(self, "var_screen_req_consent"):
             self.config_data.setdefault("modules", {}).setdefault("screen_capture", {})["require_consent"] = self.var_screen_req_consent.get()
+
+        if hasattr(self, "var_admin_shell"):
+            self.config_data.setdefault("server", {})["allow_admin_shell"] = self.var_admin_shell.get()
 
         save_config(self.config_data)
         self._log("Updated module configuration in config.json.")
@@ -2216,25 +2477,7 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_gen_tok.pack(side="left")
 
-        # 3. Shell Execution & Administrative Permissions (Defense-in-Depth)
-        shell_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
-        shell_group.pack(fill="x", pady=6)
-
-        ctk.CTkLabel(shell_group, text="💻 Shell & Execution Permissions", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
-
-        f_sh1 = ctk.CTkFrame(shell_group, fg_color="transparent")
-        f_sh1.pack(fill="x", padx=15, pady=(5, 15))
-        self.var_admin_shell = ctk.BooleanVar(value=self.config_data.get("server", {}).get("allow_admin_shell", False))
-        sw_admin_shell = ctk.CTkSwitch(
-            f_sh1,
-            text="Allow Administrative Shell Execution (Set-*, New-*, Remove-*, sc, schtasks)",
-            variable=self.var_admin_shell,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=("#0F172A", "#E5E7EB"),
-            progress_color="#EF4444",
-            command=self._on_admin_shell_toggle
-        )
-        sw_admin_shell.pack(side="left")
+        # Shell admin mode lives in Tab 2 (PowerShell & Background Daemons card).
 
         # 4. Workspace & Sandbox Security Group
         ws_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
@@ -2434,6 +2677,76 @@ class MammouthControlCenter(ctk.CTk):
             self.entry_gdrive_client_secret.insert(0, saved_csec)
         self.entry_gdrive_client_secret.pack(side="left", padx=(0, 8))
 
+        # 8. In-App Browser & Mammouth.ai
+        browser_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        browser_group.pack(fill="x", pady=6)
+
+        ctk.CTkLabel(browser_group, text="💬 In-App Browser & Mammouth.ai", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+
+        f_br1 = ctk.CTkFrame(browser_group, fg_color="transparent")
+        f_br1.pack(fill="x", padx=15, pady=5)
+        self.var_browser_auto_open = ctk.BooleanVar(value=self.config_data.get("embedded_browser", {}).get("auto_open_on_server_start", True))
+        sw_browser_auto = ctk.CTkSwitch(
+            f_br1,
+            text="Automatisch Mammouth AI Web-Tab öffnen wenn Server startet",
+            variable=self.var_browser_auto_open,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=("#0F172A", "#E5E7EB"),
+            progress_color="#10B981"
+        )
+        sw_browser_auto.pack(side="left")
+
+        f_br2 = ctk.CTkFrame(browser_group, fg_color="transparent")
+        f_br2.pack(fill="x", padx=15, pady=(5, 15))
+        ctk.CTkLabel(f_br2, text="Start-URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#E5E7EB")).pack(side="left")
+        self.entry_browser_start_url = ctk.CTkEntry(
+            f_br2,
+            width=320,
+            fg_color=("#F8FAFC", "#0D0E12"),
+            border_color=("#CBD5E1", "#22242E"),
+            text_color=("#0F172A", "#F3F4F6")
+        )
+        start_page_val = self.config_data.get("embedded_browser", {}).get("start_page", "https://mammouth.ai")
+        self.entry_browser_start_url.insert(0, start_page_val)
+        self.entry_browser_start_url.pack(side="left", padx=(0, 8))
+
+        # 9. Software Updates
+        upd_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#14151B"), border_width=1, border_color=("#CBD5E1", "#22242E"), corner_radius=10)
+        upd_group.pack(fill="x", pady=6)
+
+        ctk.CTkLabel(upd_group, text="🔄 Software Updates & Version", font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0F172A", "#F3F4F6")).pack(anchor="w", padx=15, pady=(15, 10))
+
+        f_upd1 = ctk.CTkFrame(upd_group, fg_color="transparent")
+        f_upd1.pack(fill="x", padx=15, pady=5)
+        self.var_auto_check_updates = ctk.BooleanVar(value=self.config_data.get("server", {}).get("auto_check_updates", True))
+        sw_auto_upd = ctk.CTkSwitch(
+            f_upd1,
+            text="Automatisch beim Start nach Updates suchen (GitHub Releases)",
+            variable=self.var_auto_check_updates,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=("#0F172A", "#E5E7EB"),
+            progress_color="#10B981"
+        )
+        sw_auto_upd.pack(side="left")
+
+        f_upd2 = ctk.CTkFrame(upd_group, fg_color="transparent")
+        f_upd2.pack(fill="x", padx=15, pady=(5, 15))
+        ctk.CTkLabel(f_upd2, text=f"Installierte Version: {APP_VERSION}", width=220, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#64748B", "#94A3B8")).pack(side="left")
+        btn_manual_upd = ctk.CTkButton(
+            f_upd2,
+            text="🔍 Jetzt nach Updates suchen",
+            width=220,
+            height=30,
+            fg_color=("#F1F5F9", "#1E2028"),
+            hover_color=("#E2E8F0", "#282A36"),
+            text_color=("#0F172A", "#F3F4F6"),
+            border_width=1,
+            border_color=("#CBD5E1", "#2A2C38"),
+            font=ctk.CTkFont(weight="bold"),
+            command=lambda: self._check_updates_async(manual=True)
+        )
+        btn_manual_upd.pack(side="left")
+
         # Save Settings Button
         btn_save_all = ctk.CTkButton(
             scroll,
@@ -2495,6 +2808,10 @@ class MammouthControlCenter(ctk.CTk):
             )
             if not confirm:
                 self.var_admin_shell.set(False)
+        if hasattr(self, "sw_admin_shell"):
+            self.sw_admin_shell.configure(
+                text="⚡ Admin / Modifizierend (Vollzugriff)" if self.var_admin_shell.get() else "🔒 Nur Diagnose & Read-Only"
+            )
 
     def _on_settings_mode_changed(self, choice: str):
         self.dash_mode_menu.set(choice)
@@ -2529,7 +2846,8 @@ class MammouthControlCenter(ctk.CTk):
             if decrypted and not decrypted.startswith("dpapi:"):
                 raw_tok = decrypted
         self.config_data["server"]["api_token"] = raw_tok
-        self.config_data["server"]["allow_admin_shell"] = self.var_admin_shell.get()
+        if hasattr(self, "var_admin_shell"):
+            self.config_data["server"]["allow_admin_shell"] = self.var_admin_shell.get()
         self.config_data["server"]["enable_tls"] = self.var_enable_tls.get()
         self.config_data["server"]["enforce_workspace_sandbox"] = self.var_sandbox.get()
         self.config_data["server"]["workspace_root"] = self.entry_workspace.get().strip() or "./workspace"
@@ -2549,6 +2867,17 @@ class MammouthControlCenter(ctk.CTk):
             if gd_csec and not gd_csec.startswith("dpapi:"):
                 gd_csec = _encrypt_dpapi(gd_csec)
             self.config_data.setdefault("modules", {}).setdefault("google_drive", {})["client_secret"] = gd_csec
+
+        if hasattr(self, "var_browser_auto_open"):
+            self.config_data.setdefault("embedded_browser", {})["auto_open_on_server_start"] = self.var_browser_auto_open.get()
+        if hasattr(self, "entry_browser_start_url"):
+            new_url = self.entry_browser_start_url.get().strip() or "https://mammouth.ai"
+            self.config_data.setdefault("embedded_browser", {})["start_page"] = new_url
+            if hasattr(self, "mammouth_browser"):
+                self.mammouth_browser.start_url = new_url
+
+        if hasattr(self, "var_auto_check_updates"):
+            self.config_data.setdefault("server", {})["auto_check_updates"] = self.var_auto_check_updates.get()
 
         save_config(self.config_data)
         self.dash_mode_menu.set(self.opt_tunnel_mode.get())
@@ -2733,7 +3062,10 @@ class MammouthControlCenter(ctk.CTk):
             self.btn_toggle_server.configure(text="⏹ STOP SERVER", fg_color="#EF4444", hover_color="#DC2626")
             self._refresh_all_endpoint_labels()
             self._log(f"Server is LIVE! Active Endpoint: {self._calculate_active_endpoint_url()}")
+            if self.config_data.get("embedded_browser", {}).get("auto_open_on_server_start", True):
+                self.after(500, self._switch_to_mammouth_tab)
         except Exception as e:
+
             self._log(f"[ERROR] Failed to start server: {e}")
             messagebox.showerror("Start Error", f"Failed to start server:\n\n{e}", parent=self)
 

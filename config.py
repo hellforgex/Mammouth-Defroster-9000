@@ -21,7 +21,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "tunnel_mode": "Tailscale Funnel",  # Options: "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"
         "endpoint_path": "/sse",           # Options: "/sse", "/mcp", "/messages", "/"
         "auto_tunnel": False,              # Safe by Default: Opt-in for public exposure
-        "auto_start_server": False,        # If true, GUI automatically launches server on open
+        "auto_start_server": True,         # Default in v0.4.0: Native MCP server active on launch
         "api_token": "",                   # Generated securely on initial run
         "enforce_auth": True,              # Secure by Default: Require Bearer token
         "allowed_origins": [
@@ -43,9 +43,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "enable_tls": False,               # Opt-in for LAN HTTPS
         "registration_token": "",          # Optional: If set, only clients with this token in Authorization header can register OAuth clients
         "ssl_certfile": "",
-        "ssl_keyfile": ""
+        "ssl_keyfile": "",
+        "auto_check_updates": True         # Automatically check for updates on startup
     },
     "modules": {
+
         "memory": {
             "enabled": True,
             "name": "Persistent Long-Term Memory",
@@ -102,8 +104,15 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "name": "Google Drive Cloud Storage",
             "description": "Browse, search, read, download, and upload files to Google Drive with OAuth2/Service Account auth."
         }
+    },
+    "embedded_browser": {
+        "enabled": True,
+        "start_page": "https://mammouth.ai",
+        "auto_open_on_server_start": True,
+        "user_data_dir": "./data/browser_profile"
     }
 }
+
 
 import base64
 
@@ -192,8 +201,11 @@ def load_config() -> Dict[str, Any]:
                             cfg["modules"][mod_key].update(mod_val)
                         else:
                             cfg["modules"][mod_key] = mod_val
+                if "embedded_browser" in user_cfg:
+                    cfg["embedded_browser"].update(user_cfg["embedded_browser"])
         except Exception:
             pass
+
 
     # Only generate a token if explicitly empty / missing on disk
     if not cfg["server"].get("api_token") and not token_was_present:

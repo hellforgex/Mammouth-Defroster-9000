@@ -29,6 +29,8 @@ class TestGuiStartServerRegression(unittest.TestCase):
         app._calculate_active_endpoint_url = MagicMock(return_value="http://127.0.0.1:8080/sse")
         app.status_badge = MagicMock()
         app.btn_toggle_server = MagicMock()
+        app.after = MagicMock()
+        app._switch_to_mammouth_tab = MagicMock()
 
         with patch("gui.threading.Thread") as mock_thread, \
              patch("uvicorn.Config") as mock_uvicorn_cfg, \

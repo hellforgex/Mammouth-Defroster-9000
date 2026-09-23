@@ -57,18 +57,24 @@ copy "CHANGELOG.md" "dist\MammouthDefroster9000\CHANGELOG.md" /Y
 copy "README.md" "dist\MammouthDefroster9000\README.md" /Y
 if exist "RELEASE_NOTES.md" copy "RELEASE_NOTES.md" "dist\MammouthDefroster9000\" /Y
 if exist "LICENSE" copy "LICENSE" "dist\MammouthDefroster9000\LICENSE" /Y
+copy "install.ps1" "dist\MammouthDefroster9000\" /Y
 if exist "cloudflared.exe" copy "cloudflared.exe" "dist\MammouthDefroster9000\" /Y
 
 echo ===================================================
-echo   Packaging release ZIP: MammouthDefroster9000-v0.3.2-windows-x64.zip
+echo   Packaging release ZIP: MammouthDefroster9000-v0.4.0-windows-x64.zip
 echo ===================================================
-powershell -Command "Compress-Archive -Path 'dist\MammouthDefroster9000\*' -DestinationPath '..\MammouthDefroster9000-v0.3.2-windows-x64.zip' -Force"
+powershell -Command "Compress-Archive -Path 'dist\MammouthDefroster9000\*' -DestinationPath '..\MammouthDefroster9000-v0.4.0-windows-x64.zip' -Force"
+%PYTHON_EXE% -c "import hashlib; h = hashlib.sha256(open('..\MammouthDefroster9000-v0.4.0-windows-x64.zip', 'rb').read()).hexdigest().lower(); open('..\MammouthDefroster9000-v0.4.0-windows-x64.zip.sha256', 'w').write(h + '\n')"
 
 echo ===================================================
-echo   Syncing to unpacked test directory: ..\MammouthDefroster9000-v0.3.2
+echo   Syncing to unpacked test directory: ..\MammouthDefroster9000-v0.4.0
 echo ===================================================
-if not exist "..\MammouthDefroster9000-v0.3.2" mkdir "..\MammouthDefroster9000-v0.3.2"
-robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.3.2" /E /NP /NFL /NDL /R:0 /W:0 /PURGE
+if not exist "..\MammouthDefroster9000-v0.4.0" mkdir "..\MammouthDefroster9000-v0.4.0"
+robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.4.0" /E /NP /NFL /NDL /R:0 /W:0 /XF config.json oauth.db tasks.db memory.db hosts.json credentials.json /XD data workspace
+
+if not exist "..\releases" mkdir "..\releases"
+copy "..\MammouthDefroster9000-v0.4.0-windows-x64.zip" "..\releases\" /Y
+copy "..\MammouthDefroster9000-v0.4.0-windows-x64.zip.sha256" "..\releases\" /Y
 
 echo ===================================================
 echo   Build completed successfully! Output: dist\MammouthDefroster9000

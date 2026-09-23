@@ -24,6 +24,7 @@ server.log
 
 # Workspace & User Data
 workspace/
+data/
 process_logs/
 stunt car racer/
 test_screen.png
@@ -34,3 +35,4 @@ dist/
 MammouthDefroster9000-v*/
 *.exe
 *.zip
+*.sha256
