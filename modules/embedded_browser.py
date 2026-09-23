@@ -168,25 +168,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         )
         self.btn_home.pack(side="left", padx=2)
 
-        # URL / Status Indicator Pill
-        self.url_pill = ctk.CTkFrame(
-            self.toolbar,
-            fg_color=("#F8FAFC", "#1C1C1F"),
-            border_width=1,
-            border_color=("#CBD5E1", "#323338"),
-            corner_radius=6
-        )
-        self.url_pill.pack(side="left", fill="x", expand=True, padx=8, pady=7)
-
-        self.lbl_url = ctk.CTkLabel(
-            self.url_pill,
-            text="🔒 https://mammouth.ai",
-            font=ctk.CTkFont(size=11),
-            text_color=("#64748B", "#8E909A")
-        )
-        self.lbl_url.pack(side="left", padx=10)
-
-        # Right Action Buttons: Screenshot & External Browser
+        # Right Action Buttons: Screenshot & External Browser (URL bar removed for clean desktop look)
         btn_action_box = ctk.CTkFrame(self.toolbar, fg_color="transparent")
         btn_action_box.pack(side="right", padx=(4, 8), pady=6)
 
@@ -308,12 +290,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             except Exception:
                 pass
 
-            # Update URL pill when navigation completes
+            # Update URL pill when navigation completes (if present)
             def _on_nav_completed(sender, args):
                 try:
                     current_uri = str(self.edge.webview.Source) if hasattr(self.edge.webview, "Source") else self.start_url
-                    if current_uri:
-                        self.after(0, lambda u=current_uri: self.lbl_url.configure(text=f"🔒 {u}"))
+                    if current_uri and hasattr(self, "lbl_url"):
+                        self.after(0, lambda u=current_uri: self.lbl_url.configure(text=f"🔒 {u}") if hasattr(self, "lbl_url") else None)
                 except Exception:
                     pass
 
