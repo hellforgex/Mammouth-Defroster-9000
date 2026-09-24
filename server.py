@@ -612,12 +612,11 @@ def _refresh_oauth_token(refresh_token: str) -> Optional[Dict[str, Any]]:
 def _verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") -> bool:
     if not code_challenge or not code_verifier:
         return False
+    # Enforce S256 only per RFC 7636 / OAuth 2.1 best practices (plain is deprecated and insecure)
     if method == "S256":
         digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
         computed = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
         return secrets.compare_digest(computed, code_challenge.rstrip("="))
-    elif method == "plain":
-        return secrets.compare_digest(code_verifier, code_challenge)
     return False
 
 
@@ -651,7 +650,7 @@ async def oauth_authorization_server(request: Request):
         "registration_endpoint": f"{base_url}/oauth/register",
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
-        "code_challenge_methods_supported": ["S256", "plain"],
+        "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic", "none"]
     })
 
@@ -965,8 +964,10 @@ class SecurityAndAuthMiddleware:
                 if message["type"] == "http.response.start":
                     headers = list(message.get("headers", []))
                     headers.append((b"x-content-type-options", b"nosniff"))
-                    # Don't send X-Frame-Options: DENY for OAuth consent screen to allow modal/dialog embedding
-                    if not clean_path.startswith("/oauth/"):
+                    # Anti-clickjacking: DENY by default; for OAuth consent endpoints, restrict framing to mammouth.ai and self
+                    if clean_path.startswith("/oauth/"):
+                        headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai"))
+                    else:
                         headers.append((b"x-frame-options", b"DENY"))
                     headers.append((b"referrer-policy", b"no-referrer"))
                     headers.append((b"x-xss-protection", b"1; mode=block"))

@@ -309,7 +309,7 @@ class TestInstallerPowerShellSyntax(unittest.TestCase):
 
 
 class TestOAuthHardening(unittest.TestCase):
-    def test_verify_pkce_supports_s256_and_plain(self):
+    def test_verify_pkce_enforces_s256_and_rejects_plain(self):
         from server import _verify_pkce
         import hashlib
         import base64
@@ -321,10 +321,9 @@ class TestOAuthHardening(unittest.TestCase):
         self.assertTrue(_verify_pkce(verifier, challenge_s256, "S256"))
         self.assertFalse(_verify_pkce("wrong_verifier", challenge_s256, "S256"))
 
-        # Plain test
+        # Plain test must be strictly rejected per RFC 7636 / OAuth 2.1 hardening
         challenge_plain = "plain_secret_code_12345"
-        self.assertTrue(_verify_pkce(challenge_plain, challenge_plain, "plain"))
-        self.assertFalse(_verify_pkce("wrong_plain", challenge_plain, "plain"))
+        self.assertFalse(_verify_pkce(challenge_plain, challenge_plain, "plain"))
 
     def test_get_base_url_https_for_public_tunnels(self):
         from server import _get_base_url
@@ -342,6 +341,45 @@ class TestOAuthHardening(unittest.TestCase):
         req = Request(scope)
         base = _get_base_url(req)
         self.assertEqual(base, "https://desktop-sdm42jr.taila2d74a.ts.net")
+
+    def test_anti_clickjacking_headers(self):
+        from server import SecurityAndAuthMiddleware
+        from starlette.responses import PlainTextResponse
+
+        async def dummy_app(scope, receive, send):
+            response = PlainTextResponse("OK")
+            await response(scope, receive, send)
+
+        middleware = SecurityAndAuthMiddleware(dummy_app, token="mc_test", enforce_auth=False)
+
+        # Test OAuth route gets CSP frame-ancestors and no X-Frame-Options: DENY
+        sent_messages_oauth = []
+        async def send_oauth(msg):
+            sent_messages_oauth.append(msg)
+
+        scope_oauth = {"type": "http", "method": "GET", "path": "/oauth/authorize", "headers": []}
+        import asyncio
+        asyncio.run(middleware(scope_oauth, None, send_oauth))
+
+        start_msg = [m for m in sent_messages_oauth if m["type"] == "http.response.start"][0]
+        headers_oauth = dict(start_msg["headers"])
+        self.assertIn(b"content-security-policy", headers_oauth)
+        self.assertIn(b"frame-ancestors 'self' https://mammouth.ai", headers_oauth[b"content-security-policy"])
+        self.assertNotIn(b"x-frame-options", headers_oauth)
+
+        # Test MCP route gets X-Frame-Options: DENY
+        sent_messages_mcp = []
+        async def send_mcp(msg):
+            sent_messages_mcp.append(msg)
+
+        scope_mcp = {"type": "http", "method": "GET", "path": "/mcp", "headers": []}
+        asyncio.run(middleware(scope_mcp, None, send_mcp))
+
+        start_msg_mcp = [m for m in sent_messages_mcp if m["type"] == "http.response.start"][0]
+        headers_mcp = dict(start_msg_mcp["headers"])
+        self.assertEqual(headers_mcp.get(b"x-frame-options"), b"DENY")
+
+
 class TestEmbeddedBrowserFeatures(unittest.TestCase):
     def test_is_download_uri_detection(self):
         from modules.embedded_browser import _is_download_uri
@@ -354,11 +392,24 @@ class TestEmbeddedBrowserFeatures(unittest.TestCase):
         self.assertTrue(_is_download_uri("https://mammouth.ai/api/export_chat"))
         self.assertTrue(_is_download_uri("https://mammouth.ai/v1/artifacts/download?id=99"))
 
-        # Regular web pages
         self.assertFalse(_is_download_uri("https://mammouth.ai"))
         self.assertFalse(_is_download_uri("https://mammouth.ai/chat/conv_123"))
         self.assertFalse(_is_download_uri("https://accounts.google.com/o/oauth2/v2/auth"))
         self.assertFalse(_is_download_uri(""))
+
+    def test_is_trusted_browser_origin(self):
+        from modules.embedded_browser import _is_trusted_browser_origin
+
+        self.assertTrue(_is_trusted_browser_origin("https://mammouth.ai/chat"))
+        self.assertTrue(_is_trusted_browser_origin("https://app.mammouth.ai"))
+        self.assertTrue(_is_trusted_browser_origin("http://127.0.0.1:8000/oauth/authorize"))
+        self.assertTrue(_is_trusted_browser_origin("http://localhost:8000"))
+        self.assertTrue(_is_trusted_browser_origin("blob:https://mammouth.ai/123"))
+
+        # Untrusted external origins
+        self.assertFalse(_is_trusted_browser_origin("https://malicious-site.com"))
+        self.assertFalse(_is_trusted_browser_origin("https://attacker.org/steal"))
+        self.assertFalse(_is_trusted_browser_origin(""))
 
     def test_embedded_browser_download_settings(self):
         from webview.platforms import edgechromium

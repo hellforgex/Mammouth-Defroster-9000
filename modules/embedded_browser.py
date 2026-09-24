@@ -64,6 +64,22 @@ def _is_download_uri(uri: str) -> bool:
     return False
 
 
+def _is_trusted_browser_origin(uri: str) -> bool:
+    """Verifies if the requested URI originates from trusted domains (Mammouth.ai, localhost, 127.0.0.1)."""
+    if not uri:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(uri)
+        domain = (parsed.hostname or "").lower()
+        if not domain:
+            # Allow blob/data schemes if needed
+            return uri.lower().startswith("blob:") or uri.lower().startswith("data:")
+        trusted_domains = ("mammouth.ai", "localhost", "127.0.0.1")
+        return any(domain == td or domain.endswith("." + td) for td in trusted_domains)
+    except Exception:
+        return False
+
+
 class MammouthBrowserFrame(ctk.CTkFrame):
     """Modern embedded browser widget hosting Mammouth.ai inside the Cockpit."""
 
@@ -330,13 +346,17 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                         core.Settings.IsGeneralAutofillEnabled = True
                         core.Settings.IsPasswordAutosaveEnabled = True
 
-                        # 3. Allow clipboard, downloads, and storage permissions
+                        # 3. Allow clipboard, downloads, and storage permissions only for trusted origins
                         try:
                             from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState
                             def _on_permission(s, a):
                                 try:
-                                    a.set_State(CoreWebView2PermissionState.Allow)
-                                    a.set_SavesInProfile(True)
+                                    req_uri = str(getattr(a, "Uri", "") or "")
+                                    if _is_trusted_browser_origin(req_uri):
+                                        a.set_State(CoreWebView2PermissionState.Allow)
+                                        a.set_SavesInProfile(True)
+                                    else:
+                                        a.set_State(CoreWebView2PermissionState.Deny)
                                 except Exception:
                                     pass
                             core.PermissionRequested += _on_permission
@@ -459,7 +479,16 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
                         try:
                             from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState
-                            popup_core.PermissionRequested += lambda ps, pa: pa.set_State(CoreWebView2PermissionState.Allow)
+                            def _on_popup_permission(ps, pa):
+                                try:
+                                    req_uri = str(getattr(pa, "Uri", "") or "")
+                                    if _is_trusted_browser_origin(req_uri):
+                                        pa.set_State(CoreWebView2PermissionState.Allow)
+                                    else:
+                                        pa.set_State(CoreWebView2PermissionState.Deny)
+                                except Exception:
+                                    pass
+                            popup_core.PermissionRequested += _on_popup_permission
                         except Exception:
                             pass
 

@@ -22,6 +22,7 @@ storage_state.json
 *.log
 server.log
 GEMINI.md
+AGENTS.md
 
 # Workspace & User Data
 workspace/
