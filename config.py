@@ -3,8 +3,11 @@ import copy
 import socket
 import secrets
 import sys
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+
+logger = logging.getLogger("config")
 
 if getattr(sys, "frozen", False):
     BASE_DIR = Path(sys.executable).parent.resolve()
@@ -133,7 +136,8 @@ def _encrypt_dpapi(data_str: str) -> str:
         data_bytes = data_str.encode('utf-8')
         encrypted = win32crypt.CryptProtectData(data_bytes, "Mammouth_Token", None, None, None, 0)
         return "dpapi:" + base64.b64encode(encrypted).decode('ascii')
-    except Exception:
+    except Exception as ex:
+        logger.warning(f"DPAPI encryption error: {ex}")
         return data_str
 
 
@@ -150,7 +154,8 @@ def _decrypt_dpapi(encrypted_str: str) -> str:
         raw_bytes = base64.b64decode(raw_b64.encode('ascii'))
         decrypted = win32crypt.CryptUnprotectData(raw_bytes, None, None, None, 0)[1]
         return decrypted.decode('utf-8')
-    except Exception:
+    except Exception as ex:
+        logger.warning(f"DPAPI decryption error: {ex}")
         return encrypted_str
 
 
@@ -167,7 +172,8 @@ def get_lan_ip() -> str:
         ip = s.getsockname()[0]
         s.close()
         return ip
-    except Exception:
+    except Exception as ex:
+        logger.debug(f"Local LAN IP auto-detection fallback to 127.0.0.1: {ex}")
         return "127.0.0.1"
 
 
@@ -203,8 +209,8 @@ def load_config() -> Dict[str, Any]:
                             cfg["modules"][mod_key] = mod_val
                 if "embedded_browser" in user_cfg:
                     cfg["embedded_browser"].update(user_cfg["embedded_browser"])
-        except Exception:
-            pass
+        except Exception as ex:
+            logger.error(f"Failed to read/parse configuration from {CONFIG_FILE}: {ex}")
 
 
     # Only generate a token if explicitly empty / missing on disk

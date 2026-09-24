@@ -58,8 +58,6 @@ except ImportError:
 
 from config import load_config
 
-MCP_API_TOKEN = ""
-
 # Import modular capabilities
 from modules.memory import memory_save, memory_recall, memory_get, memory_delete, memory_list
 from modules.tasks_kanban import task_create, task_update, task_list, task_delete
@@ -186,16 +184,13 @@ def require_module(mod_name: str):
 
 
 @mcp.tool()
-def local_exec_command(command: str, cwd: str = r"D:\Ai-Workdir", timeout: int = 600) -> dict:
-    """Run a shell command on this Windows host, scoped to the workdir.
+def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
+    """Run a shell command on this Windows host, scoped to the configured workspace root.
 
     Executes the command via cmd.exe /c and captures stdout, stderr, and exit code.
-    The cwd is whitelisted to only allow directories under D:\\Ai-Workdir.
+    The cwd is whitelisted to only allow directories under the configured workspace root.
     Commands are validated against the same security blocklist as powershell_exec/cmd_exec.
     """
-    import os as _os
-    import subprocess as _sp
-
     # --- Security Gate: validate command against shell blocklist (C-2 fix) ---
     try:
         from modules.shell_processes import _validate_shell_command
@@ -215,20 +210,23 @@ def local_exec_command(command: str, cwd: str = r"D:\Ai-Workdir", timeout: int =
             "error": str(ex)
         }
 
-    # --- cwd whitelist: only allow paths under D:\Ai-Workdir ---
-    workdir_root = _os.path.realpath(r"D:\Ai-Workdir")
-    resolved_cwd = _os.path.realpath(_os.path.abspath(cwd))
+    # --- Dynamic cwd whitelist: read from config with D:\Ai-Workdir fallback ---
+    cfg = load_config()
+    raw_root = cfg.get("server", {}).get("workspace_root") or r"D:\Ai-Workdir"
+    workdir_root = os.path.realpath(os.path.abspath(raw_root))
+    target_cwd = cwd if cwd and cwd.strip() else workdir_root
+    resolved_cwd = os.path.realpath(os.path.abspath(target_cwd))
 
-    if not (resolved_cwd == workdir_root or resolved_cwd.startswith(workdir_root + _os.sep)):
+    if not (resolved_cwd == workdir_root or resolved_cwd.startswith(workdir_root + os.sep)):
         return {
             "stdout": "",
-            "stderr": f"Security: cwd '{cwd}' resolves to '{resolved_cwd}' which is outside the allowed workdir '{workdir_root}'.",
+            "stderr": f"Security: cwd '{cwd}' resolves to '{resolved_cwd}' which is outside the allowed workspace '{workdir_root}'.",
             "exit_code": -1,
-            "error": "cwd not in D:\\Ai-Workdir scope"
+            "error": f"cwd not in {workdir_root} scope"
         }
 
     try:
-        proc = _sp.run(
+        proc = subprocess.run(
             clean_command,
             shell=True,
             cwd=resolved_cwd,
@@ -239,23 +237,23 @@ def local_exec_command(command: str, cwd: str = r"D:\Ai-Workdir", timeout: int =
             errors="replace"
         )
         return {
-            "stdout": proc.stdout,
-            "stderr": proc.stderr,
-            "exit_code": proc.returncode
+            "stdout": proc.stdout or "",
+            "stderr": proc.stderr or "",
+            "exit_code": proc.returncode,
+            "error": None
         }
-    except _sp.TimeoutExpired:
+    except subprocess.TimeoutExpired:
         return {
             "stdout": "",
-            "stderr": f"Command timed out after {timeout}s",
+            "stderr": f"Command timed out after {timeout} seconds.",
             "exit_code": -1,
-            "error": f"Timeout after {timeout}s"
+            "error": f"TimeoutExpired({timeout}s)"
         }
-    except Exception as exc:
+    except Exception as ex:
         return {
             "stdout": "",
-            "stderr": str(exc),
+            "stderr": str(ex),
             "exit_code": -1,
-            "error": str(exc)
         }
 
 
