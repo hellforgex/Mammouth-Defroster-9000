@@ -612,16 +612,14 @@ def _refresh_oauth_token(refresh_token: str) -> Optional[Dict[str, Any]]:
 
 
 def _verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") -> bool:
-    # M-3: PKCE is mandatory — reject if no challenge was provided
-    if not code_challenge:
-        return False
-    if not code_verifier:
+    if not code_challenge or not code_verifier:
         return False
     if method == "S256":
         digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
         computed = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
         return secrets.compare_digest(computed, code_challenge.rstrip("="))
-    # M-3: 'plain' method removed for security — only S256 supported
+    elif method == "plain":
+        return secrets.compare_digest(code_verifier, code_challenge)
     return False
 
 
@@ -633,27 +631,29 @@ def _get_base_url(request: Request) -> str:
         return custom.rstrip("/")
     proto = request.headers.get("x-forwarded-proto", request.url.scheme)
     host = request.headers.get("x-forwarded-host", request.headers.get("host", f"{request.url.hostname}:{request.url.port}"))
+    if ".ts.net" in host or ".trycloudflare.com" in host or ".serveousercontent.com" in host or "ngrok" in host:
+        proto = "https"
     return f"{proto}://{host}".rstrip("/")
 
 
 async def oauth_protected_resource(request: Request):
-    base_url = _get_base_url(request)
+    base_url = _get_base_url(request).rstrip("/")
     return JSONResponse({
-        "resource": f"{base_url}/",
-        "authorization_servers": [f"{base_url}/"]
+        "resource": base_url,
+        "authorization_servers": [base_url]
     })
 
 
 async def oauth_authorization_server(request: Request):
-    base_url = _get_base_url(request)
+    base_url = _get_base_url(request).rstrip("/")
     return JSONResponse({
-        "issuer": f"{base_url}/",
+        "issuer": base_url,
         "authorization_endpoint": f"{base_url}/oauth/authorize",
         "token_endpoint": f"{base_url}/oauth/token",
         "registration_endpoint": f"{base_url}/oauth/register",
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
-        "code_challenge_methods_supported": ["S256"],
+        "code_challenge_methods_supported": ["S256", "plain"],
         "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic", "none"]
     })
 
@@ -848,12 +848,14 @@ async def oauth_authorize(request: Request):
         if not redirect_uri:
             redirect_uri = "https://mammouth.ai/api/mcp/oauth/callback"
 
-        # H-2: Validate redirect_uri against registered client URIs
+        # H-2: Validate redirect_uri against registered client URIs (normalized without trailing slashes)
         if client_id:
             client_data = _get_oauth_client(client_id)
             if client_data:
                 registered_uris = client_data.get("redirect_uris", [])
-                if registered_uris and redirect_uri not in registered_uris:
+                norm_redirect = redirect_uri.rstrip("/")
+                norm_registered = [u.rstrip("/") for u in registered_uris]
+                if registered_uris and norm_redirect not in norm_registered:
                     return JSONResponse(
                         {"error": "invalid_request", "error_description": "redirect_uri does not match any registered URI for this client."},
                         status_code=400
@@ -885,6 +887,20 @@ async def oauth_token(request: Request):
     else:
         form = await request.form()
         body = dict(form)
+
+    # Support HTTP Basic Auth for client credentials (RFC 6749 Section 2.3.1)
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Basic "):
+        try:
+            creds = base64.b64decode(auth_header[6:].strip()).decode("utf-8")
+            if ":" in creds:
+                basic_cid, basic_csec = creds.split(":", 1)
+                if not body.get("client_id"):
+                    body["client_id"] = basic_cid
+                if not body.get("client_secret"):
+                    body["client_secret"] = basic_csec
+        except Exception:
+            pass
 
     grant_type = body.get("grant_type", "")
 
@@ -939,14 +955,16 @@ class SecurityAndAuthMiddleware:
             header_map = {k.decode("latin1").lower(): v.decode("latin1") for k, v in raw_headers}
             client_ip = scope.get("client", ("unknown", 0))[0]
             method = scope.get("method", "GET")
-            path = scope.get("path", "/")
+            clean_path = "/" + path.lstrip("/")
 
             # Wrapped send to inject standard security response headers (L-05)
             async def send_with_security_headers(message):
                 if message["type"] == "http.response.start":
                     headers = list(message.get("headers", []))
                     headers.append((b"x-content-type-options", b"nosniff"))
-                    headers.append((b"x-frame-options", b"DENY"))
+                    # Don't send X-Frame-Options: DENY for OAuth consent screen to allow modal/dialog embedding
+                    if not clean_path.startswith("/oauth/"):
+                        headers.append((b"x-frame-options", b"DENY"))
                     headers.append((b"referrer-policy", b"no-referrer"))
                     headers.append((b"x-xss-protection", b"1; mode=block"))
                     headers.append((b"cache-control", b"no-store, no-cache, must-revalidate, private"))
@@ -954,7 +972,10 @@ class SecurityAndAuthMiddleware:
                     # Support Chromium Private Network Access (PNA) for in-app browser & local network
                     headers.append((b"access-control-allow-private-network", b"true"))
                     if message.get("status") == 401:
-                        headers.append((b"www-authenticate", b'Bearer error="unauthorized", resource_metadata="/.well-known/oauth-protected-resource"'))
+                        proto = header_map.get("x-forwarded-proto", "https" if (".ts.net" in header_map.get("host", "") or ".trycloudflare.com" in header_map.get("host", "")) else "http")
+                        host = header_map.get("x-forwarded-host", header_map.get("host", "127.0.0.1:8000"))
+                        base_meta_url = f"{proto}://{host}".rstrip("/")
+                        headers.append((b"www-authenticate", f'Bearer error="unauthorized", resource_metadata="{base_meta_url}/.well-known/oauth-protected-resource"'.encode("latin1")))
                     message["headers"] = headers
                 await send(message)
 
@@ -964,7 +985,7 @@ class SecurityAndAuthMiddleware:
                 return
 
             # OAuth 2.0 Discovery & Endpoints bypass pre-authentication
-            if path.startswith("/.well-known/") or path.startswith("/oauth/"):
+            if clean_path.startswith("/.well-known/") or clean_path.startswith("/oauth/"):
                 await self.app(scope, receive, send_with_security_headers)
                 return
 

@@ -276,12 +276,41 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             except Exception:
                 pass
 
-            # Update URL pill when navigation completes (if present)
+            def _setup_core_webview2(sender, args):
+                try:
+                    target_wv = sender if hasattr(sender, "CoreWebView2") else self.edge.webview
+                    if hasattr(target_wv, "CoreWebView2") and target_wv.CoreWebView2:
+                        core = target_wv.CoreWebView2
+                        # 1. Standard Edge desktop User-Agent to avoid Google/Cloudflare "disallowed_useragent" or bot challenges
+                        core.Settings.UserAgent = (
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
+                        )
+                        # 2. Replace NewWindowRequested handler to support popup OAuth flows properly
+                        try:
+                            core.NewWindowRequested -= self.edge.on_new_window_request
+                        except Exception:
+                            pass
+                        core.NewWindowRequested += self._on_new_window_requested
+                except Exception:
+                    pass
+
+            try:
+                if self.edge.webview.CoreWebView2 is not None:
+                    _setup_core_webview2(self.edge.webview, None)
+                else:
+                    self.edge.webview.CoreWebView2InitializationCompleted += _setup_core_webview2
+            except Exception:
+                pass
+
+            # Update URL pill when navigation completes and handle auto-recovery
             def _on_nav_completed(sender, args):
                 try:
                     current_uri = str(self.edge.webview.Source) if hasattr(self.edge.webview, "Source") else self.start_url
                     if current_uri and hasattr(self, "lbl_url"):
                         self.after(0, lambda u=current_uri: self.lbl_url.configure(text=f"🔒 {u}") if hasattr(self, "lbl_url") else None)
+                    # Automatically redirect stuck OAuth callbacks or errors back to Mammouth home
+                    if "/api/auth/callback" in current_uri or "/api/mcp/oauth/callback" in current_uri or "mcp_error" in current_uri:
+                        self.after(800, lambda: self.edge.load_url(self.start_url))
                 except Exception:
                     pass
 
@@ -295,6 +324,86 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             global _INIT_ERROR
             _INIT_ERROR = str(e)
             self._show_fallback_ui()
+
+    def _on_new_window_requested(self, sender, args):
+        """Handles window.open requests (e.g. Google Login, GitHub OAuth, Mammouth MCP Consent)
+        in a native popup window preserving window.opener and sharing authentication cookies."""
+        try:
+            uri = str(args.Uri)
+            is_auth_or_app = (
+                "mammouth.ai" in uri
+                or "accounts.google.com" in uri
+                or "github.com/login" in uri
+                or "appleid.apple.com" in uri
+                or "oauth" in uri.lower()
+                or "auth" in uri.lower()
+                or "login" in uri.lower()
+                or "signin" in uri.lower()
+                or ".ts.net" in uri
+                or "127.0.0.1" in uri
+                or "localhost" in uri
+            )
+
+            if not is_auth_or_app and uri.startswith("http"):
+                args.set_Handled(True)
+                webbrowser.open(uri)
+                return
+
+            from System.Windows.Forms import Form, DockStyle, FormStartPosition
+            from Microsoft.Web.WebView2.WinForms import WebView2
+
+            deferral = args.GetDeferral()
+
+            popup_form = Form()
+            popup_form.Text = "Mammouth — Login & Autorisierung"
+            popup_form.Width = 620
+            popup_form.Height = 720
+            popup_form.StartPosition = FormStartPosition.CenterScreen
+
+            popup_wv = WebView2()
+            popup_wv.Dock = DockStyle.Fill
+            popup_form.Controls.Add(popup_wv)
+
+            def _on_popup_ready(s, a):
+                try:
+                    if hasattr(popup_wv, "CoreWebView2") and popup_wv.CoreWebView2:
+                        popup_wv.CoreWebView2.Settings.UserAgent = (
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
+                        )
+                        def _on_close_req(cs, ca):
+                            popup_form.Close()
+                        popup_wv.CoreWebView2.WindowCloseRequested += _on_close_req
+
+                    args.set_NewWindow(popup_wv.CoreWebView2)
+                    deferral.Complete()
+                    popup_form.Show()
+                except Exception:
+                    try:
+                        deferral.Complete()
+                    except Exception:
+                        pass
+
+            popup_wv.CoreWebView2InitializationCompleted += _on_popup_ready
+            popup_wv.EnsureCoreWebView2Async(sender.Environment)
+
+            def _on_form_closed(s, a):
+                try:
+                    deferral.Complete()
+                except Exception:
+                    pass
+                try:
+                    popup_wv.Dispose()
+                except Exception:
+                    pass
+            popup_form.FormClosed += _on_form_closed
+
+        except Exception as e:
+            try:
+                args.set_Handled(True)
+                if hasattr(self, "edge") and self.edge:
+                    self.edge.load_url(str(args.Uri))
+            except Exception:
+                pass
 
     def _on_viewport_resize(self, event):
         """Resizes the Win32 WebView2 control to match the viewport container."""

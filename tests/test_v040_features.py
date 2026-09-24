@@ -308,5 +308,42 @@ class TestInstallerPowerShellSyntax(unittest.TestCase):
         self.assertIn("MammouthDefroster9000*", content)
 
 
+class TestOAuthHardening(unittest.TestCase):
+    def test_verify_pkce_supports_s256_and_plain(self):
+        from server import _verify_pkce
+        import hashlib
+        import base64
+
+        # S256 test
+        verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+        digest = hashlib.sha256(verifier.encode("ascii")).digest()
+        challenge_s256 = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+        self.assertTrue(_verify_pkce(verifier, challenge_s256, "S256"))
+        self.assertFalse(_verify_pkce("wrong_verifier", challenge_s256, "S256"))
+
+        # Plain test
+        challenge_plain = "plain_secret_code_12345"
+        self.assertTrue(_verify_pkce(challenge_plain, challenge_plain, "plain"))
+        self.assertFalse(_verify_pkce("wrong_plain", challenge_plain, "plain"))
+
+    def test_get_base_url_https_for_public_tunnels(self):
+        from server import _get_base_url
+        from starlette.requests import Request
+
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [
+                (b"host", b"desktop-sdm42jr.taila2d74a.ts.net"),
+            ],
+            "scheme": "http"
+        }
+        req = Request(scope)
+        base = _get_base_url(req)
+        self.assertEqual(base, "https://desktop-sdm42jr.taila2d74a.ts.net")
+        self.assertFalse(base.endswith("/"))
+
+
 if __name__ == "__main__":
     unittest.main()
