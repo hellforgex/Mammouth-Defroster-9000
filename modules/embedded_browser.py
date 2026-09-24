@@ -78,44 +78,32 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         self._build_ui()
 
     def _build_ui(self):
-        # 1. Navigation & Utility Toolbar
+        # 1. Sleek, Borderless Navigation Bar (Blends seamlessly with the Cockpit theme)
         self.toolbar = ctk.CTkFrame(
             self,
-            height=46,
-            corner_radius=8,
-            fg_color=("#FFFFFF", "#242428"),
-            border_width=1,
-            border_color=("#CBD5E1", "#38393F")
+            height=32,
+            corner_radius=0,
+            fg_color=("#FFFFFF", "#202124"),
+            border_width=0
         )
-        self.toolbar.pack(fill="x", padx=6, pady=(4, 6))
-
-        # Brand / Title Label
-        title_box = ctk.CTkFrame(self.toolbar, fg_color="transparent")
-        title_box.pack(side="left", padx=(10, 8), pady=6)
-
-        ctk.CTkLabel(
-            title_box,
-            text="🦣 Mammouth.ai",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=("#0F172A", "#FFFFFF")
-        ).pack(side="left")
+        self.toolbar.pack(fill="x", padx=0, pady=0)
 
         # Nav Buttons: Back, Forward, Reload, Home
         btn_nav_box = ctk.CTkFrame(self.toolbar, fg_color="transparent")
-        btn_nav_box.pack(side="left", padx=4, pady=6)
+        btn_nav_box.pack(side="left", padx=8, pady=3)
 
         self.btn_back = ctk.CTkButton(
             btn_nav_box,
             text="◀",
-            width=30,
-            height=28,
-            corner_radius=6,
-            fg_color=("#F1F5F9", "#36373E"),
-            hover_color=("#E2E8F0", "#42434B"),
+            width=28,
+            height=24,
+            corner_radius=4,
+            fg_color=("#F1F5F9", "#2F2F33"),
+            hover_color=("#E2E8F0", "#38393F"),
             text_color=("#0F172A", "#FFFFFF"),
-            font=ctk.CTkFont(size=11, weight="bold"),
+            font=ctk.CTkFont(size=10, weight="bold"),
             border_width=1,
-            border_color=("#CBD5E1", "#4A4B53"),
+            border_color=("#CBD5E1", "#3E4048"),
             command=self.go_back
         )
         self.btn_back.pack(side="left", padx=2)
@@ -123,15 +111,15 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         self.btn_forward = ctk.CTkButton(
             btn_nav_box,
             text="▶",
-            width=30,
-            height=28,
-            corner_radius=6,
-            fg_color=("#F1F5F9", "#36373E"),
-            hover_color=("#E2E8F0", "#42434B"),
+            width=28,
+            height=24,
+            corner_radius=4,
+            fg_color=("#F1F5F9", "#2F2F33"),
+            hover_color=("#E2E8F0", "#38393F"),
             text_color=("#0F172A", "#FFFFFF"),
-            font=ctk.CTkFont(size=11, weight="bold"),
+            font=ctk.CTkFont(size=10, weight="bold"),
             border_width=1,
-            border_color=("#CBD5E1", "#4A4B53"),
+            border_color=("#CBD5E1", "#3E4048"),
             command=self.go_forward
         )
         self.btn_forward.pack(side="left", padx=2)
@@ -139,15 +127,15 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         self.btn_reload = ctk.CTkButton(
             btn_nav_box,
             text="🔄",
-            width=30,
-            height=28,
-            corner_radius=6,
-            fg_color=("#F1F5F9", "#36373E"),
-            hover_color=("#E2E8F0", "#42434B"),
+            width=28,
+            height=24,
+            corner_radius=4,
+            fg_color=("#F1F5F9", "#2F2F33"),
+            hover_color=("#E2E8F0", "#38393F"),
             text_color=("#0F172A", "#FFFFFF"),
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=11),
             border_width=1,
-            border_color=("#CBD5E1", "#4A4B53"),
+            border_color=("#CBD5E1", "#3E4048"),
             command=self.reload
         )
         self.btn_reload.pack(side="left", padx=2)
@@ -155,30 +143,30 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         self.btn_home = ctk.CTkButton(
             btn_nav_box,
             text="🏠",
-            width=30,
-            height=28,
-            corner_radius=6,
-            fg_color=("#F1F5F9", "#36373E"),
-            hover_color=("#E2E8F0", "#42434B"),
+            width=28,
+            height=24,
+            corner_radius=4,
+            fg_color=("#F1F5F9", "#2F2F33"),
+            hover_color=("#E2E8F0", "#38393F"),
             text_color=("#0F172A", "#FFFFFF"),
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=11),
             border_width=1,
-            border_color=("#CBD5E1", "#4A4B53"),
+            border_color=("#CBD5E1", "#3E4048"),
             command=self.go_home
         )
         self.btn_home.pack(side="left", padx=2)
 
-        # Right Action Buttons: Screenshot & External Browser (URL bar removed for clean desktop look)
+        # Right Action Buttons: External Browser
         btn_action_box = ctk.CTkFrame(self.toolbar, fg_color="transparent")
-        btn_action_box.pack(side="right", padx=(4, 8), pady=6)
+        btn_action_box.pack(side="right", padx=8, pady=3)
 
-        # Retain btn_copy_mcp for programmatic access, but do not pack into WebApp view
+        # Retain btn_copy_mcp and btn_screenshot for API/test compatibility without duplicate UI packing
         self.btn_copy_mcp = ctk.CTkButton(
             btn_action_box,
             text="📋 Copy MCP URL",
             width=120,
-            height=28,
-            corner_radius=6,
+            height=24,
+            corner_radius=4,
             fg_color=("#059669", "#10B981"),
             hover_color=("#047857", "#059669"),
             text_color="#FFFFFF",
@@ -190,41 +178,39 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             btn_action_box,
             text="📸 Screenshot (Ctrl+V)",
             width=165,
-            height=28,
-            corner_radius=6,
+            height=24,
+            corner_radius=4,
             fg_color=("#059669", "#10B981"),
             hover_color=("#047857", "#059669"),
             text_color="#FFFFFF",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=11, weight="bold"),
             command=self._take_screenshot
         )
-        self.btn_screenshot.pack(side="left", padx=(0, 6))
 
         self.btn_ext_browser = ctk.CTkButton(
             btn_action_box,
             text="🌐 In Browser öffnen",
             width=135,
-            height=28,
-            corner_radius=6,
-            fg_color=("#F1F5F9", "#36373E"),
-            hover_color=("#E2E8F0", "#42434B"),
+            height=24,
+            corner_radius=4,
+            fg_color=("#F1F5F9", "#2F2F33"),
+            hover_color=("#E2E8F0", "#38393F"),
             text_color=("#0F172A", "#FFFFFF"),
             font=ctk.CTkFont(size=11, weight="bold"),
             border_width=1,
-            border_color=("#CBD5E1", "#4A4B53"),
+            border_color=("#CBD5E1", "#3E4048"),
             command=lambda: webbrowser.open(self.start_url)
         )
-        self.btn_ext_browser.pack(side="left")
+        self.btn_ext_browser.pack(side="right")
 
-        # 2. Viewport Frame for hosting Edge WebView2
+        # 2. Seamless Full-Bleed Viewport Frame for hosting Edge WebView2
         self.viewport = ctk.CTkFrame(
             self,
-            corner_radius=8,
-            fg_color=("#FFFFFF", "#0D0E12"),
-            border_width=1,
-            border_color=("#CBD5E1", "#22242E")
+            corner_radius=0,
+            fg_color=("#FFFFFF", "#202124"),
+            border_width=0
         )
-        self.viewport.pack(fill="both", expand=True, padx=6, pady=(0, 6))
+        self.viewport.pack(fill="both", expand=True, padx=0, pady=0)
         self.viewport.bind("<Configure>", self._on_viewport_resize)
 
         if not HAS_WEBVIEW2:
@@ -389,4 +375,53 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         if hasattr(self, "btn_screenshot"):
             self.btn_screenshot.configure(text="✓ Im Clipboard! (Ctrl+V)", fg_color="#10B981")
             self.after(2500, lambda: self.btn_screenshot.configure(text="📸 Screenshot (Ctrl+V)", fg_color=("#059669", "#10B981")))
+
+    def focus_and_paste(self, delay_ms: int = 200):
+        """Focuses the embedded WebView2 control and simulates Ctrl+V to attach clipboard content."""
+        if not HAS_WEBVIEW2 or not self.hwnd:
+            return
+
+        def _do_paste():
+            try:
+                import time
+                # 1. Set foreground focus to the Win32 WebView2 window
+                user32.SetForegroundWindow(self.hwnd)
+                user32.SetFocus(self.hwnd)
+
+                # 2. Try JavaScript focus on the chat textarea/input
+                if self.edge and hasattr(self.edge, "webview"):
+                    js_focus = """
+                    (function() {
+                        var el = document.querySelector('textarea, div[contenteditable="true"], input[type="text"]');
+                        if (el) {
+                            el.focus();
+                            return true;
+                        }
+                        return false;
+                    })();
+                    """
+                    try:
+                        if hasattr(self.edge.webview, "CoreWebView2") and self.edge.webview.CoreWebView2:
+                            self.edge.webview.CoreWebView2.ExecuteScriptAsync(js_focus)
+                    except Exception:
+                        pass
+
+                # 3. Simulate Ctrl+V key combination via Win32 keybd_event
+                VK_CONTROL = 0x11
+                VK_V = 0x56
+                KEYEVENTF_KEYUP = 0x0002
+
+                time.sleep(0.08)
+                user32.keybd_event(VK_CONTROL, 0, 0, 0)
+                user32.keybd_event(VK_V, 0, 0, 0)
+                time.sleep(0.05)
+                user32.keybd_event(VK_V, 0, KEYEVENTF_KEYUP, 0)
+                user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+            except Exception:
+                pass
+
+        import threading
+        import time
+        threading.Thread(target=lambda: (time.sleep(delay_ms / 1000.0), _do_paste()), daemon=True).start()
+
 

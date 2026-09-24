@@ -257,19 +257,16 @@ class TestGuiV040Logic(unittest.TestCase):
             # Verify after() was called with 500ms and _switch_to_mammouth_tab callback
             self.app.after.assert_called_with(500, self.app._switch_to_mammouth_tab)
 
-    def test_calculate_active_endpoint_url_with_token(self):
-        self.app._calculate_active_endpoint_url = MagicMock(return_value="https://test.ts.net/sse")
+    def test_calculate_active_endpoint_url_never_exposes_token(self):
         self.app.config_data["server"]["enforce_auth"] = True
         self.app.config_data["server"]["api_token"] = "tok_mammouth_secret_123"
+        self.app.config_data["server"]["tunnel_mode"] = "Direct / LAN IP"
+        self.app.config_data["server"]["endpoint_path"] = "/sse"
 
-        # Active endpoint url with token must append token
-        url_with_tok = self.app._calculate_active_endpoint_url_with_token()
-        self.assertEqual(url_with_tok, "https://test.ts.net/sse?token=tok_mammouth_secret_123")
-
-        # When auth is disabled, token should not be appended
-        self.app.config_data["server"]["enforce_auth"] = False
-        url_no_tok = self.app._calculate_active_endpoint_url_with_token()
-        self.assertEqual(url_no_tok, "https://test.ts.net/sse")
+        # Active endpoint url must be clean and never contain query tokens
+        url = self.app._calculate_active_endpoint_url()
+        self.assertNotIn("token=", url)
+        self.assertNotIn("tok_mammouth_secret_123", url)
 
     def test_update_banner_on_update_found(self):
         self.app.btn_update_badge = MagicMock()

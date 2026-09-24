@@ -65,7 +65,7 @@ In the **Mammouth Defroster 9000** dashboard:
    * **Name**: `Mammouth Defroster 9000`
    * **Type**: `SSE` *(Default & Recommended)* or `Streamable HTTP`
    * **URL**: Paste your copied Endpoint URL (`https://.../sse`)
-   * **Bearer Token**: Paste your copied Bearer API Key *(or leave token in URL query parameter `?token=...`)*
+   * **Bearer Token**: Paste your copied Bearer API Key
 4. Click **Save / Connect**.
 
 ### Step 3: Enjoy Full Automation!

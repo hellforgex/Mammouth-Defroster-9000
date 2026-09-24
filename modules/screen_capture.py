@@ -302,3 +302,47 @@ def copy_image_to_clipboard(image_or_path) -> bool:
     except Exception:
         return False
 
+
+def launch_windows_snipping_tool() -> bool:
+    """Launches the native Windows Screen Clip / Snipping Tool overlay (Win+Shift+S)."""
+    if os.name != "nt":
+        return False
+    try:
+        import subprocess
+        subprocess.Popen(["cmd.exe", "/c", "start", "ms-screenclip:"], shell=False)
+        return True
+    except Exception:
+        return False
+
+
+def get_clipboard_image():
+    """Retrieves an image from the Windows clipboard if present, else None."""
+    try:
+        from PIL import ImageGrab
+        img = ImageGrab.grabclipboard()
+        if img is not None and hasattr(img, "save"):
+            return img
+    except Exception:
+        pass
+    return None
+
+
+def save_clipboard_image(dest_path: Optional[str] = None) -> Optional[str]:
+    """Saves the current clipboard image to workspace/screenshots/ and returns the path."""
+    img = get_clipboard_image()
+    if img is None:
+        return None
+    try:
+        if not dest_path:
+            filename = f"snip_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            dest_file = WORKSPACE_DIR / filename
+        else:
+            dest_file = Path(dest_path)
+            dest_file.parent.mkdir(parents=True, exist_ok=True)
+        img.save(str(dest_file), format="PNG", optimize=True)
+        _cleanup_old_screenshots(max_keep=25)
+        return str(dest_file)
+    except Exception:
+        return None
+
+

@@ -648,6 +648,7 @@ class MammouthControlCenter(ctk.CTk):
         self.dynamic_tunnel_url: Optional[str] = None
         self.server_start_time = None
         self.log_filter_mode = "ALL"
+        self.sidebar_visible = True
 
         if splash:
             splash.set_progress(0.50, "Setting up system logging and audit streams...")
@@ -718,9 +719,25 @@ class MammouthControlCenter(ctk.CTk):
         header = ctk.CTkFrame(self, height=66, corner_radius=0, fg_color=("#FFFFFF", "#202124"), border_width=1, border_color=("#E2E8F0", "#38393F"))
         header.pack(fill="x", side="top")
 
-        # App Logo & Title
+        # App Logo & Title + Collapsible Sidebar Toggle Button
         title_box = ctk.CTkFrame(header, fg_color="transparent")
-        title_box.pack(side="left", padx=(18, 5), pady=10)
+        title_box.pack(side="left", padx=(14, 5), pady=10)
+
+        self.btn_toggle_sidebar = ctk.CTkButton(
+            title_box,
+            text="◀",
+            width=30,
+            height=30,
+            corner_radius=6,
+            fg_color=("#F1F5F9", "#2F2F33"),
+            hover_color=("#E2E8F0", "#38393F"),
+            text_color=("#0F172A", "#FFFFFF"),
+            font=ctk.CTkFont(size=12, weight="bold"),
+            border_width=1,
+            border_color=("#CBD5E1", "#3E4048"),
+            command=self.toggle_sidebar
+        )
+        self.btn_toggle_sidebar.pack(side="left", padx=(0, 8))
         
         lbl_icon = ctk.CTkLabel(title_box, text="🦣", font=ctk.CTkFont(size=26))
         lbl_icon.pack(side="left", padx=(0, 10))
@@ -767,8 +784,8 @@ class MammouthControlCenter(ctk.CTk):
         # Quick Screenshot Button (copies image to clipboard for instant Ctrl+V into Mammouth)
         self.btn_header_screen = ctk.CTkButton(
             right_box,
-            text="📸 Screenshot",
-            width=115,
+            text="📸 Screenshot (Ctrl+V)",
+            width=160,
             height=32,
             fg_color=("#F1F5F9", "#36373E"),
             hover_color=("#E2E8F0", "#42434B"),
@@ -780,7 +797,7 @@ class MammouthControlCenter(ctk.CTk):
         )
         self.btn_header_screen.pack(side="left", padx=(0, 8))
 
-        # Quick Mammouth.ai Connect Button
+        # Retain self.btn_open_mammouth for API/test compatibility without redundant packing in top bar
         self.btn_open_mammouth = ctk.CTkButton(
             right_box,
             text="💬 Mammouth AI",
@@ -794,7 +811,6 @@ class MammouthControlCenter(ctk.CTk):
             border_color=("#CBD5E1", "#4A4B53"),
             command=self._switch_to_mammouth_tab
         )
-        self.btn_open_mammouth.pack(side="left", padx=(0, 10))
 
         # Theme Switcher
         theme_box = ctk.CTkFrame(right_box, fg_color="transparent")
@@ -848,12 +864,12 @@ class MammouthControlCenter(ctk.CTk):
 
         self._build_sidebar(body_container)
 
-        content_area = ctk.CTkFrame(body_container, fg_color=("#F1F5F9", "#2F2F33"), corner_radius=0)
-        content_area.pack(side="left", fill="both", expand=True)
+        self.content_area = ctk.CTkFrame(body_container, fg_color=("#F1F5F9", "#202124"), corner_radius=0)
+        self.content_area.pack(side="left", fill="both", expand=True)
 
         # 3. Main Tabview (Hides segmented button in favor of Left Navigation Rail)
         self.tabview = ctk.CTkTabview(
-            content_area,
+            self.content_area,
             corner_radius=0,
             fg_color="transparent",
             segmented_button_selected_color=("#059669", "#10B981"),
@@ -999,6 +1015,21 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_quick_ws.pack(fill="x")
 
+    def toggle_sidebar(self):
+        """Toggles sidebar visibility for a full-bleed seamless workspace."""
+        if getattr(self, "sidebar_visible", True):
+            if hasattr(self, "sidebar"):
+                self.sidebar.pack_forget()
+            self.sidebar_visible = False
+            if hasattr(self, "btn_toggle_sidebar"):
+                self.btn_toggle_sidebar.configure(text="☰")
+        else:
+            if hasattr(self, "sidebar") and hasattr(self, "content_area"):
+                self.sidebar.pack(side="left", fill="y", before=self.content_area)
+            self.sidebar_visible = True
+            if hasattr(self, "btn_toggle_sidebar"):
+                self.btn_toggle_sidebar.configure(text="◀")
+
     def _select_nav_tab(self, tab_key: str):
         if hasattr(self, "tabview") and hasattr(self.tabview, "set"):
             self.tabview.set(tab_key)
@@ -1037,12 +1068,13 @@ class MammouthControlCenter(ctk.CTk):
 
         self.mammouth_browser = MammouthBrowserFrame(
             self.tab_mammouth,
-            get_mcp_url_cb=self._calculate_active_endpoint_url_with_token,
+            get_mcp_url_cb=self._calculate_active_endpoint_url,
             start_url=start_url,
             profile_dir=user_data_dir,
             screenshot_cb=self._take_and_copy_screenshot
         )
-        self.mammouth_browser.pack(fill="both", expand=True)
+        self.tab_mammouth.configure(fg_color=("#FFFFFF", "#202124"))
+        self.mammouth_browser.pack(fill="both", expand=True, padx=0, pady=0)
 
     def _take_and_copy_screenshot(self) -> Optional[str]:
         try:
@@ -1062,10 +1094,99 @@ class MammouthControlCenter(ctk.CTk):
             return None
 
     def _take_and_copy_screenshot_ui(self):
-        saved = self._take_and_copy_screenshot()
-        if saved and hasattr(self, "btn_header_screen"):
-            self.btn_header_screen.configure(text="✓ Im Clipboard!", fg_color="#10B981")
-            self.after(2500, lambda: self.btn_header_screen.configure(text="📸 Screenshot", fg_color=("#F1F5F9", "#36373E")))
+        """Interactively launches Windows Snipping Tool (ms-screenclip:), intercepts clipboard capture,
+        switches to Mammouth WebApp, and automatically pastes the image into the chat field."""
+        if hasattr(self, "btn_header_screen"):
+            self.btn_header_screen.configure(text="✂️ Bereich wählen...", fg_color="#0284C7")
+
+        from modules.screen_capture import launch_windows_snipping_tool, copy_image_to_clipboard, WORKSPACE_DIR, _cleanup_old_screenshots
+        from PIL import ImageGrab, Image as PILImage
+        from datetime import datetime
+
+        if sys.platform != "win32":
+            # Fallback for non-Windows platforms
+            saved = self._take_and_copy_screenshot()
+            if saved and hasattr(self, "btn_header_screen"):
+                self.btn_header_screen.configure(text="✓ Im Clipboard!", fg_color="#10B981")
+                self.after(2500, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=("#F1F5F9", "#36373E")))
+            return
+
+        # Snapshot existing clipboard image bytes to detect new snip
+        initial_bytes = None
+        try:
+            init_img = ImageGrab.grabclipboard()
+            if isinstance(init_img, PILImage.Image) and hasattr(init_img, "tobytes"):
+                initial_bytes = init_img.tobytes()
+        except Exception:
+            pass
+
+        launched = launch_windows_snipping_tool()
+        if not launched:
+            # Fallback to standard fullscreen capture
+            saved = self._take_and_copy_screenshot()
+            if saved and hasattr(self, "btn_header_screen"):
+                self.btn_header_screen.configure(text="✓ Im Clipboard!", fg_color="#10B981")
+                self.after(2500, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=("#F1F5F9", "#36373E")))
+            return
+
+        def _snip_watcher():
+            start_t = time.time()
+            max_wait = 30.0  # Wait up to 30s for user to snip
+            new_image = None
+
+            while time.time() - start_t < max_wait:
+                time.sleep(0.25)
+                try:
+                    cur = ImageGrab.grabclipboard()
+                    if isinstance(cur, PILImage.Image):
+                        cur_b = cur.tobytes() if hasattr(cur, "tobytes") else None
+                        if initial_bytes is None or cur_b != initial_bytes:
+                            new_image = cur
+                            break
+                except Exception:
+                    pass
+
+            if new_image is not None:
+                # Save new snip to workspace
+                filename = f"snip_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                dest_path = WORKSPACE_DIR / filename
+                try:
+                    new_image.save(str(dest_path), format="PNG", optimize=True)
+                    _cleanup_old_screenshots(max_keep=25)
+                    copy_image_to_clipboard(str(dest_path))
+                except Exception:
+                    pass
+
+                self.after(0, lambda: self._on_snip_completed(str(dest_path)))
+            else:
+                self.after(0, self._on_snip_cancelled)
+
+        threading.Thread(target=_snip_watcher, daemon=True).start()
+
+    def _on_snip_completed(self, saved_path: str):
+        self._log(f"[VISION] Snip captured: {saved_path} (Automatically attaching to Mammouth chat)")
+        if hasattr(self, "btn_header_screen"):
+            self.btn_header_screen.configure(text="✓ Im Chat eingefügt!", fg_color="#10B981")
+            self.after(3000, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=("#F1F5F9", "#36373E")))
+
+        # 1. Bring Defroster to foreground
+        try:
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+        except Exception:
+            pass
+
+        # 2. Switch to Mammouth WebApp tab
+        self._switch_to_mammouth_tab()
+
+        # 3. Focus chat input and trigger Ctrl+V paste
+        if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
+            self.mammouth_browser.focus_and_paste(delay_ms=250)
+
+    def _on_snip_cancelled(self):
+        if hasattr(self, "btn_header_screen"):
+            self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=("#F1F5F9", "#36373E"))
 
     def _switch_to_mammouth_tab(self):
         self.tabview.set("💬 Mammouth AI Web")
@@ -1366,7 +1487,7 @@ class MammouthControlCenter(ctk.CTk):
             text_color=("#0F172A", "#FFFFFF"),
             border_width=1,
             border_color=("#CBD5E1", "#4A4B53"),
-            command=lambda: self._copy_to_clipboard(self._calculate_active_endpoint_url_with_token(), "Public URL (+ Token)")
+            command=lambda: self._copy_to_clipboard(self.lbl_public_url.cget("text"), "Public URL")
         )
         btn_copy_pub.pack(side="left", padx=3)
 
@@ -1899,20 +2020,6 @@ class MammouthControlCenter(ctk.CTk):
         save_config(self.config_data)
         self._refresh_all_endpoint_labels()
         self._log(f"Switched endpoint route path to: {choice}")
-
-    def _calculate_active_endpoint_url_with_token(self) -> str:
-        base_url = self._calculate_active_endpoint_url()
-        cfg = self.config_data.get("server", {})
-        if cfg.get("enforce_auth", True):
-            token = cfg.get("api_token", "")
-            if token and token.startswith("dpapi:"):
-                decrypted = _decrypt_dpapi(token)
-                if decrypted and not decrypted.startswith("dpapi:"):
-                    token = decrypted
-            if token:
-                delimiter = "&" if "?" in base_url else "?"
-                return f"{base_url}{delimiter}token={token}"
-        return base_url
 
     def _calculate_active_endpoint_url(self) -> str:
         cfg = self.config_data.get("server", {})
