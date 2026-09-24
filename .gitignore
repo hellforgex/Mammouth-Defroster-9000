@@ -21,6 +21,7 @@ storage_state.json
 *.sqlite3
 *.log
 server.log
+GEMINI.md
 
 # Workspace & User Data
 workspace/
