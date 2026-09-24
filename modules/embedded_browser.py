@@ -8,6 +8,8 @@ import sys
 import os
 import ctypes
 import webbrowser
+import urllib.parse
+from pathlib import Path
 from typing import Optional, Callable, Any
 import customtkinter as ctk
 import pyperclip
@@ -33,11 +35,33 @@ if sys.platform == "win32":
         # Disable private mode to persist cookies, user login, and local storage in profile_dir
         edgechromium._state['private_mode'] = False
         edgechromium.webview_settings['OPEN_EXTERNAL_LINKS_IN_BROWSER'] = False
+        edgechromium.webview_settings['ALLOW_DOWNLOADS'] = True
 
         user32 = ctypes.windll.user32
         HAS_WEBVIEW2 = True
     except Exception as e:
         _INIT_ERROR = str(e)
+
+
+def _is_download_uri(uri: str) -> bool:
+    """Detects whether a URI points to a downloadable file or export endpoint."""
+    if not uri:
+        return False
+    lower = uri.lower().split("?")[0].split("#")[0]
+    download_exts = (
+        ".zip", ".tar", ".gz", ".tgz", ".7z", ".rar",
+        ".csv", ".tsv", ".xlsx", ".xls",
+        ".json", ".jsonl", ".parquet",
+        ".pdf", ".doc", ".docx",
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg",
+        ".txt", ".py", ".md", ".log",
+        ".exe", ".msi", ".bin"
+    )
+    if any(lower.endswith(ext) for ext in download_exts):
+        return True
+    if "/download" in lower or "response-content-disposition" in lower or "export" in lower:
+        return True
+    return False
 
 
 class MammouthBrowserFrame(ctk.CTkFrame):
@@ -156,6 +180,15 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         )
         self.btn_home.pack(side="left", padx=2)
 
+        # Download status feedback label
+        self.lbl_download_status = ctk.CTkLabel(
+            self.toolbar,
+            text="",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#10B981"
+        )
+        self.lbl_download_status.pack(side="left", padx=10)
+
         # Right Action Buttons: External Browser
         btn_action_box = ctk.CTkFrame(self.toolbar, fg_color="transparent")
         btn_action_box.pack(side="right", padx=8, pady=3)
@@ -212,6 +245,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         )
         self.viewport.pack(fill="both", expand=True, padx=0, pady=0)
         self.viewport.bind("<Configure>", self._on_viewport_resize)
+        self.viewport.bind("<Button-1>", lambda e: self.focus_browser())
 
         if not HAS_WEBVIEW2:
             self._show_fallback_ui()
@@ -262,6 +296,11 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             window = Window("Mammouth", "Mammouth.ai", self.start_url)
             window.real_url = self.start_url
             self.edge = EdgeChrome(control, window, self.profile_dir)
+            # Override pywebview's default on_download_starting before it gets wired
+            try:
+                self.edge.on_download_starting = lambda sender, args: None
+            except Exception:
+                pass
             self.control = control
             self.hwnd = int(str(control.Handle))
 
@@ -285,7 +324,33 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                         core.Settings.UserAgent = (
                             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
                         )
-                        # 2. Replace NewWindowRequested handler to support popup OAuth flows properly
+                        # 2. Enable keyboard accelerator shortcuts (Ctrl+C, Ctrl+V, Ctrl+A) and right-click context menu
+                        core.Settings.AreBrowserAcceleratorKeysEnabled = True
+                        core.Settings.AreDefaultContextMenusEnabled = True
+                        core.Settings.IsGeneralAutofillEnabled = True
+                        core.Settings.IsPasswordAutosaveEnabled = True
+
+                        # 3. Allow clipboard, downloads, and storage permissions
+                        try:
+                            from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState
+                            def _on_permission(s, a):
+                                try:
+                                    a.set_State(CoreWebView2PermissionState.Allow)
+                                    a.set_SavesInProfile(True)
+                                except Exception:
+                                    pass
+                            core.PermissionRequested += _on_permission
+                        except Exception:
+                            pass
+
+                        # 4. Wire custom native download handler
+                        try:
+                            core.DownloadStarting -= self.edge.on_download_starting
+                        except Exception:
+                            pass
+                        core.DownloadStarting += self._on_download_starting
+
+                        # 5. Replace NewWindowRequested handler to support popup OAuth flows properly
                         try:
                             core.NewWindowRequested -= self.edge.on_new_window_request
                         except Exception:
@@ -326,22 +391,30 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             self._show_fallback_ui()
 
     def _on_new_window_requested(self, sender, args):
-        """Handles window.open requests (e.g. Google Login, GitHub OAuth, Mammouth MCP Consent)
+        """Handles window.open requests (e.g. Google Login, GitHub OAuth, Mammouth MCP Consent, file downloads)
         in a native popup window preserving window.opener and sharing authentication cookies."""
         try:
             uri = str(args.Uri)
+            uri_lower = uri.lower()
+
+            # Blob and data URLs are process-local and must always remain in WebView2
+            is_local_protocol = uri_lower.startswith("blob:") or uri_lower.startswith("data:")
+
+            # Detect if this is an auth flow, app navigation, or direct file download
             is_auth_or_app = (
-                "mammouth.ai" in uri
-                or "accounts.google.com" in uri
-                or "github.com/login" in uri
-                or "appleid.apple.com" in uri
-                or "oauth" in uri.lower()
-                or "auth" in uri.lower()
-                or "login" in uri.lower()
-                or "signin" in uri.lower()
-                or ".ts.net" in uri
-                or "127.0.0.1" in uri
-                or "localhost" in uri
+                is_local_protocol
+                or _is_download_uri(uri)
+                or "mammouth.ai" in uri_lower
+                or "accounts.google.com" in uri_lower
+                or "github.com/login" in uri_lower
+                or "appleid.apple.com" in uri_lower
+                or "oauth" in uri_lower
+                or "auth" in uri_lower
+                or "login" in uri_lower
+                or "signin" in uri_lower
+                or ".ts.net" in uri_lower
+                or "127.0.0.1" in uri_lower
+                or "localhost" in uri_lower
             )
 
             if not is_auth_or_app and uri.startswith("http"):
@@ -367,12 +440,32 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             def _on_popup_ready(s, a):
                 try:
                     if hasattr(popup_wv, "CoreWebView2") and popup_wv.CoreWebView2:
-                        popup_wv.CoreWebView2.Settings.UserAgent = (
+                        popup_core = popup_wv.CoreWebView2
+                        popup_core.Settings.UserAgent = (
                             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
                         )
+                        # Enable copy/paste shortcuts and context menu in popup window
+                        popup_core.Settings.AreBrowserAcceleratorKeysEnabled = True
+                        popup_core.Settings.AreDefaultContextMenusEnabled = True
+                        popup_core.Settings.IsGeneralAutofillEnabled = True
+                        popup_core.Settings.IsPasswordAutosaveEnabled = True
+
+                        # Downloads in popup window
+                        popup_core.DownloadStarting += self._on_download_starting
+                        def _on_popup_download_started(ds, da):
+                            # A download started in the popup, close the blank popup form
+                            self.after(600, lambda: popup_form.Close())
+                        popup_core.DownloadStarting += _on_popup_download_started
+
+                        try:
+                            from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState
+                            popup_core.PermissionRequested += lambda ps, pa: pa.set_State(CoreWebView2PermissionState.Allow)
+                        except Exception:
+                            pass
+
                         def _on_close_req(cs, ca):
                             popup_form.Close()
-                        popup_wv.CoreWebView2.WindowCloseRequested += _on_close_req
+                        popup_core.WindowCloseRequested += _on_close_req
 
                     args.set_NewWindow(popup_wv.CoreWebView2)
                     deferral.Complete()
@@ -420,6 +513,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 w = self.viewport.winfo_width()
                 h = self.viewport.winfo_height()
                 user32.MoveWindow(self.hwnd, 0, 0, w, h, True)
+                self.focus_browser()
 
     def go_back(self):
         if self.edge and hasattr(self.edge, "webview"):
@@ -532,5 +626,92 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         import threading
         import time
         threading.Thread(target=lambda: (time.sleep(delay_ms / 1000.0), _do_paste()), daemon=True).start()
+
+    def focus_browser(self):
+        """Brings Win32 keyboard and mouse focus to the embedded WebView2 window."""
+        if self.hwnd and self.is_embedded:
+            try:
+                user32.SetFocus(self.hwnd)
+            except Exception:
+                pass
+
+    def _show_download_notification(self, text: str, success: bool = True):
+        """Displays transient download status feedback in the toolbar."""
+        if hasattr(self, "lbl_download_status"):
+            color = "#10B981" if success else "#EF4444"
+            self.lbl_download_status.configure(text=text, text_color=color)
+            self.after(6000, lambda: self.lbl_download_status.configure(text="") if hasattr(self, "lbl_download_status") else None)
+
+    def _prompt_save_file(self, initial_dir: str, suggested_name: str) -> Optional[str]:
+        """Prompts the user with native SaveFileDialog. Returns chosen file path or None if cancelled."""
+        from System.Windows.Forms import SaveFileDialog, DialogResult
+        dialog = SaveFileDialog()
+        dialog.Title = "Mammouth — Datei speichern"
+        dialog.InitialDirectory = initial_dir
+        dialog.FileName = suggested_name
+        dialog.Filter = "Alle Dateien (*.*)|*.*"
+        dialog.RestoreDirectory = True
+
+        res = dialog.ShowDialog()
+        if res == DialogResult.OK and dialog.FileName:
+            return str(dialog.FileName)
+        return None
+
+    def _on_download_starting(self, sender, args):
+        """Native download handler presenting a SaveFileDialog and tracking download state."""
+        deferral = None
+        try:
+            deferral = args.GetDeferral()
+        except Exception:
+            pass
+
+        try:
+            download_op = args.DownloadOperation
+            suggested_path = str(args.ResultFilePath or "")
+            suggested_name = os.path.basename(suggested_path) if suggested_path else "download"
+            suggested_name = "".join(c for c in suggested_name if c not in '<>:"/\\|?*').strip() or "download"
+
+            downloads_dir = str(Path.home() / "Downloads")
+            os.makedirs(downloads_dir, exist_ok=True)
+
+            save_dest = self._prompt_save_file(downloads_dir, suggested_name)
+            if save_dest:
+                args.set_ResultFilePath(save_dest)
+                args.set_Handled(True)
+
+                final_name = os.path.basename(save_dest)
+                self.after(0, lambda n=final_name: self._show_download_notification(f"⬇ Lade herunter: {n}...", success=True))
+
+                def _on_state_changed(s, a):
+                    try:
+                        state_str = str(download_op.State)
+                        if "Completed" in state_str:
+                            self.after(0, lambda n=final_name: self._show_download_notification(f"✓ Gespeichert: {n}", success=True))
+                        elif "Interrupted" in state_str:
+                            self.after(0, lambda n=final_name: self._show_download_notification(f"⚠ Download abgebrochen: {n}", success=False))
+                    except Exception:
+                        pass
+
+                download_op.StateChanged += _on_state_changed
+            else:
+                args.set_Cancel(True)
+        except Exception:
+            # Fallback in case dialog cannot be displayed: save directly to ~/Downloads
+            try:
+                downloads_dir = str(Path.home() / "Downloads")
+                suggested_name = os.path.basename(str(args.ResultFilePath or "download"))
+                suggested_name = "".join(c for c in suggested_name if c not in '<>:"/\\|?*').strip() or "download"
+                fallback_path = os.path.join(downloads_dir, suggested_name)
+                args.set_ResultFilePath(fallback_path)
+                args.set_Handled(True)
+                self.after(0, lambda n=suggested_name: self._show_download_notification(f"✓ Gespeichert unter Downloads: {n}", success=True))
+            except Exception:
+                pass
+        finally:
+            if deferral:
+                try:
+                    deferral.Complete()
+                except Exception:
+                    pass
 
 

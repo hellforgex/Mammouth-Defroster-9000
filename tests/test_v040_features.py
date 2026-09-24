@@ -342,7 +342,107 @@ class TestOAuthHardening(unittest.TestCase):
         req = Request(scope)
         base = _get_base_url(req)
         self.assertEqual(base, "https://desktop-sdm42jr.taila2d74a.ts.net")
-        self.assertFalse(base.endswith("/"))
+class TestEmbeddedBrowserFeatures(unittest.TestCase):
+    def test_is_download_uri_detection(self):
+        from modules.embedded_browser import _is_download_uri
+
+        # Download file extensions
+        self.assertTrue(_is_download_uri("https://mammouth.ai/files/export_123.zip"))
+        self.assertTrue(_is_download_uri("https://s3.amazonaws.com/bucket/data.csv?token=secret"))
+        self.assertTrue(_is_download_uri("https://cdn.mammouth.ai/doc.pdf"))
+        self.assertTrue(_is_download_uri("https://mammouth.ai/api/v1/export/session.json"))
+        self.assertTrue(_is_download_uri("https://mammouth.ai/api/export_chat"))
+        self.assertTrue(_is_download_uri("https://mammouth.ai/v1/artifacts/download?id=99"))
+
+        # Regular web pages
+        self.assertFalse(_is_download_uri("https://mammouth.ai"))
+        self.assertFalse(_is_download_uri("https://mammouth.ai/chat/conv_123"))
+        self.assertFalse(_is_download_uri("https://accounts.google.com/o/oauth2/v2/auth"))
+        self.assertFalse(_is_download_uri(""))
+
+    def test_embedded_browser_download_settings(self):
+        from webview.platforms import edgechromium
+        self.assertTrue(edgechromium.webview_settings.get("ALLOW_DOWNLOADS"))
+
+    def test_show_download_notification(self):
+        from modules.embedded_browser import MammouthBrowserFrame
+        frame = MammouthBrowserFrame.__new__(MammouthBrowserFrame)
+        frame.lbl_download_status = MagicMock()
+        frame.after = MagicMock()
+
+        frame._show_download_notification("✓ Fertig heruntergeladen", success=True)
+        frame.lbl_download_status.configure.assert_called_with(
+            text="✓ Fertig heruntergeladen",
+            text_color="#10B981"
+        )
+        frame.after.assert_called_with(6000, unittest.mock.ANY)
+
+        frame._show_download_notification("⚠ Fehler aufgetreten", success=False)
+        frame.lbl_download_status.configure.assert_called_with(
+            text="⚠ Fehler aufgetreten",
+            text_color="#EF4444"
+        )
+
+    def test_on_download_starting_dialog_ok(self):
+        from modules.embedded_browser import MammouthBrowserFrame
+        frame = MammouthBrowserFrame.__new__(MammouthBrowserFrame)
+        frame.lbl_download_status = MagicMock()
+        frame.after = MagicMock()
+        frame._prompt_save_file = MagicMock(return_value="C:\\Users\\User\\Downloads\\report.pdf")
+
+        mock_op = MagicMock()
+        mock_args = MagicMock()
+        mock_args.ResultFilePath = "C:\\Temp\\report.pdf"
+        mock_args.DownloadOperation = mock_op
+        mock_deferral = MagicMock()
+        mock_args.GetDeferral.return_value = mock_deferral
+
+        frame._on_download_starting(None, mock_args)
+
+        mock_args.set_ResultFilePath.assert_called_with("C:\\Users\\User\\Downloads\\report.pdf")
+        mock_args.set_Handled.assert_called_with(True)
+        mock_deferral.Complete.assert_called_once()
+        self.assertTrue(any("StateChanged" in str(c) for c in mock_op.mock_calls))
+
+    def test_on_download_starting_dialog_cancel(self):
+        from modules.embedded_browser import MammouthBrowserFrame
+        frame = MammouthBrowserFrame.__new__(MammouthBrowserFrame)
+        frame.lbl_download_status = MagicMock()
+        frame.after = MagicMock()
+        frame._prompt_save_file = MagicMock(return_value=None)
+
+        mock_args = MagicMock()
+        mock_args.ResultFilePath = "C:\\Temp\\report.pdf"
+        mock_args.DownloadOperation = MagicMock()
+        mock_deferral = MagicMock()
+        mock_args.GetDeferral.return_value = mock_deferral
+
+        frame._on_download_starting(None, mock_args)
+
+        mock_args.set_Cancel.assert_called_with(True)
+        mock_deferral.Complete.assert_called_once()
+
+    def test_on_download_starting_fallback_on_exception(self):
+        from modules.embedded_browser import MammouthBrowserFrame
+        frame = MammouthBrowserFrame.__new__(MammouthBrowserFrame)
+        frame.lbl_download_status = MagicMock()
+        frame.after = MagicMock()
+        frame._prompt_save_file = MagicMock(side_effect=RuntimeError("GUI disabled"))
+
+        mock_args = MagicMock()
+        mock_args.ResultFilePath = "C:\\Temp\\artifact.zip"
+        mock_args.DownloadOperation = MagicMock()
+        mock_deferral = MagicMock()
+        mock_args.GetDeferral.return_value = mock_deferral
+
+        frame._on_download_starting(None, mock_args)
+
+        # Must fallback to saving in Downloads folder instead of dropping download
+        self.assertTrue(mock_args.set_ResultFilePath.called)
+        saved_path = mock_args.set_ResultFilePath.call_args[0][0]
+        self.assertTrue(saved_path.endswith("artifact.zip"))
+        mock_args.set_Handled.assert_called_with(True)
+        mock_deferral.Complete.assert_called_once()
 
 
 if __name__ == "__main__":
