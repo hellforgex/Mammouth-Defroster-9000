@@ -75,6 +75,10 @@ class RemoteExecutionConfig(object):
         self.multicast_group_endpoint = DEFAULT_MULTICAST_GROUP_ENDPOINT
         self.multicast_bind_address = DEFAULT_MULTICAST_BIND_ADDRESS
         self.command_endpoint = DEFAULT_COMMAND_ENDPOINT
+        # H-3 Fix: Generate a secure session key when no api_token is explicitly provided
+        if not api_token:
+            import secrets
+            api_token = f"ue_sec_{secrets.token_urlsafe(32)}"
         self.api_token = api_token
 
 class RemoteExecution(object):
@@ -413,10 +417,21 @@ class _RemoteExecutionBroadcastConnection(object):
         Args:
             message (_RemoteExecutionMessage): The message received from the socket.
         '''
-        if message.data and 'challenge_nonce' in message.data and 'challenge_hmac' in message.data:
-            token = getattr(self._config, 'api_token', '')
-            if token and not _verify_hmac_response(token, message.data['challenge_nonce'], message.data['challenge_hmac']):
-                return
+        # H-3 Fix: Enforce HMAC authentication for all discovery pong messages
+        token = getattr(self._config, 'api_token', '')
+        if not token:
+            import secrets
+            token = f"ue_sec_{secrets.token_urlsafe(32)}"
+            self._config.api_token = token
+
+        if not message.data or 'challenge_nonce' not in message.data or 'challenge_hmac' not in message.data:
+            _logger.warning("Unreal Engine remote execution rejected unauthenticated pong (missing challenge HMAC)")
+            return
+
+        if not _verify_hmac_response(token, message.data['challenge_nonce'], message.data['challenge_hmac']):
+            _logger.warning("Unreal Engine remote execution HMAC verification failed")
+            return
+
         self._nodes.update_remote_node(message.source, message.data)
 
 class _RemoteExecutionCommandConnection(object):

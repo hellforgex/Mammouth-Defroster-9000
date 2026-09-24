@@ -5,6 +5,48 @@ All notable changes to **Mammouth Defroster 9000** will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-24
+
+### 💬 In-App Mammouth.ai WebView2 Cockpit
+- **Native Embedded WebView2:** Microsoft Edge WebView2 control embedded directly into the CustomTkinter Cockpit.
+- **Session & Login Persistence:** Persistent cookies, credentials, and localStorage saved to `data/browser_profile/`.
+- **Keyboard Shortcuts & Context Menus:** Enabled browser accelerator keys (`Ctrl+C`, `Ctrl+V`, `Ctrl+A`) and native right-click context menus.
+- **Native Downloads:** Intercepts file downloads with native `SaveFileDialog`, live toolbar status updates, and auto-fallback to `~/Downloads`.
+- **OAuth Popup Windows:** Modal popups for Google, GitHub, and Apple login flows sharing the parent session environment.
+
+### 🛡️ Security Hardening & Fail-Closed Gates
+- **H-1 Fail-Closed Token Gate:** Automatically generates high-entropy cryptographic keys (`mc_...`) if `enforce_auth: true` has an empty token, guaranteeing authentication never fails open.
+- **H-2 Mandatory Updater Checksums:** Hard-fails update downloads if SHA256 assets are missing or checksums mismatch.
+- **H-3 Unreal Engine HMAC Gate:** Rejects unauthenticated discovery pong messages and enforces session keys for remote execution.
+- **H-4 Synchronized Documentation & Installer:** Added SHA256 integrity verification to `install.ps1` and aligned all version references across `README.md`, `CHANGELOG.md`, and `RELEASE_NOTES.md`.
+- **M-1 Hardware-Backed DPAPI Fail-Closed:** Eliminated identity fallback in `google_drive.py`; enforces strict `RuntimeError` fail-closed policy with zero plaintext token storage.
+- **Live Windows Blackbox Pentest Verification:** Verified compiled `MammouthDefroster9000-server.exe` against 4 live security gates (401 unauth, 429 backoff lockout after 5 failures, empty-token auto-gen, constant-time `compare_digest` tamper rejection).
+- **Secret Redaction:** Comprehensive regex redaction masking all Bearer tokens, OAuth secrets, and authorization codes in logs.
+
+### 🎨 Visual Redesign & DevOps Enhancements
+- **Mammouth.ai SaaS Charcoal Theme:** Complete visual redesign aligning with Mammouth.ai identity (`#202124`, `#2F2F33`, `#10B981`).
+- **Consolidated Shell Permissions:** Unified diagnostics and admin shell toggles into Tab 2.
+- **1-Click Screenshot Vision Injector:** Captures screen via Windows Snipping Tool and automatically injects image into Mammouth AI chat.
+
+---
+
+## [0.3.2] - 2026-09-20
+
+### ⚡ Native OAuth 2.0 & RFC 7591 Authorization Server
+- **RFC 8414 & RFC 9728 Discovery:** Endpoint auto-discovery for Mammouth.ai and enterprise MCP clients.
+- **PKCE Verification:** Support for both `S256` and `plain` code challenge methods.
+- **Refresh Token Rotation:** Automatically rotates refresh tokens on every exchange.
+
+---
+
+## [0.3.1] - 2026-09-19
+
+### 🛡️ Security Auditing & Defense-in-Depth
+- **Shell Blocklist:** Integrated 60+ pattern shell security filter for `local_exec_command`.
+- **Unreal Engine Injection Protection:** Converted all Unreal script string interpolations to `json.dumps()`.
+
+---
+
 ## [0.3.0] - 2026-09-19
 
 ### ☁️ Google Drive Cloud Storage & Document Automation (`modules/google_drive.py`)

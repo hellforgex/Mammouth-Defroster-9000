@@ -56,7 +56,7 @@ def check_for_update(current_version: str) -> Optional[Dict[str, Any]]:
             elif name.endswith(".zip.sha256"):
                 sha256_url = a.get("browser_download_url", "")
 
-        if not zip_url:
+        if not zip_url or not sha256_url:
             return None
 
         return {
@@ -89,16 +89,22 @@ def download_and_verify_update(
         if progress_cb:
             progress_cb(0.1, "Connecting to GitHub download servers...")
 
-        # 1. Download SHA256 checksum if available
+        # 1. Download SHA256 checksum asset (MANDATORY for integrity verification)
         expected_sha256 = ""
         sha256_url = update_info.get("sha256_url", "")
-        if sha256_url:
-            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-                resp = client.get(sha256_url)
-                if resp.status_code == 200:
-                    parts = resp.text.strip().split()
-                    if parts:
-                        expected_sha256 = parts[0].strip().lower()
+        if not sha256_url:
+            return False, "Security Error: Missing SHA256 checksum URL in release metadata! Cannot verify package."
+
+        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+            resp = client.get(sha256_url)
+            if resp.status_code != 200:
+                return False, f"Failed to download SHA256 checksum asset (HTTP {resp.status_code})"
+            parts = resp.text.strip().split()
+            if parts:
+                expected_sha256 = parts[0].strip().lower()
+
+        if not expected_sha256 or len(expected_sha256) != 64:
+            return False, f"Security Error: Malformed or missing SHA256 checksum asset!"
 
         # 2. Download ZIP asset with streaming progress
         zip_url = update_info.get("zip_url", "")
@@ -122,14 +128,14 @@ def download_and_verify_update(
                                 pct = min(0.90, 0.10 + (downloaded / total_size) * 0.80)
                                 progress_cb(pct, f"Downloading update ({downloaded // (1024 * 1024)}MB / {total_size // (1024 * 1024)}MB)...")
 
-        # 3. Verify SHA256 integrity
+        # 3. Verify SHA256 integrity (Hard fail on any discrepancy)
         calculated_sha256 = hasher.hexdigest().lower()
-        if expected_sha256 and calculated_sha256 != expected_sha256:
+        if calculated_sha256 != expected_sha256:
             try:
                 os.remove(zip_path)
             except Exception:
                 pass
-            return False, f"SHA256 Checksum mismatch! Expected {expected_sha256[:12]}..., got {calculated_sha256[:12]}..."
+            return False, f"Security Error: SHA256 Checksum mismatch! Expected {expected_sha256}, got {calculated_sha256}"
 
         if progress_cb:
             progress_cb(1.0, "Update package verified successfully! Ready to apply.")

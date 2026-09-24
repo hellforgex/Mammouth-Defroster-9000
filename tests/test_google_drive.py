@@ -252,11 +252,29 @@ class TestGoogleDriveModule(unittest.TestCase):
         mock_headers.return_value = ({"Authorization": "Bearer abc"}, None)
         self.assertTrue(auto_authenticate_if_needed(timeout_seconds=5))
 
-    def test_defroster_identification(self):
-        from modules.google_drive import DEFAULT_USER_AGENT, DEFAULT_CLIENT_ID
-        self.assertEqual(DEFAULT_USER_AGENT, "Defroster9000/0.3.0 (Mammouth.ai)")
-        self.assertNotIn("rclone", DEFAULT_CLIENT_ID)
-        self.assertNotIn("202264815644", DEFAULT_CLIENT_ID)
+    def test_dpapi_fail_closed_zero_plaintext_fallback(self):
+        """Item 8 / Finding M-1: Verify zero plaintext fallback for Google Drive token DPAPI encryption."""
+        import modules.google_drive as gd
+        # 1. Successful round-trip if DPAPI available
+        if gd.HAS_DPAPI:
+            secret = "oauth_refresh_token_xyz_999"
+            enc = gd._encrypt_dpapi(secret)
+            self.assertTrue(enc.startswith("dpapi:"))
+            self.assertEqual(gd._decrypt_dpapi(enc), secret)
+
+        # 2. Hard fail-closed when DPAPI unavailable
+        orig_has = gd.HAS_DPAPI
+        try:
+            gd.HAS_DPAPI = False
+            with self.assertRaises(RuntimeError) as ctx:
+                gd._encrypt_dpapi("secret_token")
+            self.assertIn("Plaintext storage is prohibited", str(ctx.exception))
+
+            with self.assertRaises(RuntimeError) as ctx:
+                gd._decrypt_dpapi("dpapi:somerawbytes")
+            self.assertIn("DPAPI (pywin32) is required", str(ctx.exception))
+        finally:
+            gd.HAS_DPAPI = orig_has
 
 
 if __name__ == "__main__":

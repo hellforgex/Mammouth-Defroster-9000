@@ -32,14 +32,40 @@ DEFAULT_USER_AGENT = "Defroster9000/0.3.0 (Mammouth.ai)"
 DEFAULT_CLIENT_ID = os.environ.get("DEFROSTER_GDRIVE_CLIENT_ID", "")
 DEFAULT_CLIENT_SECRET = os.environ.get("DEFROSTER_GDRIVE_CLIENT_SECRET", "")
 
-# Try importing DPAPI encryption from config
+# DPAPI encryption for token storage (Fail-closed per SECURITY.md:40)
 try:
-    from config import _encrypt_dpapi, _decrypt_dpapi
+    import win32crypt
+    import base64
+    HAS_DPAPI = True
 except ImportError:
-    def _encrypt_dpapi(s: str) -> str:
-        return s
-    def _decrypt_dpapi(s: str) -> str:
-        return s
+    HAS_DPAPI = False
+
+def _encrypt_dpapi(plaintext: str) -> str:
+    """Encrypt token using Windows DPAPI (Fail-closed per SECURITY.md:40)."""
+    if not plaintext:
+        return ""
+    if not HAS_DPAPI:
+        raise RuntimeError("Windows DPAPI (pywin32) is required for Google Drive token encryption. Plaintext storage is prohibited.")
+    try:
+        data_bytes = plaintext.encode("utf-8")
+        encrypted = win32crypt.CryptProtectData(data_bytes, "MammouthGDriveSecret", None, None, None, 0)
+        return "dpapi:" + base64.b64encode(encrypted).decode("ascii")
+    except Exception as ex:
+        raise RuntimeError(f"DPAPI Encryption Error: {ex}. Plaintext token storage is prohibited.")
+
+def _decrypt_dpapi(ciphertext: str) -> str:
+    """Decrypt token using Windows DPAPI."""
+    if not ciphertext or not ciphertext.startswith("dpapi:"):
+        return ciphertext
+    if not HAS_DPAPI:
+        raise RuntimeError("Windows DPAPI (pywin32) is required for Google Drive token decryption.")
+    try:
+        raw_b64 = ciphertext[len("dpapi:"):]
+        raw_bytes = base64.b64decode(raw_b64.encode("ascii"))
+        _, decrypted_blob = win32crypt.CryptUnprotectData(raw_bytes, None, None, None, 0)
+        return decrypted_blob.decode("utf-8")
+    except Exception as ex:
+        raise RuntimeError(f"DPAPI Decryption Error: {ex}")
 
 # Try importing sandbox path validator from file_ops
 try:

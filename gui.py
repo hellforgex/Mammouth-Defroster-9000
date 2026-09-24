@@ -2455,7 +2455,7 @@ class MammouthControlCenter(ctk.CTk):
                 self.focus_force()
                 ans = messagebox.askyesno(
                     "Desktop Screen Capture Request",
-                    "A connected AI assistant / MCP client (e.g. Agent Zero, Mammouth.ai) is requesting a screenshot of your desktop.\n\n"
+                    "A connected AI assistant / MCP client (e.g. Mammouth.ai) is requesting a screenshot of your desktop.\n\n"
                     "Do you want to grant screen capture permission for this session?",
                     parent=self
                 )

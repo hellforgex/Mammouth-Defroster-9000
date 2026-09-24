@@ -34,6 +34,28 @@ $SizeMB = [math]::Round($ZipAsset.size / 1048576, 1)
 Write-Host "[2/5] Downloading $($ZipAsset.name) ($SizeMB MB)..." -ForegroundColor Yellow
 Invoke-WebRequest -Uri $ZipAsset.browser_download_url -OutFile $TempZip
 
+# Verify SHA256 Checksum (H-2 / H-4 Fix)
+$ShaAsset = $Release.assets | Where-Object { $_.name -eq "$($ZipAsset.name).sha256" } | Select-Object -First 1
+if (-not $ShaAsset) {
+    Remove-Item $TempZip -Force -ErrorAction SilentlyContinue
+    Write-Error "Security Error: No SHA256 checksum asset found for release $Tag. Aborting installation."
+    exit 1
+}
+
+$TempSha = Join-Path $env:TEMP "$($ZipAsset.name).sha256"
+Invoke-WebRequest -Uri $ShaAsset.browser_download_url -OutFile $TempSha
+$ExpectedHash = ((Get-Content $TempSha -Raw).Trim() -split '\s+')[0].ToLower()
+Remove-Item $TempSha -Force -ErrorAction SilentlyContinue
+
+Write-Host "Verifying SHA256 package integrity..." -ForegroundColor Yellow
+$ActualHash = (Get-FileHash -Path $TempZip -Algorithm SHA256).Hash.ToLower()
+if ($ActualHash -ne $ExpectedHash) {
+    Remove-Item $TempZip -Force -ErrorAction SilentlyContinue
+    Write-Error "Security Error: Checksum mismatch! Expected $ExpectedHash, got $ActualHash. Aborting installation."
+    exit 1
+}
+Write-Host "Checksum verified successfully: $ActualHash" -ForegroundColor Green
+
 Write-Host "[3/5] Extracting to $InstallDir..." -ForegroundColor Yellow
 if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null

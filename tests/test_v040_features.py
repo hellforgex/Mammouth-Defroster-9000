@@ -444,6 +444,173 @@ class TestEmbeddedBrowserFeatures(unittest.TestCase):
         mock_args.set_Handled.assert_called_with(True)
         mock_deferral.Complete.assert_called_once()
 
+class TestSecurityAuditBlockerFixes(unittest.TestCase):
+    """Verifies that fail-closed security gates H-1, H-2, and H-3 are properly enforced."""
+
+    def test_h1_middleware_auto_generates_token_and_fails_closed(self):
+        """H-1: Ensure middleware fails closed with empty token by auto-generating a secure token."""
+        import asyncio
+        from server import SecurityAndAuthMiddleware
+
+        dummy_app = MagicMock()
+        middleware = SecurityAndAuthMiddleware(
+            app=dummy_app,
+            token="",
+            enforce_auth=True
+        )
+
+        # Token must not be empty - an auto-generated token must be assigned
+        self.assertTrue(middleware.token.startswith("mc_"))
+        self.assertGreater(len(middleware.token), 32)
+
+        # Simulated request without Authorization header must fail closed (401)
+        async def run_req(headers, path="/sse"):
+            messages = []
+            async def mock_receive():
+                return {"type": "http.request"}
+            async def mock_send(msg):
+                messages.append(msg)
+            scope = {
+                "type": "http",
+                "path": path,
+                "headers": headers,
+                "client": ("127.0.0.1", 12345),
+            }
+            await middleware(scope, mock_receive, mock_send)
+            return messages
+
+        # 1. No auth -> 401
+        res = asyncio.run(run_req([]))
+        self.assertTrue(any(m.get("type") == "http.response.start" and m.get("status") == 401 for m in res))
+
+        # 2. Bad auth -> 401
+        res_bad = asyncio.run(run_req([(b"authorization", b"Bearer wrong-token")]))
+        self.assertTrue(any(m.get("type") == "http.response.start" and m.get("status") == 401 for m in res_bad))
+
+        # 3. Good auth -> passes to app
+        good_auth = f"Bearer {middleware.token}".encode("utf-8")
+        async def fake_app(scope, receive, send):
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+        middleware.app = fake_app
+        res_good = asyncio.run(run_req([(b"authorization", good_auth)]))
+        self.assertTrue(any(m.get("type") == "http.response.start" and m.get("status") == 200 for m in res_good))
+
+    def test_h2_updater_checksum_mandatory_and_verified(self):
+        """H-2: Ensure updater refuses updates without SHA256 checksum asset or when checksum mismatches."""
+        from modules.updater import check_for_update, download_and_verify_update
+        import hashlib
+
+        # 1. check_for_update returns None when .sha256 asset is missing
+        release_no_sha = {
+            "tag_name": "v9.9.9",
+            "assets": [
+                {"name": "MammouthDefroster9000-v9.9.9-windows-x64.zip", "browser_download_url": "https://example.com/app.zip", "size": 1000}
+            ]
+        }
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = release_no_sha
+        mock_client.get.return_value = mock_resp
+        mock_client.__enter__.return_value = mock_client
+
+        with patch("httpx.Client", return_value=mock_client):
+            info = check_for_update("0.3.2")
+            self.assertIsNone(info, "check_for_update must reject releases without .sha256 asset")
+
+        # 2. download_and_verify_update fails closed without sha256_url
+        ok, err = download_and_verify_update({"download_url": "https://example.com/app.zip"})
+        self.assertFalse(ok)
+        self.assertIn("Security Error", err)
+
+        # 3. download_and_verify_update fails when hash mismatches
+        fake_zip_bytes = b"PK\x03\x04fakearchivecontent"
+        correct_hash = hashlib.sha256(fake_zip_bytes).hexdigest()
+        bad_hash = "0000000000000000000000000000000000000000000000000000000000000000"
+
+        sha_resp = MagicMock()
+        sha_resp.status_code = 200
+        sha_resp.text = f"{bad_hash}  app.zip\n"
+
+        stream_resp = MagicMock()
+        stream_resp.status_code = 200
+        stream_resp.iter_bytes.return_value = [fake_zip_bytes]
+        stream_resp.__enter__.return_value = stream_resp
+
+        mock_dl_client = MagicMock()
+        mock_dl_client.get.return_value = sha_resp
+        mock_dl_client.stream.return_value = stream_resp
+        mock_dl_client.__enter__.return_value = mock_dl_client
+
+        with patch("httpx.Client", return_value=mock_dl_client):
+            ok, err = download_and_verify_update({
+                "zip_url": "https://example.com/app.zip",
+                "zip_name": "app.zip",
+                "zip_size": len(fake_zip_bytes),
+                "sha256_url": "https://example.com/app.zip.sha256"
+            })
+            self.assertFalse(ok)
+            self.assertIn("Checksum mismatch", err)
+
+        # 4. download_and_verify_update succeeds when hash matches
+        sha_resp.text = f"{correct_hash}  app.zip\n"
+        with patch("httpx.Client", return_value=mock_dl_client):
+            ok, res_path = download_and_verify_update({
+                "zip_url": "https://example.com/app.zip",
+                "zip_name": "app.zip",
+                "zip_size": len(fake_zip_bytes),
+                "sha256_url": "https://example.com/app.zip.sha256"
+            })
+            self.assertTrue(ok)
+            self.assertTrue(res_path.endswith("app.zip"))
+            self.assertTrue(os.path.exists(res_path))
+
+    def test_h3_remote_execution_hmac_enforced(self):
+        """H-3: Ensure RemoteExecutionConfig generates session key and pongs require HMAC challenge/response."""
+        from modules.remote_execution import (
+            RemoteExecutionConfig,
+            _RemoteExecutionBroadcastConnection,
+            _RemoteExecutionMessage,
+            _generate_hmac_challenge,
+            _compute_hmac_response,
+            _ACTIVE_NONCES
+        )
+
+        # 1. Auto-generates token if empty
+        cfg = RemoteExecutionConfig(api_token="")
+        self.assertTrue(cfg.api_token.startswith("ue_sec_"))
+        self.assertGreater(len(cfg.api_token), 20)
+
+        conn = _RemoteExecutionBroadcastConnection(cfg, "local_test_node")
+        from modules.remote_execution import _RemoteExecutionBroadcastNodes
+        conn._nodes = _RemoteExecutionBroadcastNodes()
+
+        # 2. Pong missing challenge_nonce or challenge_hmac is dropped
+        msg_no_hmac = _RemoteExecutionMessage("pong", "remote_node_1", data={"engine_version": "5.3"})
+        conn._handle_pong_message(msg_no_hmac)
+        self.assertEqual(len(conn.remote_nodes), 0, "Pong without nonce/hmac must be dropped")
+
+        # 3. Pong with bad hmac is dropped
+        nonce = _generate_hmac_challenge()
+        msg_bad_hmac = _RemoteExecutionMessage("pong", "remote_node_2", data={
+            "challenge_nonce": nonce,
+            "challenge_hmac": "invalid_hmac_signature"
+        })
+        conn._handle_pong_message(msg_bad_hmac)
+        self.assertEqual(len(conn.remote_nodes), 0, "Pong with invalid HMAC must be dropped")
+
+        # 4. Valid pong is accepted
+        valid_nonce = _generate_hmac_challenge()
+        valid_hmac = _compute_hmac_response(cfg.api_token, valid_nonce)
+        msg_valid = _RemoteExecutionMessage("pong", "remote_node_3", data={
+            "challenge_nonce": valid_nonce,
+            "challenge_hmac": valid_hmac,
+            "engine_version": "5.3.2"
+        })
+        conn._handle_pong_message(msg_valid)
+        self.assertEqual(len(conn.remote_nodes), 1)
+        self.assertEqual(conn.remote_nodes[0]["node_id"], "remote_node_3")
+
 
 if __name__ == "__main__":
     unittest.main()

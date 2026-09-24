@@ -307,7 +307,7 @@ def file_search_text(
                             if is_regex and compiled_re:
                                 if compiled_re.search(line):
                                     matched = True
-                            elif search_query.lower() in line.lower():
+                            elif raw_query.lower() in line.lower():
                                 matched = True
                                 
                             if matched:

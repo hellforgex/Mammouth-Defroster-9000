@@ -946,8 +946,12 @@ class SecurityAndAuthMiddleware:
     """Handles constant-time Bearer token authentication, progressive IP backoff, fail-closed enforcement, OPTIONS preflight, security headers, and safe logging."""
     def __init__(self, app: ASGIApp, token: str = "", enforce_auth: bool = True):
         self.app = app
-        self.token = str(token).strip()
         self.enforce_auth = enforce_auth
+        self.token = str(token).strip()
+        # H-1 Fix: Fail closed — if enforce_auth is True, ensure a non-empty token is present
+        if self.enforce_auth and not self.token:
+            import secrets
+            self.token = f"mc_{secrets.token_urlsafe(32)}"
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] == "http":
@@ -955,6 +959,7 @@ class SecurityAndAuthMiddleware:
             header_map = {k.decode("latin1").lower(): v.decode("latin1") for k, v in raw_headers}
             client_ip = scope.get("client", ("unknown", 0))[0]
             method = scope.get("method", "GET")
+            path = scope.get("path", "/")
             clean_path = "/" + path.lstrip("/")
 
             # Wrapped send to inject standard security response headers (L-05)
@@ -1054,8 +1059,20 @@ def build_app(token: Optional[str] = None):
     if effective_token is None:
         if enforce_auth:
             effective_token = server_cfg.get("api_token", "") or os.environ.get("MCP_API_TOKEN", "")
+            if not effective_token:
+                import secrets
+                effective_token = f"mc_{secrets.token_urlsafe(32)}"
+                server_cfg["api_token"] = effective_token
+                try:
+                    from config import save_config
+                    save_config(cfg)
+                except Exception:
+                    pass
         else:
             effective_token = ""
+    elif enforce_auth and not effective_token:
+        import secrets
+        effective_token = f"mc_{secrets.token_urlsafe(32)}"
 
     streamable_http_app = StreamableHTTPASGIApp(None)
     

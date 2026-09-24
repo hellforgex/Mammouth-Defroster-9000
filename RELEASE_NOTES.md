@@ -2,7 +2,32 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.3.2**
+> **Current Version:** **v0.4.0**
+
+---
+
+## 🚀 What's New in v0.4.0
+
+### 💬 Native In-App Mammouth.ai WebView2 Cockpit
+* **Integrated Mammouth.ai WebApp Tab:** Embedded Microsoft Edge WebView2 control directly inside the Cockpit. No need for a separate browser window.
+* **Persistent Sessions & Profiles:** Cookies, sessions, local storage, and Google/GitHub OAuth logins persist across restarts in `data/browser_profile/`.
+* **Full Keyboard Shortcuts & Context Menus:** Full support for `Ctrl+C`, `Ctrl+V`, `Ctrl+A`, `Ctrl+X`, and right-click context menus.
+* **Native File Downloads & SaveFileDialog:** Automatic download interception with native Windows save dialog, live status bar feedback, and auto-fallback to `~/Downloads`.
+* **OAuth Popup Windows:** Modal popups for Google, GitHub, and Apple login flows sharing the same session environment.
+
+### 🛡️ Security Hardening & Fail-Closed Authentication
+* **Fail-Closed Token Gate (H-1):** Enforced fail-closed token policy; auto-generates high-entropy cryptographic keys (`mc_...`) if unconfigured.
+* **Verified Auto-Updater (H-2):** Mandatory SHA256 checksum verification against release assets before code execution.
+* **Unreal Engine Remote Execution HMAC (H-3):** All discovery pong messages require valid HMAC authentication with session keys.
+* **1-Click Sovereign Web-Installer (H-4):** Complete `install.ps1` installer with SHA256 checksum integrity verification and SmartScreen MotW removal.
+* **Hardware-Backed DPAPI Fail-Closed (M-1):** Eliminated identity fallback in `google_drive.py`; enforces strict `RuntimeError` fail-closed policy (zero plaintext token fallback).
+* **Live Windows Runtime Blackbox Pentest:** Verified compiled `MammouthDefroster9000-server.exe` against 4 live security gates (401 unauth, 429 backoff lockout after 5 failures, empty-token auto-gen, constant-time `compare_digest` tamper rejection).
+* **Sensitive Token Redaction:** Comprehensive regex redaction masking all Bearer tokens, OAuth secrets, and authorization codes in logs.
+
+### 🎨 Visual Redesign & Unified Shell Permissions
+* **SaaS Charcoal Aesthetic:** Theme aligned with Mammouth.ai Charcoal (`#202124`) and emerald accents (`#10B981`).
+* **Consolidated Shell Permissions:** Unified diagnostics and admin shell toggles into Tab 2.
+* **1-Click Screenshot Vision Injector:** Captures screen via Windows Snipping Tool and automatically injects image into Mammouth AI chat.
 
 ---
 
@@ -30,7 +55,7 @@
 ## 🚀 What's New in v0.3.0
 
 ### ☁️ Google Drive Cloud Storage & Document Automation (`modules/google_drive.py`)
-* **Seamless Google Drive Integration:** Full cloud drive connectivity for connected AI assistants (Mammouth.ai, Agent Zero, Claude Desktop, Cursor), bringing the total platform capabilities to **11 modules and 77 active tools**.
+* **Seamless Google Drive Integration:** Full cloud drive connectivity for connected AI assistants (Mammouth.ai, Claude Desktop, Cursor), bringing the total platform capabilities to **11 modules and 77 active tools**.
 * **Interactive Desktop OAuth 2.0 Loopback:** Built-in HTTP loopback flow (`http://127.0.0.1:8085`) that allows instantaneous 1-click browser login without manual token pasting.
 * **Hardware-Backed DPAPI Encryption:** Stores Google OAuth refresh and access tokens encrypted at rest via Windows Data Protection API (`CryptProtectData`).
 * **Service Account & Headless Support:** Seamless fallback to Google Cloud Service Account credentials (`service_account.json`).
@@ -95,7 +120,7 @@
 * **Transparent Migration (`config.py`):** Automatically upgrades legacy `dpapi:` tokens to clean plaintext tokens.
 
 ### 🛡️ FastMCP & MCP Client Compatibility Fixes
-* **Empty List IndexError Fix:** Prevented MCP clients (including Agent Zero) from crashing on empty lists (`memory_list`, `task_list`) by guaranteeing valid `[TextContent(text="[]")]` payloads.
+* **Empty List IndexError Fix:** Prevented MCP clients from crashing on empty lists (`memory_list`, `task_list`) by guaranteeing valid `[TextContent(text="[]")]` payloads.
 * **Flexible Parameter Aliases:** Added `path` alias for `directory_path` / `file_path` across file operations and `id` alias for `task_id`.
 
 ---
@@ -104,7 +129,7 @@
 
 | File | Platform | Size | Description |
 | :--- | :---: | :---: | :--- |
-| **`MammouthDefroster9000-v0.2.3-windows-x64.zip`** | **Windows x64** | **~109 MB** | Official optimized standalone release package with executables, modules, and documentation. |
+| **`MammouthDefroster9000-v0.4.0-windows-x64.zip`** | **Windows x64** | **~86.4 MB** | Official optimized standalone release package with executables, modules, and documentation. |
 
 ---
 
