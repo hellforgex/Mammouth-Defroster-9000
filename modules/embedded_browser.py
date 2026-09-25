@@ -10,7 +10,7 @@ import ctypes
 import webbrowser
 import urllib.parse
 from pathlib import Path
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Dict, List
 import customtkinter as ctk
 import pyperclip
 
@@ -80,6 +80,106 @@ def _is_trusted_browser_origin(uri: str) -> bool:
         return False
 
 
+MAMMOUTH_BRAND_COLORS = {
+    "claude": ("#E07A5F", "Claude"),
+    "gpt": ("#10B981", "GPT"),
+    "glm": ("#64748B", "GLM"),
+    "gemini": ("#38BDF8", "Gemini"),
+    "perplexity": ("#06B6D4", "Perplexity"),
+    "mistral": ("#F59E0B", "Mistral"),
+    "black-forest-labs": ("#8B5CF6", "FLUX"),
+}
+
+PLAN_MULTIPLIERS = {
+    "starter": (1, "Starter x1"),
+    "standard": (3, "Standard x3"),
+    "expert": (10, "Expert x10"),
+    "unsubscribed": (0, "Free / None"),
+    "none": (0, "Free / None")
+}
+
+BASE_THRESHOLD_CENTS = 150  # GAUGE_MAX_CENTS in Mammouth.ai ($1.50 per 3h session window)
+
+
+def parse_mammouth_quota_data(payload: Optional[Any]) -> Dict[str, Any]:
+    """Parses raw Mammouth quota payload into standardized UI telemetry metrics."""
+    if not payload or not isinstance(payload, dict):
+        return {
+            "is_logged_in": False,
+            "plan_id": "unknown",
+            "plan_label": "Nicht eingeloggt",
+            "total_percent": 0.0,
+            "current_spend_cents": 0.0,
+            "max_spend_cents": float(BASE_THRESHOLD_CENTS),
+            "brands": [],
+            "timestamp": 0,
+            "raw": payload or {}
+        }
+
+    current = payload.get("current")
+    if not isinstance(current, dict):
+        current = {}
+    recent = payload.get("recent")
+    if not isinstance(recent, dict):
+        recent = {}
+
+    is_logged_in = bool(payload.get("ok", False) and (current or recent))
+    if not is_logged_in:
+        return {
+            "is_logged_in": False,
+            "plan_id": "unknown",
+            "plan_label": "Nicht eingeloggt",
+            "total_percent": 0.0,
+            "current_spend_cents": 0.0,
+            "max_spend_cents": float(BASE_THRESHOLD_CENTS),
+            "brands": [],
+            "timestamp": payload.get("ts", 0),
+            "raw": payload
+        }
+
+    plan_key = str(current.get("usagePlan", "starter")).lower().strip()
+    mult, plan_label = PLAN_MULTIPLIERS.get(plan_key, (1, plan_key.capitalize()))
+
+    max_cents = float(BASE_THRESHOLD_CENTS * mult) if mult > 0 else float(BASE_THRESHOLD_CENTS)
+    try:
+        current_spend = float(current.get("currentSpendCents", 0.0) or 0.0)
+    except (ValueError, TypeError):
+        current_spend = 0.0
+
+    if max_cents > 0:
+        pct = round(min(100.0, max(0.0, (current_spend / max_cents) * 100.0)), 1)
+    else:
+        pct = 0.0
+
+    raw_brands = recent.get("byBrand", [])
+    brands_list = []
+    if isinstance(raw_brands, list):
+        for item in raw_brands:
+            if isinstance(item, dict):
+                b_name = str(item.get("brand", "")).lower()
+                b_val = float(item.get("value", 0.0) or 0.0)
+                color, label = MAMMOUTH_BRAND_COLORS.get(b_name, ("#94A3B8", b_name.upper()))
+                brands_list.append({
+                    "brand": b_name,
+                    "label": label,
+                    "value": b_val,
+                    "color": color
+                })
+
+    return {
+        "is_logged_in": True,
+        "plan_id": plan_key,
+        "plan_label": plan_label,
+        "multiplier": mult,
+        "total_percent": pct,
+        "current_spend_cents": current_spend,
+        "max_spend_cents": max_cents,
+        "brands": brands_list,
+        "timestamp": payload.get("ts", 0),
+        "raw": payload
+    }
+
+
 class MammouthBrowserFrame(ctk.CTkFrame):
     """Modern embedded browser widget hosting Mammouth.ai inside the Cockpit."""
 
@@ -90,12 +190,15 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         start_url: str = "https://mammouth.ai",
         profile_dir: Optional[str] = None,
         screenshot_cb: Optional[Callable[[], Optional[str]]] = None,
+        quota_cb: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs
     ):
         super().__init__(master, **kwargs)
         self.get_mcp_url_cb = get_mcp_url_cb
         self.start_url = start_url or "https://mammouth.ai"
         self.screenshot_cb = screenshot_cb
+        self.quota_cb = quota_cb
+        self._last_quota_data: Optional[Dict[str, Any]] = None
 
         # Persistent profile directory (ensures login/cookies are stored in app root, never in _internal)
         if not profile_dir:
@@ -376,6 +479,25 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                         except Exception:
                             pass
                         core.NewWindowRequested += self._on_new_window_requested
+
+                        # 6. Wire WebMessageReceived for quota telemetry & bridge
+                        try:
+                            def _on_web_message(s, a):
+                                try:
+                                    raw = str(a.TryGetWebMessageAsString() or "")
+                                    if raw and raw.startswith("{"):
+                                        import json
+                                        data = json.loads(raw)
+                                        if data.get("type") == "mammouth_quota":
+                                            payload = data.get("payload")
+                                            self._last_quota_data = payload
+                                            if self.quota_cb:
+                                                self.after(0, lambda p=payload: self.quota_cb(p))
+                                except Exception:
+                                    pass
+                            core.WebMessageReceived += _on_web_message
+                        except Exception:
+                            pass
                 except Exception:
                     pass
 
@@ -396,6 +518,10 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                     # Automatically redirect stuck OAuth callbacks or errors back to Mammouth home
                     if "/api/auth/callback" in current_uri or "/api/mcp/oauth/callback" in current_uri or "mcp_error" in current_uri:
                         self.after(800, lambda: self.edge.load_url(self.start_url))
+
+                    # Trigger background quota query when Mammouth page finishes loading
+                    if "mammouth.ai" in current_uri.lower():
+                        self.after(1200, self.request_quota_refresh)
                 except Exception:
                     pass
 
@@ -473,8 +599,29 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                         # Downloads in popup window
                         popup_core.DownloadStarting += self._on_download_starting
                         def _on_popup_download_started(ds, da):
-                            # A download started in the popup, close the blank popup form
-                            self.after(600, lambda: popup_form.Close())
+                            # The popup was opened solely to initiate a download.
+                            # Hide the popup form so it doesn't linger visually,
+                            # but KEEP popup_wv alive until the download completes!
+                            try:
+                                popup_form.Hide()
+                            except Exception:
+                                pass
+                            try:
+                                d_op = getattr(da, "DownloadOperation", None)
+                                if d_op:
+                                    def _on_pop_d_state(s, a):
+                                        try:
+                                            st = str(d_op.State)
+                                            if "Completed" in st or "Interrupted" in st:
+                                                self.after(1000, lambda: self._safe_close_popup(popup_form, popup_wv))
+                                        except Exception:
+                                            pass
+                                    d_op.StateChanged += _on_pop_d_state
+                                else:
+                                    self.after(8000, lambda: self._safe_close_popup(popup_form, popup_wv))
+                            except Exception:
+                                self.after(8000, lambda: self._safe_close_popup(popup_form, popup_wv))
+
                         popup_core.DownloadStarting += _on_popup_download_started
 
                         try:
@@ -572,6 +719,53 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             except Exception:
                 pass
 
+    def request_quota_refresh(self):
+        """Triggers background quota fetch inside WebView2 session."""
+        if not self.is_embedded or not self.edge or not hasattr(self.edge, "webview"):
+            return
+
+        js_script = """
+        (function() {
+            try {
+                if (!window.location.hostname || !window.location.hostname.includes("mammouth.ai")) {
+                    return;
+                }
+                Promise.all([
+                    fetch('/api/user/currentUsage', { credentials: 'same-origin' }).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }),
+                    fetch('/api/user/recentUsage', { credentials: 'same-origin' }).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+                ]).then(function(results) {
+                    var cur = results[0];
+                    var rec = results[1];
+                    var payload = {
+                        ok: !!(cur || rec),
+                        current: cur,
+                        recent: rec,
+                        ts: Date.now()
+                    };
+                    if (window.chrome && window.chrome.webview) {
+                        window.chrome.webview.postMessage(JSON.stringify({
+                            type: 'mammouth_quota',
+                            payload: payload
+                        }));
+                    }
+                }).catch(function(err) {
+                    if (window.chrome && window.chrome.webview) {
+                        window.chrome.webview.postMessage(JSON.stringify({
+                            type: 'mammouth_quota',
+                            payload: { ok: false, error: String(err) }
+                        }));
+                    }
+                });
+            } catch(e) {}
+        })();
+        """
+        try:
+            target_wv = self.edge.webview
+            if hasattr(target_wv, "CoreWebView2") and target_wv.CoreWebView2:
+                target_wv.CoreWebView2.ExecuteScriptAsync(js_script)
+        except Exception:
+            pass
+
     def _copy_mcp_url(self):
         url = ""
         if self.get_mcp_url_cb:
@@ -608,53 +802,63 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             self.btn_screenshot.configure(text="✓ Im Clipboard! (Ctrl+V)", fg_color="#10B981")
             self.after(2500, lambda: self.btn_screenshot.configure(text="📸 Screenshot (Ctrl+V)", fg_color=("#059669", "#10B981")))
 
-    def focus_and_paste(self, delay_ms: int = 200):
-        """Focuses the embedded WebView2 control and simulates Ctrl+V to attach clipboard content."""
+    def focus_and_paste(self, delay_ms: int = 250):
+        """Focuses the embedded WebView2 control and simulates Ctrl+V to attach clipboard content.
+        Runs safely on the UI thread to prevent COM cross-thread deadlocks, and guarantees key release."""
         if not HAS_WEBVIEW2 or not self.hwnd:
             return
 
-        def _do_paste():
+        def _do_paste_ui():
             try:
-                import time
-                # 1. Set foreground focus to the Win32 WebView2 window
-                user32.SetForegroundWindow(self.hwnd)
-                user32.SetFocus(self.hwnd)
+                # 1. Bring top-level window to foreground
+                try:
+                    top_hwnd = self.winfo_toplevel().winfo_id()
+                    user32.SetForegroundWindow(top_hwnd)
+                except Exception:
+                    pass
 
-                # 2. Try JavaScript focus on the chat textarea/input
-                if self.edge and hasattr(self.edge, "webview"):
-                    js_focus = """
-                    (function() {
-                        var el = document.querySelector('textarea, div[contenteditable="true"], input[type="text"]');
-                        if (el) {
-                            el.focus();
-                            return true;
-                        }
-                        return false;
-                    })();
-                    """
+                # 2. Focus the WebView2 Win32 window
+                if self.hwnd:
                     try:
-                        if hasattr(self.edge.webview, "CoreWebView2") and self.edge.webview.CoreWebView2:
-                            self.edge.webview.CoreWebView2.ExecuteScriptAsync(js_focus)
+                        user32.SetFocus(self.hwnd)
                     except Exception:
                         pass
 
-                # 3. Simulate Ctrl+V key combination via Win32 keybd_event
+                # 3. Focus chat textarea / input via JavaScript on the UI thread
+                if self.edge and hasattr(self.edge, "webview"):
+                    target_wv = self.edge.webview
+                    if hasattr(target_wv, "CoreWebView2") and target_wv.CoreWebView2:
+                        js_focus = """
+                        (function() {
+                            var el = document.querySelector('textarea, div[contenteditable="true"], input[type="text"]');
+                            if (el) {
+                                el.focus();
+                                return true;
+                            }
+                            return false;
+                        })();
+                        """
+                        try:
+                            target_wv.CoreWebView2.ExecuteScriptAsync(js_focus)
+                        except Exception:
+                            pass
+
+                # 4. Simulate Ctrl+V key combination with guaranteed key-up in finally
                 VK_CONTROL = 0x11
                 VK_V = 0x56
                 KEYEVENTF_KEYUP = 0x0002
 
-                time.sleep(0.08)
-                user32.keybd_event(VK_CONTROL, 0, 0, 0)
-                user32.keybd_event(VK_V, 0, 0, 0)
-                time.sleep(0.05)
-                user32.keybd_event(VK_V, 0, KEYEVENTF_KEYUP, 0)
-                user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+                try:
+                    user32.keybd_event(VK_CONTROL, 0, 0, 0)
+                    user32.keybd_event(VK_V, 0, 0, 0)
+                finally:
+                    user32.keybd_event(VK_V, 0, KEYEVENTF_KEYUP, 0)
+                    user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
             except Exception:
                 pass
 
-        import threading
-        import time
-        threading.Thread(target=lambda: (time.sleep(delay_ms / 1000.0), _do_paste()), daemon=True).start()
+        # Schedule execution on UI thread after delay_ms to allow tab switch/window focus
+        self.after(max(50, delay_ms), _do_paste_ui)
 
     def focus_browser(self):
         """Brings Win32 keyboard and mouse focus to the embedded WebView2 window."""
@@ -663,6 +867,13 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 user32.SetFocus(self.hwnd)
             except Exception:
                 pass
+
+    def _safe_close_popup(self, form, wv=None):
+        """Safely closes and disposes a popup window after downloads finish."""
+        try:
+            form.Close()
+        except Exception:
+            pass
 
     def _show_download_notification(self, text: str, success: bool = True):
         """Displays transient download status feedback in the toolbar."""
@@ -673,18 +884,38 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
     def _prompt_save_file(self, initial_dir: str, suggested_name: str) -> Optional[str]:
         """Prompts the user with native SaveFileDialog. Returns chosen file path or None if cancelled."""
-        from System.Windows.Forms import SaveFileDialog, DialogResult
-        dialog = SaveFileDialog()
-        dialog.Title = "Mammouth — Datei speichern"
-        dialog.InitialDirectory = initial_dir
-        dialog.FileName = suggested_name
-        dialog.Filter = "Alle Dateien (*.*)|*.*"
-        dialog.RestoreDirectory = True
+        # Method 1: Try native tkinter.filedialog for thread-safe dialog without COM STA conflicts
+        try:
+            import tkinter.filedialog as fd
+            chosen = fd.asksaveasfilename(
+                title="Mammouth — Datei speichern",
+                initialdir=initial_dir,
+                initialfile=suggested_name,
+                parent=self.winfo_toplevel()
+            )
+            if chosen:
+                return str(chosen)
+            # If user explicitly cancelled tkinter dialog, return None
+            return None
+        except Exception:
+            pass
 
-        res = dialog.ShowDialog()
-        if res == DialogResult.OK and dialog.FileName:
-            return str(dialog.FileName)
-        return None
+        # Method 2: Fallback to System.Windows.Forms.SaveFileDialog
+        try:
+            from System.Windows.Forms import SaveFileDialog, DialogResult
+            dialog = SaveFileDialog()
+            dialog.Title = "Mammouth — Datei speichern"
+            dialog.InitialDirectory = initial_dir
+            dialog.FileName = suggested_name
+            dialog.Filter = "Alle Dateien (*.*)|*.*"
+            dialog.RestoreDirectory = True
+
+            res = dialog.ShowDialog()
+            if res == DialogResult.OK and dialog.FileName:
+                return str(dialog.FileName)
+            return None
+        except Exception:
+            return None
 
     def _on_download_starting(self, sender, args):
         """Native download handler presenting a SaveFileDialog and tracking download state."""
@@ -695,8 +926,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             pass
 
         try:
-            download_op = args.DownloadOperation
-            suggested_path = str(args.ResultFilePath or "")
+            download_op = getattr(args, "DownloadOperation", None)
+            suggested_path = ""
+            try:
+                suggested_path = str(args.ResultFilePath or "")
+            except Exception:
+                pass
             suggested_name = os.path.basename(suggested_path) if suggested_path else "download"
             suggested_name = "".join(c for c in suggested_name if c not in '<>:"/\\|?*').strip() or "download"
 
@@ -705,34 +940,85 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
             save_dest = self._prompt_save_file(downloads_dir, suggested_name)
             if save_dest:
-                args.set_ResultFilePath(save_dest)
-                args.set_Handled(True)
+                if hasattr(args, "set_ResultFilePath"):
+                    try:
+                        args.set_ResultFilePath(str(save_dest))
+                    except Exception:
+                        pass
+                try:
+                    args.ResultFilePath = str(save_dest)
+                except Exception:
+                    pass
+
+                if hasattr(args, "set_Handled"):
+                    try:
+                        args.set_Handled(True)
+                    except Exception:
+                        pass
+                try:
+                    args.Handled = True
+                except Exception:
+                    pass
 
                 final_name = os.path.basename(save_dest)
                 self.after(0, lambda n=final_name: self._show_download_notification(f"⬇ Lade herunter: {n}...", success=True))
 
-                def _on_state_changed(s, a):
+                if download_op:
+                    def _on_state_changed(s, a):
+                        try:
+                            state_str = str(download_op.State)
+                            if "Completed" in state_str:
+                                self.after(0, lambda n=final_name: self._show_download_notification(f"✓ Gespeichert: {n}", success=True))
+                            elif "Interrupted" in state_str:
+                                self.after(0, lambda n=final_name: self._show_download_notification(f"⚠ Download abgebrochen: {n}", success=False))
+                        except Exception:
+                            pass
+
                     try:
-                        state_str = str(download_op.State)
-                        if "Completed" in state_str:
-                            self.after(0, lambda n=final_name: self._show_download_notification(f"✓ Gespeichert: {n}", success=True))
-                        elif "Interrupted" in state_str:
-                            self.after(0, lambda n=final_name: self._show_download_notification(f"⚠ Download abgebrochen: {n}", success=False))
+                        download_op.StateChanged += _on_state_changed
                     except Exception:
                         pass
-
-                download_op.StateChanged += _on_state_changed
             else:
-                args.set_Cancel(True)
+                if hasattr(args, "set_Cancel"):
+                    try:
+                        args.set_Cancel(True)
+                    except Exception:
+                        pass
+                try:
+                    args.Cancel = True
+                except Exception:
+                    pass
         except Exception:
             # Fallback in case dialog cannot be displayed: save directly to ~/Downloads
             try:
                 downloads_dir = str(Path.home() / "Downloads")
-                suggested_name = os.path.basename(str(args.ResultFilePath or "download"))
+                suggested_name = "download"
+                try:
+                    suggested_path = str(args.ResultFilePath or "")
+                    if suggested_path:
+                        suggested_name = os.path.basename(suggested_path)
+                except Exception:
+                    pass
                 suggested_name = "".join(c for c in suggested_name if c not in '<>:"/\\|?*').strip() or "download"
                 fallback_path = os.path.join(downloads_dir, suggested_name)
-                args.set_ResultFilePath(fallback_path)
-                args.set_Handled(True)
+                if hasattr(args, "set_ResultFilePath"):
+                    try:
+                        args.set_ResultFilePath(fallback_path)
+                    except Exception:
+                        pass
+                try:
+                    args.ResultFilePath = fallback_path
+                except Exception:
+                    pass
+                if hasattr(args, "set_Handled"):
+                    try:
+                        args.set_Handled(True)
+                    except Exception:
+                        pass
+                try:
+                    args.Handled = True
+                except Exception:
+                    pass
                 self.after(0, lambda n=suggested_name: self._show_download_notification(f"✓ Gespeichert unter Downloads: {n}", success=True))
             except Exception:
                 pass

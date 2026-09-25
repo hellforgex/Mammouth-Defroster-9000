@@ -34,7 +34,7 @@ You do **not** need Python, Git, or terminal knowledge. Everything is bundled in
 ```
 
 1. **Download the Release Package**:  
-   👉 **[Download MammouthDefroster9000-v0.4.0-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~86.4 MB)
+   👉 **[Download MammouthDefroster9000-v0.4.1-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~86.5 MB)
 2. **Extract the ZIP**:  
    Extract the archive to any convenient folder on your Windows PC (e.g. `C:\MammouthDefroster9000` or your Desktop).
 3. **Launch the Cockpit**:  

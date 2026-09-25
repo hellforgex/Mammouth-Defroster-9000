@@ -157,7 +157,7 @@ from modules.google_drive import (
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.4.0): Sovereign Windows 11 Desktop Cockpit, Vision, Google Drive & Unreal Engine 5 Automation Platform.
+    Mammouth Defroster 9000 (v0.4.1): Sovereign Windows 11 Desktop Cockpit, Vision, Google Drive & Unreal Engine 5 Automation Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, Google Drive cloud integration, and Unreal Engine automation exclusively for Mammouth.ai.
     Always prioritize safety, sandboxing, and precision.
     """

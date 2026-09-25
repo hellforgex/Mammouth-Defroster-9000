@@ -70,7 +70,9 @@
     "enabled": true,
     "start_page": "https://mammouth.ai",
     "auto_open_on_server_start": true,
-    "user_data_dir": "./data/browser_profile"
+    "user_data_dir": "./data/browser_profile",
+    "quota_sidebar_enabled": true,
+    "quota_refresh_interval_seconds": 300
   }
 }
 

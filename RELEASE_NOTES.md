@@ -2,7 +2,24 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.4.0**
+> **Current Version:** **v0.4.1**
+
+---
+
+## 🚀 What's New in v0.4.1
+
+### 🐛 Critical Bugfixes: Downloads & Screenshot Paste
+* **Download Dialog Crash Fix:** Fixed an immediate crash when clicking "OK" on the native Save File dialog. Resolved premature closing and disposing of the popup WebView2 instance while downloads are initializing or active. Added resilient `tkinter.filedialog` fallback and safe deferral completion.
+* **Screenshot & Paste Freeze Fix:** Fixed an issue where the application could hang when capturing a screenshot and inserting it into chat. Moved WebView2 script execution to the main UI thread to eliminate COM cross-thread deadlocks. Added a guaranteed `finally` key-up release for `VK_CONTROL` and `VK_V` preventing stuck modifier keys. Added an exponential retry loop with safe `finally` clipboard closing in `copy_image_to_clipboard`.
+
+### 🦣 Mammouth AI Quota & Usage Monitor in Sidebar
+* **Native In-Sidebar Telemetry (`CTkMammouthQuotaCard`):** Real-time quota and usage metrics rendered directly in the left Cockpit sidebar.
+* **Background WebView2 Session Bridge:** Directly communicates with Mammouth.ai's authenticated session via `ExecuteScriptAsync` to query `/api/user/currentUsage` and `/api/user/recentUsage`.
+* **Model Consumption Breakdown:** Displays a stacked multi-segment progress bar and legend dots for each model family (Claude, GPT, GLM, Gemini, Perplexity).
+* **Accurate Rolling Window & Plan Multipliers:** Implements Mammouth's 150-cent base threshold with plan multipliers (`Starter x1`, `Standard x3`, `Expert x10`).
+* **5-Minute Auto-Refresh & 🔄 Button:** Automatic background updates every 300 seconds and instantaneous manual refresh with feedback indicators.
+* **1-Click Navigation:** Clicking the quota card seamlessly focuses the in-app Mammouth AI WebApp tab.
+* **Settings Tab Integration:** Toggle the quota card on/off and select custom refresh intervals (1 to 15 minutes) under ⚙️ Settings.
 
 ---
 

@@ -278,12 +278,12 @@ def screen_capture(
 
 
 def copy_image_to_clipboard(image_or_path) -> bool:
-    """Copies an image (file path or PIL Image object) to the Windows clipboard as CF_DIB."""
+    """Copies an image (file path or PIL Image object) to the Windows clipboard as CF_DIB with retries."""
     if os.name != "nt":
         return False
     try:
         from PIL import Image
-        import win32clipboard, io
+        import win32clipboard, io, time
         if isinstance(image_or_path, (str, Path)):
             img = Image.open(str(image_or_path))
         else:
@@ -294,13 +294,26 @@ def copy_image_to_clipboard(image_or_path) -> bool:
         data = output.getvalue()[14:]  # 14-byte BMP header stripped for CF_DIB
         output.close()
         
-        win32clipboard.OpenClipboard()
-        win32clipboard.EmptyClipboard()
-        win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
-        win32clipboard.CloseClipboard()
-        return True
+        for _ in range(5):
+            opened = False
+            try:
+                win32clipboard.OpenClipboard()
+                opened = True
+                win32clipboard.EmptyClipboard()
+                win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
+                return True
+            except Exception:
+                time.sleep(0.06)
+            finally:
+                if opened:
+                    try:
+                        win32clipboard.CloseClipboard()
+                    except Exception:
+                        pass
+        return False
     except Exception:
         return False
+
 
 
 def launch_windows_snipping_tool() -> bool:

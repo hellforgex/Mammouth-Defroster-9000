@@ -5,6 +5,24 @@ All notable changes to **Mammouth Defroster 9000** will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-09-25
+
+### 🐛 Critical Bugfixes: Downloads & Screenshot Paste
+- **Download Dialog Crash Fix:** Fixed an immediate application crash when clicking "OK" on the native Save File dialog. Resolved premature closing and disposing of the popup WebView2 instance while downloads are starting or active. Added resilient `tkinter.filedialog` fallback and safe deferral completion.
+- **Screenshot & Paste Freeze Fix:** Fixed an issue where the application could hang when capturing a screenshot and inserting it into chat. Moved WebView2 script execution to the main UI thread to eliminate COM cross-thread deadlocks. Added a guaranteed `finally` key-up release for `VK_CONTROL` and `VK_V` preventing stuck modifier keys. Added an exponential retry loop with safe `finally` clipboard closing in `copy_image_to_clipboard`.
+
+### 🦣 Mammouth AI Quota & Usage Monitor in Sidebar
+- **Native Sidebar Quota Widget (`CTkMammouthQuotaCard`):** Integrates real-time quota telemetry directly into the Cockpit sidebar above the telemetry card.
+- **Reverse-Engineered Mammouth Telemetry Bridge:** Leverages the embedded WebView2 session via `ExecuteScriptAsync` to query `/api/user/currentUsage` and `/api/user/recentUsage` with zero credential or Cloudflare issues.
+- **Model Family Breakdown:** Displays proportional stacked progress bar and legend dots for active AI model families (Claude, GPT, GLM, Gemini, Perplexity).
+- **Plan Multipliers & Limits:** Accurately computes limits based on 150-cent ($1.50) rolling 3-hour window with plan multipliers (Starter x1, Standard x3, Expert x10).
+- **5-Minute Background Auto-Refresh:** Automatically refreshes quota status in the background every 300 seconds (configurable) and upon navigating to the Mammouth WebApp tab.
+- **Manual 🔄 Refresh Button:** One-click instant refresh with feedback animations and debouncing.
+- **Interactive 1-Click Jump:** Clicking the quota card seamlessly focuses the in-app Mammouth AI Web tab.
+- **Settings Tab Controls:** Toggle sidebar quota display and configure refresh interval (1, 2, 5, 10, or 15 minutes) under ⚙️ Settings.
+
+---
+
 ## [0.4.0] - 2026-09-24
 
 ### 💬 In-App Mammouth.ai WebView2 Cockpit

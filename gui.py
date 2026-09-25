@@ -21,7 +21,7 @@ import threading
 import subprocess
 import webbrowser
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable
 
 
 # Ensure sys.stdout and sys.stderr are never None in frozen windowed binaries
@@ -62,7 +62,7 @@ if (BASE_DIR / "modules").exists() and str(BASE_DIR / "modules") not in sys.path
 
 from config import load_config, save_config, get_lan_ip, generate_secure_token, _decrypt_dpapi, CONFIG_FILE
 from server import build_app, app
-from modules.embedded_browser import MammouthBrowserFrame, HAS_WEBVIEW2
+from modules.embedded_browser import MammouthBrowserFrame, HAS_WEBVIEW2, parse_mammouth_quota_data
 from modules.updater import check_for_update, download_and_verify_update, apply_update_and_restart
 
 
@@ -215,7 +215,7 @@ ctk.set_appearance_mode(INITIAL_MODE)
 ctk.set_default_color_theme("dark-blue")
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.4.0"
+APP_VERSION = "v0.4.1"
 
 
 def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
@@ -599,6 +599,267 @@ class SplashScreen(ctk.CTkToplevel):
             pass
 
 
+class CTkMammouthQuotaCard(ctk.CTkFrame):
+    """Native CustomTkinter Sidebar Card for Mammouth.ai Quota & Telemetry."""
+
+    def __init__(
+        self,
+        master,
+        on_click: Optional[Callable[[], None]] = None,
+        on_refresh: Optional[Callable[[], None]] = None,
+        **kwargs
+    ):
+        super().__init__(
+            master,
+            fg_color=("#F8FAFC", "#242428"),
+            border_width=1,
+            border_color=("#E2E8F0", "#38393F"),
+            corner_radius=8,
+            cursor="hand2" if on_click else "arrow",
+            **kwargs
+        )
+        self.on_click = on_click
+        self.on_refresh = on_refresh
+        self._parsed_data: Dict[str, Any] = {}
+        self._last_refresh_timestamp: float = 0.0
+
+        self._build_ui()
+
+    def _build_ui(self):
+        self.inner = ctk.CTkFrame(self, fg_color="transparent")
+        self.inner.pack(fill="x", padx=10, pady=8)
+
+        # 1. Header row: Title + Refresh Button
+        self.hdr_box = ctk.CTkFrame(self.inner, fg_color="transparent")
+        self.hdr_box.pack(fill="x", pady=(0, 4))
+
+        self.lbl_title = ctk.CTkLabel(
+            self.hdr_box,
+            text="🦣 Kontingent",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#0F172A", "#F3F4F6")
+        )
+        self.lbl_title.pack(side="left")
+
+        self.btn_refresh = ctk.CTkButton(
+            self.hdr_box,
+            text="🔄",
+            width=22,
+            height=20,
+            corner_radius=4,
+            font=ctk.CTkFont(size=11),
+            fg_color="transparent",
+            hover_color=("#E2E8F0", "#36373E"),
+            text_color=("#64748B", "#8E909A"),
+            command=self._on_refresh_clicked
+        )
+        self.btn_refresh.pack(side="right")
+
+        # 2. Status Row: Plan Badge + Percentage
+        self.status_box = ctk.CTkFrame(self.inner, fg_color="transparent")
+        self.status_box.pack(fill="x", pady=(0, 6))
+
+        self.badge_plan = ctk.CTkFrame(
+            self.status_box,
+            fg_color=("#E2E8F0", "#36373E"),
+            corner_radius=10
+        )
+        self.badge_plan.pack(side="left")
+
+        self.lbl_plan = ctk.CTkLabel(
+            self.badge_plan,
+            text="Wird geladen...",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=("#0F172A", "#FFFFFF")
+        )
+        self.lbl_plan.pack(padx=6, pady=1)
+
+        self.lbl_percent = ctk.CTkLabel(
+            self.status_box,
+            text="-- %",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=("#059669", "#10B981")
+        )
+        self.lbl_percent.pack(side="right")
+
+        # 3. Canvas Progress Bar
+        self.canvas_bar = ctk.CTkCanvas(
+            self.inner,
+            height=6,
+            highlightthickness=0,
+            bd=0
+        )
+        self.canvas_bar.pack(fill="x", pady=(0, 6))
+        self.canvas_bar.bind("<Configure>", lambda e: self._draw_bar())
+
+        # 4. Legend Frame for Models
+        self.legend_frame = ctk.CTkFrame(self.inner, fg_color="transparent")
+        self.legend_frame.pack(fill="x", pady=(0, 4))
+
+        # 5. Footer info
+        self.lbl_footer = ctk.CTkLabel(
+            self.inner,
+            text="⏳ 3h-Sitzungsfenster",
+            font=ctk.CTkFont(size=9),
+            text_color=("#64748B", "#8E909A")
+        )
+        self.lbl_footer.pack(anchor="w")
+
+        # Bind click to open WebApp tab
+        self._bind_click_recursive(self)
+
+    def _bind_click_recursive(self, widget):
+        if widget != self.btn_refresh and not str(widget).endswith("button"):
+            try:
+                widget.bind("<Button-1>", lambda e: self._on_card_clicked())
+                widget.bind("<Enter>", lambda e: self.configure(border_color=("#CBD5E1", "#4A4B53")))
+                widget.bind("<Leave>", lambda e: self.configure(border_color=("#E2E8F0", "#38393F")))
+            except Exception:
+                pass
+        for child in widget.winfo_children():
+            self._bind_click_recursive(child)
+
+    def _on_card_clicked(self):
+        if self.on_click:
+            try:
+                self.on_click()
+            except Exception:
+                pass
+
+    def _on_refresh_clicked(self):
+        self.btn_refresh.configure(text="⏳")
+        self.after(1200, lambda: self.btn_refresh.configure(text="🔄"))
+        if self.on_refresh:
+            try:
+                self.on_refresh()
+            except Exception:
+                pass
+
+    def update_quota(self, parsed: Dict[str, Any]):
+        self._parsed_data = parsed or {}
+        self._last_refresh_timestamp = time.time()
+
+        is_logged_in = parsed.get("is_logged_in", False)
+        plan_label = parsed.get("plan_label", "Nicht eingeloggt")
+        pct = float(parsed.get("total_percent", 0.0))
+
+        self.lbl_plan.configure(text=plan_label)
+
+        if not is_logged_in:
+            self.lbl_percent.configure(text="-- %", text_color=("#64748B", "#8E909A"))
+            self.badge_plan.configure(fg_color=("#F1F5F9", "#2F2F33"))
+            self.lbl_footer.configure(text="🔒 Zum Anmelden klicken")
+        else:
+            self.lbl_percent.configure(text=f"{int(round(pct))} %")
+            if pct < 70.0:
+                self.lbl_percent.configure(text_color=("#059669", "#10B981"))
+            elif pct < 90.0:
+                self.lbl_percent.configure(text_color=("#D97706", "#F59E0B"))
+            else:
+                self.lbl_percent.configure(text_color=("#DC2626", "#EF4444"))
+
+            self.badge_plan.configure(fg_color=("#E2E8F0", "#36373E"))
+            self.lbl_footer.configure(text="⏳ 3h-Fenster • Gerade eben")
+
+        # Update Legend
+        for w in self.legend_frame.winfo_children():
+            w.destroy()
+
+        if not is_logged_in:
+            lbl_hint = ctk.CTkLabel(
+                self.legend_frame,
+                text="In Mammouth.ai einloggen",
+                font=ctk.CTkFont(size=10),
+                text_color=("#64748B", "#8E909A")
+            )
+            lbl_hint.pack(anchor="w")
+        else:
+            brands = parsed.get("brands", [])
+            if brands:
+                for i in range(0, len(brands), 2):
+                    row_f = ctk.CTkFrame(self.legend_frame, fg_color="transparent")
+                    row_f.pack(fill="x", pady=1)
+
+                    b1 = brands[i]
+                    val_str1 = f"{int(round(b1['value']))}%" if b1['value'] >= 1 else "<1%"
+                    ctk.CTkLabel(
+                        row_f,
+                        text=f"● {b1['label']} {val_str1}",
+                        font=ctk.CTkFont(size=10),
+                        text_color=b1['color']
+                    ).pack(side="left", padx=(0, 6))
+
+                    if i + 1 < len(brands):
+                        b2 = brands[i + 1]
+                        val_str2 = f"{int(round(b2['value']))}%" if b2['value'] >= 1 else "<1%"
+                        ctk.CTkLabel(
+                            row_f,
+                            text=f"● {b2['label']} {val_str2}",
+                            font=ctk.CTkFont(size=10),
+                            text_color=b2['color']
+                        ).pack(side="left")
+            else:
+                ctk.CTkLabel(
+                    self.legend_frame,
+                    text="Noch keine Aktivität",
+                    font=ctk.CTkFont(size=10),
+                    text_color=("#64748B", "#8E909A")
+                ).pack(anchor="w")
+
+        self._draw_bar()
+        self._bind_click_recursive(self.legend_frame)
+
+    def _draw_bar(self):
+        if not hasattr(self, "canvas_bar"):
+            return
+
+        w = self.canvas_bar.winfo_width()
+        if w <= 1:
+            w = 195
+        h = 6
+
+        is_dark = ctk.get_appearance_mode().lower() == "dark"
+        card_bg = "#242428" if is_dark else "#F8FAFC"
+        track_bg = "#2F2F33" if is_dark else "#E2E8F0"
+
+        self.canvas_bar.configure(bg=card_bg)
+        self.canvas_bar.delete("all")
+
+        self.canvas_bar.create_rectangle(0, 0, w, h, fill=track_bg, outline="")
+
+        if not self._parsed_data or not self._parsed_data.get("is_logged_in"):
+            return
+
+        pct = float(self._parsed_data.get("total_percent", 0.0))
+        if pct <= 0:
+            return
+
+        filled_w = max(2, min(w, int(round(w * (pct / 100.0)))))
+        brands = self._parsed_data.get("brands", [])
+
+        if brands:
+            total_brand_val = sum(b.get("value", 0.0) for b in brands)
+            if total_brand_val <= 0:
+                total_brand_val = 1.0
+
+            curr_x = 0
+            for i, b in enumerate(brands):
+                b_val = b.get("value", 0.0)
+                if b_val <= 0:
+                    continue
+                seg_w = max(2, int(round(filled_w * (b_val / total_brand_val))))
+                x_end = min(filled_w, curr_x + seg_w)
+                if i == len(brands) - 1:
+                    x_end = filled_w
+
+                if x_end > curr_x:
+                    self.canvas_bar.create_rectangle(curr_x, 0, x_end, h, fill=b["color"], outline="")
+                    curr_x = x_end
+        else:
+            color = "#10B981" if pct < 70 else ("#F59E0B" if pct < 90 else "#EF4444")
+            self.canvas_bar.create_rectangle(0, 0, filled_w, h, fill=color, outline="")
+
+
 class MammouthControlCenter(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -684,6 +945,8 @@ class MammouthControlCenter(ctk.CTk):
                     self.after(200, self._start_server)
                 if self.config_data.get("server", {}).get("auto_check_updates", True):
                     self.after(2500, self._check_updates_async)
+                if self.config_data.get("embedded_browser", {}).get("quota_sidebar_enabled", True):
+                    self.after(3000, self._schedule_quota_refresh_loop)
 
             self.after(350, finish_loading)
         else:
@@ -692,6 +955,8 @@ class MammouthControlCenter(ctk.CTk):
                 self.after(200, self._start_server)
             if self.config_data.get("server", {}).get("auto_check_updates", True):
                 self.after(2500, self._check_updates_async)
+            if self.config_data.get("embedded_browser", {}).get("quota_sidebar_enabled", True):
+                self.after(3000, self._schedule_quota_refresh_loop)
 
 
     def _setup_logging(self):
@@ -957,16 +1222,26 @@ class MammouthControlCenter(ctk.CTk):
         bottom_box = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         bottom_box.pack(side="bottom", fill="x", padx=10, pady=12)
 
-        mini_card = ctk.CTkFrame(
+        # Mammouth Quota Telemetry Card (v0.5.0)
+        self.quota_card = CTkMammouthQuotaCard(
+            bottom_box,
+            on_click=lambda: self._select_nav_tab("💬 Mammouth AI Web"),
+            on_refresh=self._on_quota_manual_refresh
+        )
+        browser_cfg = self.config_data.get("embedded_browser", {})
+        if browser_cfg.get("quota_sidebar_enabled", True):
+            self.quota_card.pack(fill="x", pady=(0, 8))
+
+        self.mini_card = ctk.CTkFrame(
             bottom_box,
             fg_color=("#F8FAFC", "#242428"),
             border_width=1,
             border_color=("#E2E8F0", "#38393F"),
             corner_radius=8
         )
-        mini_card.pack(fill="x", pady=(0, 8))
+        self.mini_card.pack(fill="x", pady=(0, 8))
 
-        inner_card = ctk.CTkFrame(mini_card, fg_color="transparent")
+        inner_card = ctk.CTkFrame(self.mini_card, fg_color="transparent")
         inner_card.pack(fill="x", padx=10, pady=8)
 
         self.lbl_nav_tools = ctk.CTkLabel(
@@ -1071,10 +1346,38 @@ class MammouthControlCenter(ctk.CTk):
             get_mcp_url_cb=self._calculate_active_endpoint_url,
             start_url=start_url,
             profile_dir=user_data_dir,
-            screenshot_cb=self._take_and_copy_screenshot
+            screenshot_cb=self._take_and_copy_screenshot,
+            quota_cb=self._on_quota_updated
         )
         self.tab_mammouth.configure(fg_color=("#FFFFFF", "#202124"))
         self.mammouth_browser.pack(fill="both", expand=True, padx=0, pady=0)
+
+    def _on_quota_updated(self, payload: Optional[Dict[str, Any]]):
+        """Callback invoked when MammouthBrowserFrame receives new quota data."""
+        if hasattr(self, "quota_card") and self.quota_card:
+            parsed = parse_mammouth_quota_data(payload)
+            self.quota_card.update_quota(parsed)
+
+    def _on_quota_manual_refresh(self):
+        """Manually trigger quota telemetry query in WebView2."""
+        if hasattr(self, "mammouth_browser") and self.mammouth_browser:
+            if not getattr(self.mammouth_browser, "is_embedded", False):
+                self.mammouth_browser.ensure_initialized()
+                self.mammouth_browser.set_tab_visible(False)
+            self.mammouth_browser.request_quota_refresh()
+
+    def _schedule_quota_refresh_loop(self):
+        """Periodically requests updated quota telemetry from Mammouth.ai."""
+        browser_cfg = self.config_data.get("embedded_browser", {})
+        if browser_cfg.get("quota_sidebar_enabled", True):
+            if hasattr(self, "mammouth_browser") and self.mammouth_browser:
+                if not getattr(self.mammouth_browser, "is_embedded", False):
+                    self.mammouth_browser.ensure_initialized()
+                    self.mammouth_browser.set_tab_visible(False)
+                self.mammouth_browser.request_quota_refresh()
+
+        interval_sec = max(30, int(browser_cfg.get("quota_refresh_interval_seconds", 300)))
+        self._quota_timer_id = self.after(interval_sec * 1000, self._schedule_quota_refresh_loop)
 
     def _take_and_copy_screenshot(self) -> Optional[str]:
         try:
@@ -1135,12 +1438,15 @@ class MammouthControlCenter(ctk.CTk):
             new_image = None
 
             while time.time() - start_t < max_wait:
-                time.sleep(0.25)
+                time.sleep(0.35)
                 try:
                     cur = ImageGrab.grabclipboard()
                     if isinstance(cur, PILImage.Image):
+                        if initial_bytes is None:
+                            new_image = cur
+                            break
                         cur_b = cur.tobytes() if hasattr(cur, "tobytes") else None
-                        if initial_bytes is None or cur_b != initial_bytes:
+                        if cur_b != initial_bytes:
                             new_image = cur
                             break
                 except Exception:
@@ -1164,9 +1470,9 @@ class MammouthControlCenter(ctk.CTk):
         threading.Thread(target=_snip_watcher, daemon=True).start()
 
     def _on_snip_completed(self, saved_path: str):
-        self._log(f"[VISION] Snip captured: {saved_path} (Automatically attaching to Mammouth chat)")
+        self._log(f"[VISION] Snip captured: {saved_path} (Ready in clipboard and focusing chat)")
         if hasattr(self, "btn_header_screen"):
-            self.btn_header_screen.configure(text="✓ Im Chat eingefügt!", fg_color="#10B981")
+            self.btn_header_screen.configure(text="✓ Im Clipboard & Chat!", fg_color="#10B981")
             self.after(3000, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=("#F1F5F9", "#36373E")))
 
         # 1. Bring Defroster to foreground
@@ -1180,9 +1486,9 @@ class MammouthControlCenter(ctk.CTk):
         # 2. Switch to Mammouth WebApp tab
         self._switch_to_mammouth_tab()
 
-        # 3. Focus chat input and trigger Ctrl+V paste
+        # 3. Focus chat input and trigger Ctrl+V paste safely on UI thread
         if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
-            self.mammouth_browser.focus_and_paste(delay_ms=250)
+            self.mammouth_browser.focus_and_paste(delay_ms=300)
 
     def _on_snip_cancelled(self):
         if hasattr(self, "btn_header_screen"):
@@ -1205,6 +1511,7 @@ class MammouthControlCenter(ctk.CTk):
             if current == "💬 Mammouth AI Web":
                 self.mammouth_browser.ensure_initialized()
                 self.mammouth_browser.set_tab_visible(True)
+                self.after(600, self._on_quota_manual_refresh)
             else:
                 self.mammouth_browser.set_tab_visible(False)
 
@@ -3190,6 +3497,35 @@ class MammouthControlCenter(ctk.CTk):
         self.entry_browser_start_url.insert(0, start_page_val)
         self.entry_browser_start_url.pack(side="left", padx=(0, 8))
 
+        f_br3 = ctk.CTkFrame(browser_group, fg_color="transparent")
+        f_br3.pack(fill="x", padx=15, pady=(5, 5))
+        self.var_quota_sidebar = ctk.BooleanVar(value=self.config_data.get("embedded_browser", {}).get("quota_sidebar_enabled", True))
+        sw_quota_sidebar = ctk.CTkSwitch(
+            f_br3,
+            text="Mammouth-Kontingent in Sidebar anzeigen (v0.5.0)",
+            variable=self.var_quota_sidebar,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=("#0F172A", "#FFFFFF"),
+            progress_color="#10B981"
+        )
+        sw_quota_sidebar.pack(side="left")
+
+        f_br4 = ctk.CTkFrame(browser_group, fg_color="transparent")
+        f_br4.pack(fill="x", padx=15, pady=(5, 15))
+        ctk.CTkLabel(f_br4, text="Kontingent-Intervall:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
+        self.opt_quota_interval = ctk.CTkOptionMenu(
+            f_br4,
+            values=["1 Minute (60s)", "2 Minuten (120s)", "5 Minuten (300s)", "10 Minuten (600s)", "15 Minuten (900s)"],
+            width=220,
+            fg_color=("#F1F5F9", "#36373E"),
+            button_color=("#CBD5E1", "#4A4B53"),
+            text_color=("#0F172A", "#FFFFFF")
+        )
+        cur_sec = self.config_data.get("embedded_browser", {}).get("quota_refresh_interval_seconds", 300)
+        sec_map = {60: "1 Minute (60s)", 120: "2 Minuten (120s)", 300: "5 Minuten (300s)", 600: "10 Minuten (600s)", 900: "15 Minuten (900s)"}
+        self.opt_quota_interval.set(sec_map.get(cur_sec, "5 Minuten (300s)"))
+        self.opt_quota_interval.pack(side="left")
+
         # 9. Software Updates
         upd_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
         upd_group.pack(fill="x", pady=6)
@@ -3355,6 +3691,25 @@ class MammouthControlCenter(ctk.CTk):
             self.config_data.setdefault("embedded_browser", {})["start_page"] = new_url
             if hasattr(self, "mammouth_browser"):
                 self.mammouth_browser.start_url = new_url
+
+        if hasattr(self, "var_quota_sidebar"):
+            enabled = self.var_quota_sidebar.get()
+            self.config_data.setdefault("embedded_browser", {})["quota_sidebar_enabled"] = enabled
+            if hasattr(self, "quota_card"):
+                if enabled:
+                    self.quota_card.pack(fill="x", pady=(0, 8), before=self.mini_card if hasattr(self, "mini_card") else None)
+                else:
+                    self.quota_card.pack_forget()
+
+        if hasattr(self, "opt_quota_interval"):
+            choice = self.opt_quota_interval.get()
+            val_sec = 300
+            if "1 Minute" in choice: val_sec = 60
+            elif "2 Minuten" in choice: val_sec = 120
+            elif "5 Minuten" in choice: val_sec = 300
+            elif "10 Minuten" in choice: val_sec = 600
+            elif "15 Minuten" in choice: val_sec = 900
+            self.config_data.setdefault("embedded_browser", {})["quota_refresh_interval_seconds"] = val_sec
 
         if hasattr(self, "var_auto_check_updates"):
             self.config_data.setdefault("server", {})["auto_check_updates"] = self.var_auto_check_updates.get()

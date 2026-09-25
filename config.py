@@ -112,7 +112,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "enabled": True,
         "start_page": "https://mammouth.ai",
         "auto_open_on_server_start": True,
-        "user_data_dir": "./data/browser_profile"
+        "user_data_dir": "./data/browser_profile",
+        "quota_sidebar_enabled": True,
+        "quota_refresh_interval_seconds": 300
     }
 }
 
