@@ -946,7 +946,10 @@ class MammouthControlCenter(ctk.CTk):
                 if self.config_data.get("server", {}).get("auto_check_updates", True):
                     self.after(2500, self._check_updates_async)
                 if self.config_data.get("embedded_browser", {}).get("quota_sidebar_enabled", True):
-                    self.after(3000, self._schedule_quota_refresh_loop)
+                    self.after(2000, self._on_quota_manual_refresh)
+                    self.after(6000, self._on_quota_manual_refresh)
+                    self.after(15000, self._on_quota_manual_refresh)
+                    self.after(30000, self._schedule_quota_refresh_loop)
 
             self.after(350, finish_loading)
         else:
@@ -956,7 +959,10 @@ class MammouthControlCenter(ctk.CTk):
             if self.config_data.get("server", {}).get("auto_check_updates", True):
                 self.after(2500, self._check_updates_async)
             if self.config_data.get("embedded_browser", {}).get("quota_sidebar_enabled", True):
-                self.after(3000, self._schedule_quota_refresh_loop)
+                self.after(2000, self._on_quota_manual_refresh)
+                self.after(6000, self._on_quota_manual_refresh)
+                self.after(15000, self._on_quota_manual_refresh)
+                self.after(30000, self._schedule_quota_refresh_loop)
 
 
     def _setup_logging(self):
@@ -1357,6 +1363,10 @@ class MammouthControlCenter(ctk.CTk):
         if hasattr(self, "quota_card") and self.quota_card:
             parsed = parse_mammouth_quota_data(payload)
             self.quota_card.update_quota(parsed)
+            if parsed.get("is_logged_in"):
+                self._log(f"[QUOTA] Live-Kontingent: {parsed.get('plan_label')} ({int(round(parsed.get('total_percent', 0)))}% genutzt)")
+            else:
+                self._log("[QUOTA] Nicht eingeloggt oder Sitzung inaktiv (Anmeldung in Mammouth WebApp erforderlich)")
 
     def _on_quota_manual_refresh(self):
         """Manually trigger quota telemetry query in WebView2."""

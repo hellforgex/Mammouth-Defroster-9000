@@ -64,6 +64,79 @@ def _is_download_uri(uri: str) -> bool:
     return False
 
 
+def _native_save_file_dialog(initial_dir: str, default_name: str, title: str = "Mammouth — Datei speichern", hwnd_owner: int = 0) -> Optional[str]:
+    """Prompts the user with native Windows GetSaveFileNameW dialog.
+    Pure Win32 C API: thread-safe, STA/MTA agnostic, zero COM or Tkinter message-loop side effects."""
+    if os.name == "nt":
+        try:
+            from ctypes import wintypes
+
+            class OPENFILENAME(ctypes.Structure):
+                _fields_ = [
+                    ('lStructSize', wintypes.DWORD),
+                    ('hwndOwner', wintypes.HWND),
+                    ('hInstance', wintypes.HINSTANCE),
+                    ('lpstrFilter', wintypes.LPCWSTR),
+                    ('lpstrCustomFilter', wintypes.LPWSTR),
+                    ('nMaxCustFilter', wintypes.DWORD),
+                    ('nFilterIndex', wintypes.DWORD),
+                    ('lpstrFile', wintypes.LPWSTR),
+                    ('nMaxFile', wintypes.DWORD),
+                    ('lpstrFileTitle', wintypes.LPWSTR),
+                    ('nMaxFileTitle', wintypes.DWORD),
+                    ('lpstrInitialDir', wintypes.LPCWSTR),
+                    ('lpstrTitle', wintypes.LPCWSTR),
+                    ('Flags', wintypes.DWORD),
+                    ('nFileOffset', wintypes.WORD),
+                    ('nFileExtension', wintypes.WORD),
+                    ('lpstrDefExt', wintypes.LPCWSTR),
+                    ('lCustData', wintypes.LPARAM),
+                    ('lpfnHook', wintypes.LPVOID),
+                    ('lpTemplateName', wintypes.LPCWSTR),
+                    ('pvReserved', wintypes.LPVOID),
+                    ('dwReserved', wintypes.DWORD),
+                    ('FlagsEx', wintypes.DWORD)
+                ]
+
+            buf = ctypes.create_unicode_buffer(1024)
+            buf.value = default_name
+
+            filter_str = "Alle Dateien (*.*)\0*.*\0\0"
+
+            ofn = OPENFILENAME()
+            ofn.lStructSize = ctypes.sizeof(OPENFILENAME)
+            ofn.hwndOwner = hwnd_owner or 0
+            ofn.lpstrFilter = filter_str
+            ofn.lpstrFile = ctypes.cast(buf, wintypes.LPWSTR)
+            ofn.nMaxFile = 1024
+            ofn.lpstrInitialDir = initial_dir
+            ofn.lpstrTitle = title
+            # OFN_OVERWRITEPROMPT (0x02) | OFN_PATHMUSTEXIST (0x800) | OFN_NOCHANGEDIR (0x08)
+            ofn.Flags = 0x00000002 | 0x00000800 | 0x00000008
+
+            if ctypes.windll.comdlg32.GetSaveFileNameW(ctypes.byref(ofn)):
+                val = str(buf.value).strip()
+                if val:
+                    return os.path.normpath(val)
+            return None
+        except Exception:
+            pass
+
+    # Non-Windows or fallback
+    try:
+        import tkinter.filedialog as fd
+        chosen = fd.asksaveasfilename(
+            title=title,
+            initialdir=initial_dir,
+            initialfile=default_name
+        )
+        if chosen:
+            return os.path.normpath(str(chosen))
+        return None
+    except Exception:
+        return None
+
+
 def _is_trusted_browser_origin(uri: str) -> bool:
     """Verifies if the requested URI originates from trusted domains (Mammouth.ai, localhost, 127.0.0.1)."""
     if not uri:
@@ -414,9 +487,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             control = Control()
             window = Window("Mammouth", "Mammouth.ai", self.start_url)
             window.real_url = self.start_url
+            window.localization = {
+                'windows.fileFilter.allFiles': 'Alle Dateien'
+            }
             self.edge = EdgeChrome(control, window, self.profile_dir)
-            # Direct pywebview's callbacks to our handlers cleanly
-            self.edge.on_download_starting = self._on_download_starting
+            # Pywebview's on_download_starting is replaced with a no-op to prevent duplicate/crashed dialogs
+            self.edge.on_download_starting = lambda sender, args: None
             self.edge.on_new_window_request = self._on_new_window_requested
 
             # Replace pywebview's fragile on_script_notify with our crash-proof _unified_web_message
@@ -471,6 +547,43 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                             core.PermissionRequested += _on_permission
                         except Exception:
                             pass
+
+                        # 4. Attach native crash-proof download handler
+                        try:
+                            core.DownloadStarting += self._on_download_starting
+                        except Exception:
+                            pass
+
+                        # 5. Inject client-side SPA navigation observer for instant quota updates
+                        try:
+                            core.AddScriptToExecuteOnDocumentCreatedAsync("""
+                            (function() {
+                                if (window._defroster_nav_hooked) return;
+                                window._defroster_nav_hooked = true;
+                                function notifyNav() {
+                                    if (window.chrome && window.chrome.webview) {
+                                        window.chrome.webview.postMessage(JSON.stringify({ type: 'mammouth_nav', url: window.location.href }));
+                                    }
+                                }
+                                var origPush = history.pushState;
+                                if (origPush) {
+                                    history.pushState = function() {
+                                        origPush.apply(this, arguments);
+                                        notifyNav();
+                                    };
+                                }
+                                var origReplace = history.replaceState;
+                                if (origReplace) {
+                                    history.replaceState = function() {
+                                        origReplace.apply(this, arguments);
+                                        notifyNav();
+                                    };
+                                }
+                                window.addEventListener('popstate', notifyNav);
+                            })();
+                            """)
+                        except Exception:
+                            pass
                 except Exception:
                     pass
 
@@ -519,10 +632,16 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             # Blob and data URLs are process-local and must always remain in WebView2
             is_local_protocol = uri_lower.startswith("blob:") or uri_lower.startswith("data:")
 
+            # Direct file download or export endpoint: route directly to main WebView2 without opening a popup
+            if _is_download_uri(uri):
+                args.set_Handled(True)
+                if hasattr(self, "edge") and self.edge and hasattr(self.edge, "webview") and self.edge.webview.CoreWebView2:
+                    self.edge.webview.CoreWebView2.Navigate(uri)
+                return
+
             # Detect if this is an auth flow, app navigation, or direct file download
             is_auth_or_app = (
                 is_local_protocol
-                or _is_download_uri(uri)
                 or "mammouth.ai" in uri_lower
                 or "accounts.google.com" in uri_lower
                 or "github.com/login" in uri_lower
@@ -630,10 +749,6 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
             def _on_form_closed(s, a):
                 try:
-                    deferral.Complete()
-                except Exception:
-                    pass
-                try:
                     popup_wv.Dispose()
                 except Exception:
                     pass
@@ -718,6 +833,11 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                     self.after(0, lambda p=payload: self.quota_cb(p))
                 return
 
+            # Handle client-side SPA navigation notification
+            if isinstance(parsed_data, dict) and parsed_data.get("type") == "mammouth_nav":
+                self.after(1000, self.request_quota_refresh)
+                return
+
             # 2. Safely handle pywebview drag-and-drop file notification
             if raw == '"FilesDropped"':
                 try:
@@ -759,43 +879,101 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             pass
 
     def request_quota_refresh(self):
-        """Triggers background quota fetch inside WebView2 session."""
+        """Triggers background quota fetch inside WebView2 session using Nuxt 3 Pinia store, $fetch, and native endpoints."""
         if not self.is_embedded or not self.edge or not hasattr(self.edge, "webview"):
             return
 
         js_script = """
-        (function() {
+        (async function() {
             try {
                 if (!window.location.hostname || !window.location.hostname.includes("mammouth.ai")) {
                     return;
                 }
-                Promise.all([
-                    fetch('/api/user/currentUsage', { credentials: 'same-origin' }).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }),
-                    fetch('/api/user/recentUsage', { credentials: 'same-origin' }).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
-                ]).then(function(results) {
-                    var cur = results[0];
-                    var rec = results[1];
-                    var payload = {
-                        ok: !!(cur || rec),
-                        current: cur,
-                        recent: rec,
-                        ts: Date.now()
-                    };
-                    if (window.chrome && window.chrome.webview) {
-                        window.chrome.webview.postMessage(JSON.stringify({
-                            type: 'mammouth_quota',
-                            payload: payload
-                        }));
+
+                var cur = null;
+                var rec = null;
+
+                // Strategy 1: Check Nuxt 3 Pinia global store directly
+                try {
+                    var nuxtApp = typeof window.useNuxtApp === 'function' ? window.useNuxtApp() : null;
+                    var pinia = nuxtApp ? (nuxtApp.$pinia || nuxtApp.pinia) : null;
+                    var globalStore = pinia && pinia._s ? pinia._s.get("global") : null;
+                    if (globalStore) {
+                        var promises = [];
+                        if (typeof globalStore.fetchCurrentUsage === 'function') {
+                            promises.push(globalStore.fetchCurrentUsage().catch(function() {}));
+                        }
+                        if (typeof globalStore.fetchRecentUsage === 'function') {
+                            promises.push(globalStore.fetchRecentUsage().catch(function() {}));
+                        }
+                        if (promises.length > 0) {
+                            await Promise.all(promises);
+                        }
+                        if (globalStore.usage) {
+                            cur = {
+                                usagePlan: globalStore.usage.plan || 'starter',
+                                usageCounts: globalStore.usage.counts || {},
+                                currentSpendCents: globalStore.usage.currentSpendCents || 0
+                            };
+                        }
+                        if (globalStore.recentUsage) {
+                            rec = globalStore.recentUsage;
+                        }
                     }
-                }).catch(function(err) {
-                    if (window.chrome && window.chrome.webview) {
-                        window.chrome.webview.postMessage(JSON.stringify({
-                            type: 'mammouth_quota',
-                            payload: { ok: false, error: String(err) }
-                        }));
-                    }
-                });
-            } catch(e) {}
+                } catch(e) {}
+
+                // Strategy 2: Use window.$fetch (Nuxt 3 official fetch client with session context)
+                if (!cur || !rec) {
+                    try {
+                        var fetchFn = window.$fetch || (typeof globalThis !== 'undefined' ? globalThis.$fetch : null);
+                        if (typeof fetchFn === 'function') {
+                            var results = await Promise.all([
+                                fetchFn('/api/user/currentUsage').catch(function() { return null; }),
+                                fetchFn('/api/user/recentUsage').catch(function() { return null; })
+                            ]);
+                            if (results[0]) cur = results[0];
+                            if (results[1]) rec = results[1];
+                        }
+                    } catch(e) {}
+                }
+
+                // Strategy 3: Standard fetch with credentials
+                if (!cur || !rec) {
+                    try {
+                        var rawResults = await Promise.all([
+                            fetch('/api/user/currentUsage', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                                .then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }),
+                            fetch('/api/user/recentUsage', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                                .then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+                        ]);
+                        if (rawResults[0]) cur = rawResults[0];
+                        if (rawResults[1]) rec = rawResults[1];
+                    } catch(e) {}
+                }
+
+                var isOk = !!(cur || rec);
+                var payload = {
+                    ok: isOk,
+                    current: cur,
+                    recent: rec,
+                    url: window.location.href,
+                    ts: Date.now()
+                };
+
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'mammouth_quota',
+                        payload: payload
+                    }));
+                }
+            } catch(err) {
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'mammouth_quota',
+                        payload: { ok: false, error: String(err), ts: Date.now() }
+                    }));
+                }
+            }
         })();
         """
         try:
@@ -923,41 +1101,23 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
     def _prompt_save_file(self, initial_dir: str, suggested_name: str) -> Optional[str]:
         """Prompts the user with native SaveFileDialog. Returns chosen file path or None if cancelled."""
-        # Method 1: Try native tkinter.filedialog for thread-safe dialog without COM STA conflicts
+        owner = 0
         try:
-            import tkinter.filedialog as fd
-            chosen = fd.asksaveasfilename(
-                title="Mammouth — Datei speichern",
-                initialdir=initial_dir,
-                initialfile=suggested_name,
-                parent=self.winfo_toplevel()
-            )
-            if chosen:
-                return str(chosen)
-            # If user explicitly cancelled tkinter dialog, return None
-            return None
+            if hasattr(self, "winfo_toplevel"):
+                top = self.winfo_toplevel()
+                if hasattr(top, "winfo_id"):
+                    owner = top.winfo_id()
         except Exception:
             pass
-
-        # Method 2: Fallback to System.Windows.Forms.SaveFileDialog
-        try:
-            from System.Windows.Forms import SaveFileDialog, DialogResult
-            dialog = SaveFileDialog()
-            dialog.Title = "Mammouth — Datei speichern"
-            dialog.InitialDirectory = initial_dir
-            dialog.FileName = suggested_name
-            dialog.Filter = "Alle Dateien (*.*)|*.*"
-            dialog.RestoreDirectory = True
-
-            res = dialog.ShowDialog()
-            if res == DialogResult.OK and dialog.FileName:
-                return str(dialog.FileName)
-            return None
-        except Exception:
-            return None
+        return _native_save_file_dialog(
+            initial_dir=initial_dir,
+            default_name=suggested_name,
+            title="Mammouth — Datei speichern",
+            hwnd_owner=owner
+        )
 
     def _on_download_starting(self, sender, args):
-        """Native download handler presenting a SaveFileDialog and tracking download state."""
+        """Native crash-proof download handler presenting a SaveFileDialog and tracking download state."""
         deferral = None
         try:
             deferral = args.GetDeferral()
@@ -977,15 +1137,22 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             downloads_dir = str(Path.home() / "Downloads")
             os.makedirs(downloads_dir, exist_ok=True)
 
-            save_dest = self._prompt_save_file(downloads_dir, suggested_name)
+            save_dest = None
+            try:
+                save_dest = self._prompt_save_file(downloads_dir, suggested_name)
+            except Exception:
+                # Fallback to direct download in Downloads directory
+                save_dest = os.path.join(downloads_dir, suggested_name)
+
             if save_dest:
+                dest = os.path.normpath(str(save_dest))
                 if hasattr(args, "set_ResultFilePath"):
                     try:
-                        args.set_ResultFilePath(str(save_dest))
+                        args.set_ResultFilePath(dest)
                     except Exception:
                         pass
                 try:
-                    args.ResultFilePath = str(save_dest)
+                    args.ResultFilePath = dest
                 except Exception:
                     pass
 
@@ -999,17 +1166,20 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 except Exception:
                     pass
 
-                final_name = os.path.basename(save_dest)
-                self.after(0, lambda n=final_name: self._show_download_notification(f"⬇ Lade herunter: {n}...", success=True))
+                final_name = os.path.basename(dest)
+                if hasattr(self, "_show_download_notification"):
+                    self._show_download_notification(f"⬇ Lade herunter: {final_name}...", success=True)
 
                 if download_op:
                     def _on_state_changed(s, a):
                         try:
                             state_str = str(download_op.State)
                             if "Completed" in state_str:
-                                self.after(0, lambda n=final_name: self._show_download_notification(f"✓ Gespeichert: {n}", success=True))
+                                if hasattr(self, "_show_download_notification"):
+                                    self._show_download_notification(f"✓ Gespeichert: {final_name}", success=True)
                             elif "Interrupted" in state_str:
-                                self.after(0, lambda n=final_name: self._show_download_notification(f"⚠ Download abgebrochen: {n}", success=False))
+                                if hasattr(self, "_show_download_notification"):
+                                    self._show_download_notification(f"⚠ Download abgebrochen: {final_name}", success=False)
                         except Exception:
                             pass
 
@@ -1028,39 +1198,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 except Exception:
                     pass
         except Exception:
-            # Fallback in case dialog cannot be displayed: save directly to ~/Downloads
-            try:
-                downloads_dir = str(Path.home() / "Downloads")
-                suggested_name = "download"
-                try:
-                    suggested_path = str(args.ResultFilePath or "")
-                    if suggested_path:
-                        suggested_name = os.path.basename(suggested_path)
-                except Exception:
-                    pass
-                suggested_name = "".join(c for c in suggested_name if c not in '<>:"/\\|?*').strip() or "download"
-                fallback_path = os.path.join(downloads_dir, suggested_name)
-                if hasattr(args, "set_ResultFilePath"):
-                    try:
-                        args.set_ResultFilePath(fallback_path)
-                    except Exception:
-                        pass
-                try:
-                    args.ResultFilePath = fallback_path
-                except Exception:
-                    pass
-                if hasattr(args, "set_Handled"):
-                    try:
-                        args.set_Handled(True)
-                    except Exception:
-                        pass
-                try:
-                    args.Handled = True
-                except Exception:
-                    pass
-                self.after(0, lambda n=suggested_name: self._show_download_notification(f"✓ Gespeichert unter Downloads: {n}", success=True))
-            except Exception:
-                pass
+            pass
         finally:
             if deferral:
                 try:

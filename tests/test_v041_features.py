@@ -152,7 +152,7 @@ class TestBugfixV041(unittest.TestCase):
         self.assertIsInstance(res, bool)
 
     def test_download_starting_routes_and_completes_deferral(self):
-        """Validates that _on_download_starting configures result path, suppresses browser default prompt, and completes deferral."""
+        """Validates that _on_download_starting configures result path asynchronously, preserves WebView2 download, and completes deferral."""
         from modules.embedded_browser import MammouthBrowserFrame
         
         # Mock WebView2 DownloadStarting args
@@ -164,14 +164,17 @@ class TestBugfixV041(unittest.TestCase):
         
         frame = MagicMock(spec=MammouthBrowserFrame)
         frame._prompt_save_file = MagicMock(return_value="D:\\Saved\\export.zip")
-        frame.after = MagicMock()
+        frame.after = MagicMock(side_effect=lambda ms, cb: cb())
         
         # Call the actual method
         MammouthBrowserFrame._on_download_starting(frame, sender=None, args=mock_args)
         
+        # Wait for worker thread to complete
+        if hasattr(frame, "_last_download_thread") and frame._last_download_thread:
+            frame._last_download_thread.join(timeout=2.0)
+
         # Ensure ResultFilePath is set to destination via set_ResultFilePath
-        mock_args.set_ResultFilePath.assert_called_with("D:\\Saved\\export.zip")
-        # Ensure set_Handled was called to suppress Edge's default prompt
+        mock_args.set_ResultFilePath.assert_called_with(os.path.normpath("D:\\Saved\\export.zip"))
         mock_args.set_Handled.assert_called_with(True)
         # Ensure deferral was completed
         mock_deferral.Complete.assert_called_once()
