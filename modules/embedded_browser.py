@@ -415,11 +415,17 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             window = Window("Mammouth", "Mammouth.ai", self.start_url)
             window.real_url = self.start_url
             self.edge = EdgeChrome(control, window, self.profile_dir)
-            # Override pywebview's default on_download_starting before it gets wired
+            # Direct pywebview's callbacks to our handlers cleanly
+            self.edge.on_download_starting = self._on_download_starting
+            self.edge.on_new_window_request = self._on_new_window_requested
+
+            # Replace pywebview's fragile on_script_notify with our crash-proof _unified_web_message
             try:
-                self.edge.on_download_starting = lambda sender, args: None
+                self.edge.webview.WebMessageReceived -= self.edge.on_script_notify
             except Exception:
                 pass
+            self.edge.webview.WebMessageReceived += self._unified_web_message
+
             self.control = control
             self.hwnd = int(str(control.Handle))
 
@@ -463,39 +469,6 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                                 except Exception:
                                     pass
                             core.PermissionRequested += _on_permission
-                        except Exception:
-                            pass
-
-                        # 4. Wire custom native download handler
-                        try:
-                            core.DownloadStarting -= self.edge.on_download_starting
-                        except Exception:
-                            pass
-                        core.DownloadStarting += self._on_download_starting
-
-                        # 5. Replace NewWindowRequested handler to support popup OAuth flows properly
-                        try:
-                            core.NewWindowRequested -= self.edge.on_new_window_request
-                        except Exception:
-                            pass
-                        core.NewWindowRequested += self._on_new_window_requested
-
-                        # 6. Wire WebMessageReceived for quota telemetry & bridge
-                        try:
-                            def _on_web_message(s, a):
-                                try:
-                                    raw = str(a.TryGetWebMessageAsString() or "")
-                                    if raw and raw.startswith("{"):
-                                        import json
-                                        data = json.loads(raw)
-                                        if data.get("type") == "mammouth_quota":
-                                            payload = data.get("payload")
-                                            self._last_quota_data = payload
-                                            if self.quota_cb:
-                                                self.after(0, lambda p=payload: self.quota_cb(p))
-                                except Exception:
-                                    pass
-                            core.WebMessageReceived += _on_web_message
                         except Exception:
                             pass
                 except Exception:
@@ -718,6 +691,72 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 self.edge.load_url(self.start_url)
             except Exception:
                 pass
+
+    def _unified_web_message(self, sender, args):
+        """Unified message receiver handling both Mammouth quota telemetry and pywebview bridge calls without crashes."""
+        try:
+            raw = str(args.get_WebMessageAsJson() or "")
+            if not raw:
+                return
+
+            parsed_data = None
+            try:
+                parsed_data = json.loads(raw)
+                if isinstance(parsed_data, str) and parsed_data.strip().startswith("{"):
+                    try:
+                        parsed_data = json.loads(parsed_data)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # 1. Handle our Mammouth quota telemetry message
+            if isinstance(parsed_data, dict) and parsed_data.get("type") == "mammouth_quota":
+                payload = parsed_data.get("payload")
+                self._last_quota_data = payload
+                if self.quota_cb:
+                    self.after(0, lambda p=payload: self.quota_cb(p))
+                return
+
+            # 2. Safely handle pywebview drag-and-drop file notification
+            if raw == '"FilesDropped"':
+                try:
+                    from webview.platforms.edgechromium import _dnd_state
+                    if _dnd_state.get('num_listeners', 0) > 0:
+                        add_objs = args.get_AdditionalObjects()
+                        if add_objs is not None:
+                            files = [
+                                (os.path.basename(file.Path), file.Path)
+                                for file in list(add_objs)
+                                if 'CoreWebView2File' in str(type(file))
+                            ]
+                            _dnd_state['paths'] += files
+                except Exception:
+                    pass
+                return
+
+            # 3. Safely handle pywebview RPC calls [func_name, func_param, value_id]
+            if isinstance(parsed_data, (list, tuple)) and len(parsed_data) == 3:
+                func_name, func_param, value_id = parsed_data
+                try:
+                    if isinstance(func_param, str):
+                        try:
+                            func_param = json.loads(func_param)
+                        except Exception:
+                            pass
+                    if func_name == '_pywebviewAlert':
+                        from System.Windows.Forms import MessageBox
+                        MessageBox.Show(str(func_param))
+                    elif func_name == 'console':
+                        print(func_param)
+                    else:
+                        from webview.platforms.edgechromium import js_bridge_call
+                        js_bridge_call(self.edge.pywebview_window, func_name, func_param, value_id)
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass
 
     def request_quota_refresh(self):
         """Triggers background quota fetch inside WebView2 session."""
