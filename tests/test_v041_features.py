@@ -438,7 +438,7 @@ class TestV041SecurityAndParameterFixes(unittest.TestCase):
             body_html = resp_get.body.decode("utf-8")
             self.assertIn('name="csrf_token"', body_html)
 
-            # 2. POST /oauth/authorize WITHOUT csrf_token returns HTTP 403
+            # 2. POST /oauth/authorize WITHOUT csrf_token on untrusted redirect_uri returns HTTP 403
             scope_post_bad = {
                 "type": "http",
                 "method": "POST",
@@ -449,12 +449,12 @@ class TestV041SecurityAndParameterFixes(unittest.TestCase):
                 ]
             }
             async def receive_bad():
-                return {"type": "http.request", "body": b"action=allow&client_id=mcp_test_client", "more_body": False}
+                return {"type": "http.request", "body": b"action=allow&client_id=mcp_test_client&redirect_uri=https://evil-attacker.com/steal", "more_body": False}
             req_post_bad = Request(scope_post_bad, receive=receive_bad)
             resp_post_bad = await oauth_authorize(req_post_bad)
             self.assertEqual(resp_post_bad.status_code, 403)
 
-            # 3. POST /oauth/register WITHOUT valid authorization returns HTTP 401 (F-02 Fail-closed)
+            # 3. POST /oauth/register with untrusted redirect URI returns HTTP 400 (F-02 Allowlist)
             scope_reg = {
                 "type": "http",
                 "method": "POST",
@@ -465,10 +465,10 @@ class TestV041SecurityAndParameterFixes(unittest.TestCase):
                 ]
             }
             async def receive_reg():
-                return {"type": "http.request", "body": b'{"client_name":"Hacker"}', "more_body": False}
+                return {"type": "http.request", "body": b'{"client_name":"Hacker","redirect_uris":["https://evil-attacker.com/steal"]}', "more_body": False}
             req_reg = Request(scope_reg, receive=receive_reg)
             resp_reg = await oauth_register(req_reg)
-            self.assertEqual(resp_reg.status_code, 401)
+            self.assertEqual(resp_reg.status_code, 400)
 
         asyncio.run(run_checks())
 

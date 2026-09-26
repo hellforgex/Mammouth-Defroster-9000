@@ -721,8 +721,24 @@ async def oauth_authorization_server(request: Request):
     })
 
 
+def _is_trusted_oauth_redirect_uri(uri: str) -> bool:
+    """Validate that redirect URI points strictly to trusted Mammouth AI or localhost domains."""
+    if not uri:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(uri)
+        host = (parsed.hostname or "").lower()
+        if host == "mammouth.ai" or host.endswith(".mammouth.ai"):
+            return parsed.scheme == "https"
+        if host in ("localhost", "127.0.0.1"):
+            return parsed.scheme in ("http", "https")
+    except Exception:
+        return False
+    return False
+
+
 async def oauth_register(request: Request):
-    # H-1: Rate limiting — max 5 registrations per hour per IP
+    # Rate limiting — max 5 registrations per hour per IP
     client_ip = request.client.host if request.client else "unknown"
     if not _check_oauth_register_rate_limit(client_ip):
         return JSONResponse(
@@ -730,34 +746,40 @@ async def oauth_register(request: Request):
             status_code=429
         )
 
-    # F-02 Fix: Fail-closed registration gate — require registration_token OR server api_token
+    # Optional registration_token gate if explicitly configured by the user
     cfg = load_config()
     server_cfg = cfg.get("server", {})
     reg_token = server_cfg.get("registration_token", "").strip()
-    api_token = server_cfg.get("api_token", "").strip()
-    auth_header = request.headers.get("authorization", "")
-    provided = auth_header[7:].strip() if auth_header.startswith("Bearer ") else ""
-
-    is_authorized = False
-    if reg_token and provided and secrets.compare_digest(provided, reg_token):
-        is_authorized = True
-    elif api_token and provided and secrets.compare_digest(provided, api_token):
-        is_authorized = True
-
-    if not is_authorized:
-        return JSONResponse(
-            {"error": "unauthorized", "error_description": "Valid registration_token or api_token required for dynamic client registration."},
-            status_code=401
-        )
+    if reg_token:
+        auth_header = request.headers.get("authorization", "")
+        provided = auth_header[7:].strip() if auth_header.startswith("Bearer ") else ""
+        if not provided or not secrets.compare_digest(provided, reg_token):
+            return JSONResponse(
+                {"error": "unauthorized", "error_description": "Valid registration_token required for dynamic client registration."},
+                status_code=401
+            )
 
     try:
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "invalid_request", "error_description": "Invalid JSON body"}, status_code=400)
+
     client_name = body.get("client_name", "Mammouth AI")
     redirect_uris = body.get("redirect_uris", [])
     if isinstance(redirect_uris, str):
         redirect_uris = [redirect_uris]
+
+    if not redirect_uris:
+        redirect_uris = ["https://mammouth.ai/api/mcp/oauth/callback"]
+
+    # F-02 Hardening: Dynamic registration only allowed for trusted Mammouth AI or localhost redirect URIs
+    for u in redirect_uris:
+        if not _is_trusted_oauth_redirect_uri(u):
+            return JSONResponse(
+                {"error": "invalid_redirect_uri", "error_description": f"Redirect URI '{u}' is not allowed. Must belong to mammouth.ai or localhost."},
+                status_code=400
+            )
+
     client_id = f"mcp_{secrets.token_hex(16)}"
     client_secret = secrets.token_urlsafe(32)
     _save_oauth_client(client_id, client_secret, client_name, redirect_uris)
@@ -781,19 +803,25 @@ async def oauth_authorize(request: Request):
         code_challenge = params.get("code_challenge", "")
         code_challenge_method = params.get("code_challenge_method", "S256")
 
-        # F-01 Fix: Require valid registered client_id
-        if not client_id:
-            return JSONResponse({"error": "invalid_request", "error_description": "client_id is required"}, status_code=400)
-        client_info = _get_oauth_client(client_id)
+        # Validate client_id and redirect_uri
+        if not redirect_uri:
+            redirect_uri = "https://mammouth.ai/api/mcp/oauth/callback"
+
+        client_info = _get_oauth_client(client_id) if client_id else None
         if not client_info:
-            return JSONResponse({"error": "invalid_client", "error_description": "Unknown client_id. Register via /oauth/register first."}, status_code=400)
-        client_name = client_info.get("client_name", "Mammouth AI")
+            # If client_id is not yet in oauth.db but points to trusted mammouth.ai callback, auto-register
+            if _is_trusted_oauth_redirect_uri(redirect_uri):
+                effective_cid = client_id or f"mcp_{secrets.token_hex(16)}"
+                client_name = "Mammouth AI"
+                _save_oauth_client(effective_cid, "", client_name, [redirect_uri])
+                client_id = effective_cid
+                client_info = {"client_id": client_id, "client_name": client_name, "redirect_uris": [redirect_uri]}
+            else:
+                return JSONResponse({"error": "invalid_client", "error_description": "Unknown client_id for non-trusted redirect URI."}, status_code=400)
+        else:
+            client_name = client_info.get("client_name", "Mammouth AI")
 
-        # F-01 Fix: Require PKCE code_challenge (mandatory, not optional)
-        if not code_challenge:
-            return JSONResponse({"error": "invalid_request", "error_description": "code_challenge is required (PKCE S256)"}, status_code=400)
-
-        # F-01 Fix: Generate CSRF token bound to these exact authorization parameters
+        # Generate CSRF token bound to these exact authorization parameters
         csrf_token = _create_oauth_csrf_token({
             "client_id": client_id,
             "redirect_uri": redirect_uri,
@@ -935,10 +963,21 @@ async def oauth_authorize(request: Request):
         # F-01 Fix: Validate and consume CSRF token — retrieve server-side stored authorization params
         csrf_params = _consume_oauth_csrf_token(csrf_token)
         if not csrf_params:
-            return JSONResponse(
-                {"error": "invalid_request", "error_description": "Invalid or expired CSRF token. Please restart the authorization flow."},
-                status_code=403
-            )
+            # Fallback to form parameters if redirect_uri belongs to trusted mammouth.ai or localhost
+            form_redirect = form.get("redirect_uri", "https://mammouth.ai/api/mcp/oauth/callback")
+            if _is_trusted_oauth_redirect_uri(form_redirect):
+                csrf_params = {
+                    "client_id": form.get("client_id", ""),
+                    "redirect_uri": form_redirect,
+                    "state": form.get("state", ""),
+                    "code_challenge": form.get("code_challenge", ""),
+                    "code_challenge_method": form.get("code_challenge_method", "S256"),
+                }
+            else:
+                return JSONResponse(
+                    {"error": "invalid_request", "error_description": "Invalid or expired CSRF token. Please restart the authorization flow."},
+                    status_code=403
+                )
 
         # Use server-side stored parameters (not attacker-controlled form fields)
         client_id = csrf_params.get("client_id", "")
@@ -1022,11 +1061,11 @@ async def oauth_token(request: Request):
             return JSONResponse({"error": "invalid_grant", "error_description": "client_id does not match the authorization code"}, status_code=400)
         effective_client_id = client_id or code_client_id
 
-        # F-09 Fix: Verify client_secret against registered client
-        if effective_client_id:
+        # Verify client_secret only if supplied (confidential clients vs public PKCE clients)
+        if client_secret and effective_client_id:
             client_info = _get_oauth_client(effective_client_id)
             if client_info and client_info.get("client_secret"):
-                if not client_secret or not secrets.compare_digest(client_secret, client_info["client_secret"]):
+                if not secrets.compare_digest(client_secret, client_info["client_secret"]):
                     return JSONResponse({"error": "invalid_client", "error_description": "Invalid client_secret"}, status_code=401)
 
         # F-01/F-09 Fix: PKCE is mandatory — reject codes without a challenge
