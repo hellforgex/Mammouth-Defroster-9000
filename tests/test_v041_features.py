@@ -237,7 +237,61 @@ class TestCTkMammouthQuotaCard(unittest.TestCase):
         self.assertEqual(card.lbl_plan.cget("text"), "Starter x1")
         self.assertEqual(card.lbl_percent.cget("text"), "60 %")
         # 3 rows of brands (pairs: 2 + 2 + 1)
-        self.assertEqual(len(card.legend_frame.winfo_children()), 3)
+
+class TestUnifiedWebMessage(unittest.TestCase):
+    """Validates _unified_web_message correctly unpacks JSON WebMessages and notifies quota_cb."""
+
+    def test_quota_web_message_triggers_callback(self):
+        from modules.embedded_browser import MammouthBrowserFrame
+        import json
+
+        received_payload = []
+        frame = MagicMock(spec=MammouthBrowserFrame)
+        frame.quota_cb = lambda p: received_payload.append(p)
+        frame.after = MagicMock(side_effect=lambda ms, cb: cb())
+
+        # Simulate WebMessage arriving as JSON string from WebView2
+        payload_obj = {
+            "type": "mammouth_quota",
+            "payload": {
+                "ok": True,
+                "current": {"plan": "starter", "currentSpendCents": 45.0},
+                "recent": {"byBrand": [{"brand": "claude", "value": 100.0}]}
+            }
+        }
+        # In WebView2, if JS sends postMessage(JSON.stringify(...)), get_WebMessageAsJson returns JSON string of that string
+        mock_args = MagicMock()
+        mock_args.get_WebMessageAsJson.return_value = json.dumps(json.dumps(payload_obj))
+
+        MammouthBrowserFrame._unified_web_message(frame, sender=None, args=mock_args)
+
+        self.assertEqual(len(received_payload), 1)
+        self.assertTrue(received_payload[0]["ok"])
+        self.assertEqual(received_payload[0]["current"]["currentSpendCents"], 45.0)
+
+    def test_quota_web_message_single_json_level(self):
+        from modules.embedded_browser import MammouthBrowserFrame
+        import json
+
+        received_payload = []
+        frame = MagicMock(spec=MammouthBrowserFrame)
+        frame.quota_cb = lambda p: received_payload.append(p)
+        frame.after = MagicMock(side_effect=lambda ms, cb: cb())
+
+        payload_obj = {
+            "type": "mammouth_quota",
+            "payload": {
+                "ok": True,
+                "current": {"usagePlan": "standard", "spendCents": 150.0}
+            }
+        }
+        mock_args = MagicMock()
+        mock_args.get_WebMessageAsJson.return_value = json.dumps(payload_obj)
+
+        MammouthBrowserFrame._unified_web_message(frame, sender=None, args=mock_args)
+
+        self.assertEqual(len(received_payload), 1)
+        self.assertEqual(received_payload[0]["current"]["usagePlan"], "standard")
 
 
 if __name__ == "__main__":

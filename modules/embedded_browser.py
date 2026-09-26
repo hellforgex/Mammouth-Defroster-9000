@@ -6,6 +6,7 @@ Provides persistent sessions, navigation controls, and seamless MCP URL clipboar
 
 import sys
 import os
+import json
 import ctypes
 import webbrowser
 import urllib.parse
@@ -166,7 +167,11 @@ MAMMOUTH_BRAND_COLORS = {
 PLAN_MULTIPLIERS = {
     "starter": (1, "Starter x1"),
     "standard": (3, "Standard x3"),
+    "pro": (3, "Pro x3"),
     "expert": (10, "Expert x10"),
+    "advanced": (10, "Advanced x10"),
+    "enterprise": (10, "Enterprise x10"),
+    "free": (0, "Free"),
     "unsubscribed": (0, "Free / None"),
     "none": (0, "Free / None")
 }
@@ -210,12 +215,17 @@ def parse_mammouth_quota_data(payload: Optional[Any]) -> Dict[str, Any]:
             "raw": payload
         }
 
-    plan_key = str(current.get("usagePlan", "starter")).lower().strip()
-    mult, plan_label = PLAN_MULTIPLIERS.get(plan_key, (1, plan_key.capitalize()))
+    plan_key = str(current.get("usagePlan") or current.get("plan") or "starter").lower().strip()
+    mult, plan_label = PLAN_MULTIPLIERS.get(plan_key, (1, f"{plan_key.capitalize()} x1"))
 
     max_cents = float(BASE_THRESHOLD_CENTS * mult) if mult > 0 else float(BASE_THRESHOLD_CENTS)
+    raw_spend = (
+        current.get("currentSpendCents")
+        if current.get("currentSpendCents") is not None
+        else (current.get("spendCents") if current.get("spendCents") is not None else current.get("current_spend_cents", 0.0))
+    )
     try:
-        current_spend = float(current.get("currentSpendCents", 0.0) or 0.0)
+        current_spend = float(raw_spend or 0.0)
     except (ValueError, TypeError):
         current_spend = 0.0
 
@@ -224,13 +234,17 @@ def parse_mammouth_quota_data(payload: Optional[Any]) -> Dict[str, Any]:
     else:
         pct = 0.0
 
-    raw_brands = recent.get("byBrand", [])
+    raw_brands = recent.get("byBrand") or recent.get("brands") or recent.get("by_brand") or []
     brands_list = []
     if isinstance(raw_brands, list):
         for item in raw_brands:
             if isinstance(item, dict):
-                b_name = str(item.get("brand", "")).lower()
-                b_val = float(item.get("value", 0.0) or 0.0)
+                b_name = str(item.get("brand") or item.get("name") or "").lower()
+                raw_val = item.get("value") if item.get("value") is not None else (item.get("percent") or 0.0)
+                try:
+                    b_val = float(raw_val or 0.0)
+                except (ValueError, TypeError):
+                    b_val = 0.0
                 color, label = MAMMOUTH_BRAND_COLORS.get(b_name, ("#94A3B8", b_name.upper()))
                 brands_list.append({
                     "brand": b_name,
@@ -817,13 +831,13 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             parsed_data = None
             try:
                 parsed_data = json.loads(raw)
-                if isinstance(parsed_data, str) and parsed_data.strip().startswith("{"):
+                if isinstance(parsed_data, str) and (parsed_data.strip().startswith("{") or parsed_data.strip().startswith("[")):
                     try:
                         parsed_data = json.loads(parsed_data)
                     except Exception:
                         pass
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[BROWSER WEB-MESSAGE] JSON parse warning: {e}")
 
             # 1. Handle our Mammouth quota telemetry message
             if isinstance(parsed_data, dict) and parsed_data.get("type") == "mammouth_quota":
@@ -875,8 +889,8 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 except Exception:
                     pass
                 return
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[BROWSER WEB-MESSAGE] Handler warning: {e}")
 
     def request_quota_refresh(self):
         """Triggers background quota fetch inside WebView2 session using Nuxt 3 Pinia store, $fetch, and native endpoints."""
@@ -910,14 +924,11 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                             await Promise.all(promises);
                         }
                         if (globalStore.usage) {
-                            cur = {
-                                usagePlan: globalStore.usage.plan || 'starter',
-                                usageCounts: globalStore.usage.counts || {},
-                                currentSpendCents: globalStore.usage.currentSpendCents || 0
-                            };
+                            cur = Object.assign({}, globalStore.usage);
+                            if (!cur.usagePlan && cur.plan) cur.usagePlan = cur.plan;
                         }
                         if (globalStore.recentUsage) {
-                            rec = globalStore.recentUsage;
+                            rec = Object.assign({}, globalStore.recentUsage);
                         }
                     }
                 } catch(e) {}
