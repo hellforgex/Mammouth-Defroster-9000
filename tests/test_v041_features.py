@@ -293,6 +293,24 @@ class TestUnifiedWebMessage(unittest.TestCase):
         self.assertEqual(len(received_payload), 1)
         self.assertEqual(received_payload[0]["current"]["usagePlan"], "standard")
 
+    def test_edgechrome_handlers_neutralized_and_instantiation_safe(self):
+        """Validates EdgeChrome monkeypatches are active and direct instantiation does not raise State TypeError."""
+        import sys
+        if sys.platform != "win32":
+            return
+        from webview.platforms import edgechromium
+        from webview.window import Window
+
+        # Test that calling monkeypatched handlers does not throw
+        edge_dummy = edgechromium.EdgeChrome.__new__(edgechromium.EdgeChrome)
+        edgechromium.EdgeChrome.on_script_notify(edge_dummy, None, None)
+        edgechromium.EdgeChrome.on_navigation_completed(edge_dummy, None, None)
+        edgechromium.EdgeChrome.on_download_starting(edge_dummy, None, None)
+
+        # Test Window creation doesn't fail with State class TypeError
+        w = Window("Test", "Test", "http://localhost")
+        self.assertIsNotNone(w.state)
+
 
 if __name__ == "__main__":
     unittest.main()

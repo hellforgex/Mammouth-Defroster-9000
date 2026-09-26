@@ -530,13 +530,6 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             window.localization = {
                 'windows.fileFilter.allFiles': 'Alle Dateien'
             }
-            window.js_api_endpoint = None
-            window.state = {}
-            window.text_select = True
-            window.zoomable = True
-            window.draggable = False
-            window.easy_drag = False
-            window.frameless = False
             self.edge = EdgeChrome(control, window, self.profile_dir)
             # Pywebview's on_download_starting is replaced with a no-op to prevent duplicate/crashed dialogs
             self.edge.on_download_starting = lambda sender, args: None
