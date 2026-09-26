@@ -945,11 +945,6 @@ class MammouthControlCenter(ctk.CTk):
                     self.after(200, self._start_server)
                 if self.config_data.get("server", {}).get("auto_check_updates", True):
                     self.after(2500, self._check_updates_async)
-                if self.config_data.get("embedded_browser", {}).get("quota_sidebar_enabled", True):
-                    self.after(2000, self._on_quota_manual_refresh)
-                    self.after(6000, self._on_quota_manual_refresh)
-                    self.after(15000, self._on_quota_manual_refresh)
-                    self.after(30000, self._schedule_quota_refresh_loop)
 
             self.after(350, finish_loading)
         else:
@@ -958,11 +953,6 @@ class MammouthControlCenter(ctk.CTk):
                 self.after(200, self._start_server)
             if self.config_data.get("server", {}).get("auto_check_updates", True):
                 self.after(2500, self._check_updates_async)
-            if self.config_data.get("embedded_browser", {}).get("quota_sidebar_enabled", True):
-                self.after(2000, self._on_quota_manual_refresh)
-                self.after(6000, self._on_quota_manual_refresh)
-                self.after(15000, self._on_quota_manual_refresh)
-                self.after(30000, self._schedule_quota_refresh_loop)
 
 
     def _setup_logging(self):
@@ -1227,16 +1217,7 @@ class MammouthControlCenter(ctk.CTk):
         # Bottom Mini Telemetry Card
         bottom_box = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         bottom_box.pack(side="bottom", fill="x", padx=10, pady=12)
-
-        # Mammouth Quota Telemetry Card (v0.5.0)
-        self.quota_card = CTkMammouthQuotaCard(
-            bottom_box,
-            on_click=lambda: self._select_nav_tab("💬 Mammouth AI Web"),
-            on_refresh=self._on_quota_manual_refresh
-        )
-        browser_cfg = self.config_data.get("embedded_browser", {})
-        if browser_cfg.get("quota_sidebar_enabled", True):
-            self.quota_card.pack(fill="x", pady=(0, 8))
+        self.quota_card = None
 
         self.mini_card = ctk.CTkFrame(
             bottom_box,
@@ -1352,42 +1333,19 @@ class MammouthControlCenter(ctk.CTk):
             get_mcp_url_cb=self._calculate_active_endpoint_url,
             start_url=start_url,
             profile_dir=user_data_dir,
-            screenshot_cb=self._take_and_copy_screenshot,
-            quota_cb=self._on_quota_updated
+            screenshot_cb=self._take_and_copy_screenshot
         )
         self.tab_mammouth.configure(fg_color=("#FFFFFF", "#202124"))
         self.mammouth_browser.pack(fill="both", expand=True, padx=0, pady=0)
 
     def _on_quota_updated(self, payload: Optional[Dict[str, Any]]):
-        """Callback invoked when MammouthBrowserFrame receives new quota data."""
-        if hasattr(self, "quota_card") and self.quota_card:
-            parsed = parse_mammouth_quota_data(payload)
-            self.quota_card.update_quota(parsed)
-            if parsed.get("is_logged_in"):
-                self._log(f"[QUOTA] Live-Kontingent: {parsed.get('plan_label')} ({int(round(parsed.get('total_percent', 0)))}% genutzt)")
-            else:
-                self._log("[QUOTA] Nicht eingeloggt oder Sitzung inaktiv (Anmeldung in Mammouth WebApp erforderlich)")
+        pass
 
     def _on_quota_manual_refresh(self):
-        """Manually trigger quota telemetry query in WebView2."""
-        if hasattr(self, "mammouth_browser") and self.mammouth_browser:
-            if not getattr(self.mammouth_browser, "is_embedded", False):
-                self.mammouth_browser.ensure_initialized()
-                self.mammouth_browser.set_tab_visible(False)
-            self.mammouth_browser.request_quota_refresh()
+        pass
 
     def _schedule_quota_refresh_loop(self):
-        """Periodically requests updated quota telemetry from Mammouth.ai."""
-        browser_cfg = self.config_data.get("embedded_browser", {})
-        if browser_cfg.get("quota_sidebar_enabled", True):
-            if hasattr(self, "mammouth_browser") and self.mammouth_browser:
-                if not getattr(self.mammouth_browser, "is_embedded", False):
-                    self.mammouth_browser.ensure_initialized()
-                    self.mammouth_browser.set_tab_visible(False)
-                self.mammouth_browser.request_quota_refresh()
-
-        interval_sec = max(30, int(browser_cfg.get("quota_refresh_interval_seconds", 300)))
-        self._quota_timer_id = self.after(interval_sec * 1000, self._schedule_quota_refresh_loop)
+        pass
 
     def _take_and_copy_screenshot(self) -> Optional[str]:
         try:
@@ -1521,7 +1479,6 @@ class MammouthControlCenter(ctk.CTk):
             if current == "💬 Mammouth AI Web":
                 self.mammouth_browser.ensure_initialized()
                 self.mammouth_browser.set_tab_visible(True)
-                self.after(600, self._on_quota_manual_refresh)
             else:
                 self.mammouth_browser.set_tab_visible(False)
 
@@ -3507,35 +3464,6 @@ class MammouthControlCenter(ctk.CTk):
         self.entry_browser_start_url.insert(0, start_page_val)
         self.entry_browser_start_url.pack(side="left", padx=(0, 8))
 
-        f_br3 = ctk.CTkFrame(browser_group, fg_color="transparent")
-        f_br3.pack(fill="x", padx=15, pady=(5, 5))
-        self.var_quota_sidebar = ctk.BooleanVar(value=self.config_data.get("embedded_browser", {}).get("quota_sidebar_enabled", True))
-        sw_quota_sidebar = ctk.CTkSwitch(
-            f_br3,
-            text="Mammouth-Kontingent in Sidebar anzeigen (v0.5.0)",
-            variable=self.var_quota_sidebar,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=("#0F172A", "#FFFFFF"),
-            progress_color="#10B981"
-        )
-        sw_quota_sidebar.pack(side="left")
-
-        f_br4 = ctk.CTkFrame(browser_group, fg_color="transparent")
-        f_br4.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f_br4, text="Kontingent-Intervall:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
-        self.opt_quota_interval = ctk.CTkOptionMenu(
-            f_br4,
-            values=["1 Minute (60s)", "2 Minuten (120s)", "5 Minuten (300s)", "10 Minuten (600s)", "15 Minuten (900s)"],
-            width=220,
-            fg_color=("#F1F5F9", "#36373E"),
-            button_color=("#CBD5E1", "#4A4B53"),
-            text_color=("#0F172A", "#FFFFFF")
-        )
-        cur_sec = self.config_data.get("embedded_browser", {}).get("quota_refresh_interval_seconds", 300)
-        sec_map = {60: "1 Minute (60s)", 120: "2 Minuten (120s)", 300: "5 Minuten (300s)", 600: "10 Minuten (600s)", 900: "15 Minuten (900s)"}
-        self.opt_quota_interval.set(sec_map.get(cur_sec, "5 Minuten (300s)"))
-        self.opt_quota_interval.pack(side="left")
-
         # 9. Software Updates
         upd_group = ctk.CTkFrame(scroll, fg_color=("#FFFFFF", "#242428"), border_width=1, border_color=("#CBD5E1", "#38393F"), corner_radius=10)
         upd_group.pack(fill="x", pady=6)
@@ -3701,25 +3629,6 @@ class MammouthControlCenter(ctk.CTk):
             self.config_data.setdefault("embedded_browser", {})["start_page"] = new_url
             if hasattr(self, "mammouth_browser"):
                 self.mammouth_browser.start_url = new_url
-
-        if hasattr(self, "var_quota_sidebar"):
-            enabled = self.var_quota_sidebar.get()
-            self.config_data.setdefault("embedded_browser", {})["quota_sidebar_enabled"] = enabled
-            if hasattr(self, "quota_card"):
-                if enabled:
-                    self.quota_card.pack(fill="x", pady=(0, 8), before=self.mini_card if hasattr(self, "mini_card") else None)
-                else:
-                    self.quota_card.pack_forget()
-
-        if hasattr(self, "opt_quota_interval"):
-            choice = self.opt_quota_interval.get()
-            val_sec = 300
-            if "1 Minute" in choice: val_sec = 60
-            elif "2 Minuten" in choice: val_sec = 120
-            elif "5 Minuten" in choice: val_sec = 300
-            elif "10 Minuten" in choice: val_sec = 600
-            elif "15 Minuten" in choice: val_sec = 900
-            self.config_data.setdefault("embedded_browser", {})["quota_refresh_interval_seconds"] = val_sec
 
         if hasattr(self, "var_auto_check_updates"):
             self.config_data.setdefault("server", {})["auto_check_updates"] = self.var_auto_check_updates.get()

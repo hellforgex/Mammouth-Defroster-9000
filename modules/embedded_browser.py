@@ -593,37 +593,6 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                             core.DownloadStarting += self._on_download_starting
                         except Exception:
                             pass
-
-                        # 5. Inject client-side SPA navigation observer for instant quota updates
-                        try:
-                            core.AddScriptToExecuteOnDocumentCreatedAsync("""
-                            (function() {
-                                if (window._defroster_nav_hooked) return;
-                                window._defroster_nav_hooked = true;
-                                function notifyNav() {
-                                    if (window.chrome && window.chrome.webview) {
-                                        window.chrome.webview.postMessage(JSON.stringify({ type: 'mammouth_nav', url: window.location.href }));
-                                    }
-                                }
-                                var origPush = history.pushState;
-                                if (origPush) {
-                                    history.pushState = function() {
-                                        origPush.apply(this, arguments);
-                                        notifyNav();
-                                    };
-                                }
-                                var origReplace = history.replaceState;
-                                if (origReplace) {
-                                    history.replaceState = function() {
-                                        origReplace.apply(this, arguments);
-                                        notifyNav();
-                                    };
-                                }
-                                window.addEventListener('popstate', notifyNav);
-                            })();
-                            """)
-                        except Exception:
-                            pass
                 except Exception:
                     pass
 
@@ -644,10 +613,6 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                     # Automatically redirect stuck OAuth callbacks or errors back to Mammouth home
                     if "/api/auth/callback" in current_uri or "/api/mcp/oauth/callback" in current_uri or "mcp_error" in current_uri:
                         self.after(800, lambda: self.edge.load_url(self.start_url))
-
-                    # Trigger background quota query when Mammouth page finishes loading
-                    if "mammouth.ai" in current_uri.lower():
-                        self.after(1200, self.request_quota_refresh)
                 except Exception:
                     pass
 
@@ -865,20 +830,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             except Exception as e:
                 print(f"[BROWSER WEB-MESSAGE] JSON parse warning: {e}")
 
-            # 1. Handle our Mammouth quota telemetry message
-            if isinstance(parsed_data, dict) and parsed_data.get("type") == "mammouth_quota":
-                payload = parsed_data.get("payload")
-                self._last_quota_data = payload
-                if self.quota_cb:
-                    self.after(0, lambda p=payload: self.quota_cb(p))
-                return
-
-            # Handle client-side SPA navigation notification
-            if isinstance(parsed_data, dict) and parsed_data.get("type") == "mammouth_nav":
-                self.after(1000, self.request_quota_refresh)
-                return
-
-            # 2. Safely handle pywebview drag-and-drop file notification
+            # Safely handle pywebview drag-and-drop file notification
             if raw == '"FilesDropped"':
                 try:
                     from webview.platforms.edgechromium import _dnd_state
@@ -895,7 +847,14 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                     pass
                 return
 
-            # 3. Safely handle pywebview RPC calls [func_name, func_param, value_id]
+            # Passively receive mammouth_quota message if dispatched
+            if isinstance(parsed_data, dict) and parsed_data.get("type") == "mammouth_quota":
+                if getattr(self, "quota_cb", None) and callable(self.quota_cb):
+                    payload = parsed_data.get("payload")
+                    self.after(0, lambda p=payload: self.quota_cb(p))
+                return
+
+            # Safely handle pywebview RPC calls [func_name, func_param, value_id]
             if isinstance(parsed_data, (list, tuple)) and len(parsed_data) == 3:
                 func_name, func_param, value_id = parsed_data
                 try:
@@ -915,110 +874,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 except Exception:
                     pass
                 return
-        except Exception as e:
-            print(f"[BROWSER WEB-MESSAGE] Handler warning: {e}")
-
-    def request_quota_refresh(self):
-        """Triggers background quota fetch inside WebView2 session using Nuxt 3 Pinia store, $fetch, and native endpoints."""
-        if not self.is_embedded or not self.edge or not hasattr(self.edge, "webview"):
-            return
-
-        js_script = """
-        (async function() {
-            try {
-                if (!window.location.hostname || !window.location.hostname.includes("mammouth.ai")) {
-                    return;
-                }
-
-                var cur = null;
-                var rec = null;
-
-                // Strategy 1: Check Nuxt 3 Pinia global store directly
-                try {
-                    var nuxtApp = typeof window.useNuxtApp === 'function' ? window.useNuxtApp() : null;
-                    var pinia = nuxtApp ? (nuxtApp.$pinia || nuxtApp.pinia) : null;
-                    var globalStore = pinia && pinia._s ? pinia._s.get("global") : null;
-                    if (globalStore) {
-                        var promises = [];
-                        if (typeof globalStore.fetchCurrentUsage === 'function') {
-                            promises.push(globalStore.fetchCurrentUsage().catch(function() {}));
-                        }
-                        if (typeof globalStore.fetchRecentUsage === 'function') {
-                            promises.push(globalStore.fetchRecentUsage().catch(function() {}));
-                        }
-                        if (promises.length > 0) {
-                            await Promise.all(promises);
-                        }
-                        if (globalStore.usage) {
-                            cur = Object.assign({}, globalStore.usage);
-                            if (!cur.usagePlan && cur.plan) cur.usagePlan = cur.plan;
-                        }
-                        if (globalStore.recentUsage) {
-                            rec = Object.assign({}, globalStore.recentUsage);
-                        }
-                    }
-                } catch(e) {}
-
-                // Strategy 2: Use window.$fetch (Nuxt 3 official fetch client with session context)
-                if (!cur || !rec) {
-                    try {
-                        var fetchFn = window.$fetch || (typeof globalThis !== 'undefined' ? globalThis.$fetch : null);
-                        if (typeof fetchFn === 'function') {
-                            var results = await Promise.all([
-                                fetchFn('/api/user/currentUsage').catch(function() { return null; }),
-                                fetchFn('/api/user/recentUsage').catch(function() { return null; })
-                            ]);
-                            if (results[0]) cur = results[0];
-                            if (results[1]) rec = results[1];
-                        }
-                    } catch(e) {}
-                }
-
-                // Strategy 3: Standard fetch with credentials
-                if (!cur || !rec) {
-                    try {
-                        var rawResults = await Promise.all([
-                            fetch('/api/user/currentUsage', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
-                                .then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }),
-                            fetch('/api/user/recentUsage', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
-                                .then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
-                        ]);
-                        if (rawResults[0]) cur = rawResults[0];
-                        if (rawResults[1]) rec = rawResults[1];
-                    } catch(e) {}
-                }
-
-                var isOk = !!(cur || rec);
-                var payload = {
-                    ok: isOk,
-                    current: cur,
-                    recent: rec,
-                    url: window.location.href,
-                    ts: Date.now()
-                };
-
-                if (window.chrome && window.chrome.webview) {
-                    window.chrome.webview.postMessage(JSON.stringify({
-                        type: 'mammouth_quota',
-                        payload: payload
-                    }));
-                }
-            } catch(err) {
-                if (window.chrome && window.chrome.webview) {
-                    window.chrome.webview.postMessage(JSON.stringify({
-                        type: 'mammouth_quota',
-                        payload: { ok: false, error: String(err), ts: Date.now() }
-                    }));
-                }
-            }
-        })();
-        """
-        try:
-            target_wv = self.edge.webview
-            if hasattr(target_wv, "CoreWebView2") and target_wv.CoreWebView2:
-                target_wv.CoreWebView2.ExecuteScriptAsync(js_script)
         except Exception:
             pass
+
+    def request_quota_refresh(self):
+        """Deprecated no-op: In-page DOM quota scraping removed for absolute stability."""
+        pass
 
     def _copy_mcp_url(self):
         url = ""
