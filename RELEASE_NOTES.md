@@ -8,18 +8,31 @@
 
 ## 🚀 What's New in v0.4.1
 
-### 🐛 Critical Bugfixes: Downloads & Screenshot Paste
-* **Download Dialog Crash Fix:** Fixed an immediate crash when clicking "OK" on the native Save File dialog. Resolved premature closing and disposing of the popup WebView2 instance while downloads are initializing or active. Added resilient `tkinter.filedialog` fallback and safe deferral completion.
-* **Screenshot & Paste Freeze Fix:** Fixed an issue where the application could hang when capturing a screenshot and inserting it into chat. Moved WebView2 script execution to the main UI thread to eliminate COM cross-thread deadlocks. Added a guaranteed `finally` key-up release for `VK_CONTROL` and `VK_V` preventing stuck modifier keys. Added an exponential retry loop with safe `finally` clipboard closing in `copy_image_to_clipboard`.
+### 🛡️ Security Audit Remediations & OAuth Hardening
+* **OAuth Consent CSRF Protection (F-01):** Bound ephemeral cryptographic anti-CSRF tokens to authorization consent requests (`/oauth/authorize`). Consent form submissions must validate against server-side session state, eliminating cross-site request forgery risks.
+* **Fail-Closed Dynamic Client Registration (F-02):** Dynamic client registration (`/oauth/register`) is now strictly fail-closed. Registration requires either a configured `registration_token` or the server's `api_token` in the `Authorization: Bearer` header.
+* **Shell Statement Separator Bypass Defense (F-03):** Expanded statement splitting in `_validate_shell_command` and `_check_readonly_path_guard` to include newlines (`\n`, `\r\n`), and boolean chaining operators (`&&`, `||`). `Out-File` is explicitly blocked in read-only shell mode.
+* **Safe-by-Default Tunnel Enforcement (F-04):** `start_server.bat`, `start_server.ps1`, and `gui.py` strictly check `server.auto_tunnel == true` before initiating Tailscale Funnel. By default, the server operates safely in local loopback mode.
+* **Query-String Token Deprecation (F-05):** Removed query-string `?token=` credential acceptance in `SecurityAndAuthMiddleware`. Credentials must be supplied via `Authorization: Bearer` headers, preventing token leakage in browser histories, referer headers, and proxy access logs.
+* **OAuth Client Secret & PKCE Verification (F-09):** The token endpoint (`/oauth/token`) verifies `client_secret` against registered client records using timing-safe comparisons and enforces mandatory PKCE S256 challenge checks.
 
-### 🦣 Mammouth AI Quota & Usage Monitor in Sidebar
-* **Native In-Sidebar Telemetry (`CTkMammouthQuotaCard`):** Real-time quota and usage metrics rendered directly in the left Cockpit sidebar.
-* **Background WebView2 Session Bridge:** Directly communicates with Mammouth.ai's authenticated session via `ExecuteScriptAsync` to query `/api/user/currentUsage` and `/api/user/recentUsage`.
-* **Model Consumption Breakdown:** Displays a stacked multi-segment progress bar and legend dots for each model family (Claude, GPT, GLM, Gemini, Perplexity).
-* **Accurate Rolling Window & Plan Multipliers:** Implements Mammouth's 150-cent base threshold with plan multipliers (`Starter x1`, `Standard x3`, `Expert x10`).
-* **5-Minute Auto-Refresh & 🔄 Button:** Automatic background updates every 300 seconds and instantaneous manual refresh with feedback indicators.
-* **1-Click Navigation:** Clicking the quota card seamlessly focuses the in-app Mammouth AI WebApp tab.
-* **Settings Tab Integration:** Toggle the quota card on/off and select custom refresh intervals (1 to 15 minutes) under ⚙️ Settings.
+### 📝 Parameter Parsing & File Write Hardening
+* **Elimination of Quote Truncation & Phantom Files:** Introduced path input sanitation (`_clean_path_input`) in `file_ops.py` to strip accidental wrapping and internal double quotes (`"`). Solves the issue where paths with quotes or spaces were split or truncated, creating corrupted files (such as phantom `2.0` files).
+* **Strict Workspace Root Anchoring:** Relative paths and paths with leading slashes (`/` or `\`) are strictly anchored to the workspace root (`ws_root / rel_clean`) instead of jumping to the drive root (`D:\`).
+* **1:1 Byte-for-Byte File Writes:** Switched `file_write` and `file_replace_chunk` to `open(..., newline="")` ensuring scripts, headers, and code content are preserved byte-for-byte without CRLF translation mangling.
+* **1:1 Shell Command Execution:** Upgraded `local_exec_command` to execute via PowerShell (`shell=False`) instead of `cmd.exe /c` (`shell=True`). Arguments, quotes, backslashes, multiline scripts, and exit codes are passed through 1:1 without `cmd.exe` quote stripping. Added workspace anchoring for relative `cwd` parameters.
+
+### 🐛 Browser Stability & Navigation Crash Fixes
+* **Cloudflare Turnstile & SPA Navigation Fix:** Eliminated frame script injection (`AddScriptToExecuteOnDocumentCreatedAsync`) that interfered with Cloudflare Turnstile verification iframes on mammouth.ai, resolving renderer crashes when clicking "Start / Loslegen".
+* **Download Dialog Crash Fix:** Neutralized unhandled delegate events (`on_download_starting`, `on_navigation_completed`, `on_script_notify`) at the class level on `EdgeChrome` to prevent Python.NET COM interop crashes during file downloads.
+* **Screenshot & Paste Freeze Fix:** Ensured WebView2 script execution runs exclusively on the main UI thread, added guaranteed `finally` key-up releases for modifier keys, and added retry loops with safe clipboard closing.
+
+### 📦 Release Verification & Checksums
+* **Archive:** `MammouthDefroster9000-v0.4.1-windows-x64.zip`
+* **SHA-256 Checksum:**
+  ```text
+  c6061d460dfc479305c77609744e53b65f13a5feccef81477ae7c3ba039257a3
+  ```
 
 ---
 
