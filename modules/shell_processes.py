@@ -110,7 +110,7 @@ def _check_readonly_path_guard(raw_cmd: str) -> None:
 
     # 3. R7-N1: Path Argument Extraction & Resolution against workspace
     workspace_root = _get_workspace_root_resolved()
-    segments = re.split(r'\||;', raw_cmd)
+    segments = re.split(r'\||;|&&|\|\||[\r\n]+', raw_cmd)
     for seg in segments:
         seg = seg.strip()
         if not seg:
@@ -149,7 +149,7 @@ def _check_readonly_path_guard(raw_cmd: str) -> None:
 
 
 READONLY_CMDLET_PREFIXES = (
-    "get-", "test-", "measure-", "select-", "where-", "out-", "write-", "format-", "find-"
+    "get-", "test-", "measure-", "select-", "where-", "format-", "find-", "write-"
 )
 
 READONLY_BINARIES = {
@@ -216,7 +216,7 @@ def _validate_shell_command(command: str, allow_admin: Optional[bool] = None) ->
     # 2. Check Read-Only Allowlist if admin shell is not enabled
     admin_enabled = allow_admin if allow_admin is not None else _is_admin_shell_allowed()
     if not admin_enabled:
-        pipeline_segments = re.split(r'\||;', s_no_quotes)
+        pipeline_segments = re.split(r'\||;|&&|\|\||[\r\n]+', s_no_quotes)
         for seg in pipeline_segments:
             seg_tokens = seg.strip().split()
             if not seg_tokens:
@@ -227,6 +227,9 @@ def _validate_shell_command(command: str, allow_admin: Optional[bool] = None) ->
                 if subcmd != "query":
                     raise PermissionError("Admin shell required: 'reg' command is only allowed with 'query' in Read-Only mode.")
                 continue
+
+            if first_token == "out-file":
+                raise PermissionError("Admin shell required: 'Out-File' modifies disk and is blocked in Read-Only mode.")
 
             is_allowed_prefix = any(first_token.startswith(pref) for pref in READONLY_CMDLET_PREFIXES)
             is_allowed_binary = (

@@ -187,14 +187,29 @@ def require_module(mod_name: str):
 def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
     """Run a shell command on this Windows host, scoped to the configured workspace root.
 
-    Executes the command via cmd.exe /c and captures stdout, stderr, and exit code.
-    The cwd is whitelisted to only allow directories under the configured workspace root.
-    Commands are validated against the same security blocklist as powershell_exec/cmd_exec.
+    Executes the command via PowerShell (preserving quotes, backslashes, and multiline commands 1:1)
+    and captures stdout, stderr, and exit code.
+    The cwd is whitelisted to only allow directories under the configured workspace root (relative paths
+    are anchored directly to the workspace root).
+    Commands are validated against the security blocklist and read-only allowlist.
     """
-    # --- Security Gate: validate command against shell blocklist (C-2 fix) ---
+    raw_cmd = str(command or "").strip()
+    # Strip wrapping quotes if the whole command was accidentally quoted by the caller
+    if (raw_cmd.startswith('"') and raw_cmd.endswith('"')) or (raw_cmd.startswith("'") and raw_cmd.endswith("'")):
+        raw_cmd = raw_cmd[1:-1].strip()
+
+    if not raw_cmd:
+        return {
+            "stdout": "",
+            "stderr": "Command cannot be empty.",
+            "exit_code": -1,
+            "error": "Empty command"
+        }
+
+    # --- Security Gate: validate command against shell blocklist & allowlist ---
     try:
         from modules.shell_processes import _validate_shell_command
-        clean_command = _validate_shell_command(command)
+        _validate_shell_command(raw_cmd)
     except PermissionError as ex:
         return {
             "stdout": "",
@@ -210,14 +225,23 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
             "error": str(ex)
         }
 
-    # --- Dynamic cwd whitelist: read from config with D:\Ai-Workdir fallback ---
+    # --- Dynamic cwd whitelist: anchor relative cwd to workspace root ---
     cfg = load_config()
     raw_root = cfg.get("server", {}).get("workspace_root") or r"D:\Ai-Workdir"
     workdir_root = os.path.realpath(os.path.abspath(raw_root))
-    target_cwd = cwd if cwd and cwd.strip() else workdir_root
-    resolved_cwd = os.path.realpath(os.path.abspath(target_cwd))
 
-    if not (resolved_cwd == workdir_root or resolved_cwd.startswith(workdir_root + os.sep)):
+    clean_cwd = str(cwd or "").strip().strip("'\"").strip()
+    if clean_cwd:
+        is_abs = os.path.isabs(clean_cwd) or (len(clean_cwd) >= 2 and clean_cwd[1] == ':')
+        if not is_abs:
+            # Anchor relative cwd to workspace root
+            clean_cwd = os.path.join(workdir_root, clean_cwd.lstrip("/\\"))
+        resolved_cwd = os.path.realpath(os.path.abspath(clean_cwd))
+    else:
+        resolved_cwd = workdir_root
+
+    # Enforce workspace root boundary
+    if not (resolved_cwd == workdir_root or resolved_cwd.startswith(workdir_root + os.sep) or resolved_cwd.startswith(workdir_root + "/")):
         return {
             "stdout": "",
             "stderr": f"Security: cwd '{cwd}' resolves to '{resolved_cwd}' which is outside the allowed workspace '{workdir_root}'.",
@@ -225,10 +249,18 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
             "error": f"cwd not in {workdir_root} scope"
         }
 
+    if not os.path.exists(resolved_cwd):
+        return {
+            "stdout": "",
+            "stderr": f"Directory not found: '{resolved_cwd}'",
+            "exit_code": -1,
+            "error": "DirectoryNotFound"
+        }
+
     try:
+        # Execute via PowerShell directly with shell=False to pass raw_cmd 1:1 including quotes and backslashes
         proc = subprocess.run(
-            clean_command,
-            shell=True,
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", raw_cmd],
             cwd=resolved_cwd,
             capture_output=True,
             text=True,
@@ -254,6 +286,7 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
             "stdout": "",
             "stderr": str(ex),
             "exit_code": -1,
+            "error": str(ex)
         }
 
 
@@ -434,6 +467,39 @@ def _record_successful_auth(client_ip: str) -> None:
 # ==========================================
 # OAUTH 2.0 & RFC 7591 AUTHENTICATION SERVER
 # ==========================================
+
+# F-01 Fix: In-memory CSRF token store for OAuth consent flow (token → {params, expires_at})
+import threading
+_oauth_csrf_tokens: Dict[str, Dict[str, Any]] = {}
+_oauth_csrf_lock = threading.Lock()
+_OAUTH_CSRF_TTL = 600  # 10 minutes
+
+def _create_oauth_csrf_token(params: Dict[str, str]) -> str:
+    """Generate a cryptographic CSRF token bound to specific authorization request parameters."""
+    csrf_token = secrets.token_urlsafe(32)
+    now = time.time()
+    with _oauth_csrf_lock:
+        # Prune expired tokens
+        expired = [k for k, v in _oauth_csrf_tokens.items() if v["expires_at"] < now]
+        for k in expired:
+            del _oauth_csrf_tokens[k]
+        _oauth_csrf_tokens[csrf_token] = {
+            "params": params,
+            "expires_at": now + _OAUTH_CSRF_TTL,
+        }
+    return csrf_token
+
+def _consume_oauth_csrf_token(csrf_token: str) -> Optional[Dict[str, str]]:
+    """Validate and consume a CSRF token. Returns bound params if valid, None otherwise."""
+    if not csrf_token:
+        return None
+    now = time.time()
+    with _oauth_csrf_lock:
+        entry = _oauth_csrf_tokens.pop(csrf_token, None)
+    if not entry or entry["expires_at"] < now:
+        return None
+    return entry["params"]
+
 
 OAUTH_DB_PATH = ROOT_DIR / "oauth.db"
 
@@ -664,17 +730,25 @@ async def oauth_register(request: Request):
             status_code=429
         )
 
-    # H-1b: Optional registration_token gate — if configured, only bearers of this token may register
+    # F-02 Fix: Fail-closed registration gate — require registration_token OR server api_token
     cfg = load_config()
-    reg_token = cfg.get("server", {}).get("registration_token", "").strip()
-    if reg_token:
-        auth_header = request.headers.get("authorization", "")
-        provided = auth_header[7:].strip() if auth_header.startswith("Bearer ") else ""
-        if not provided or not secrets.compare_digest(provided, reg_token):
-            return JSONResponse(
-                {"error": "unauthorized", "error_description": "Valid registration_token required for dynamic client registration."},
-                status_code=401
-            )
+    server_cfg = cfg.get("server", {})
+    reg_token = server_cfg.get("registration_token", "").strip()
+    api_token = server_cfg.get("api_token", "").strip()
+    auth_header = request.headers.get("authorization", "")
+    provided = auth_header[7:].strip() if auth_header.startswith("Bearer ") else ""
+
+    is_authorized = False
+    if reg_token and provided and secrets.compare_digest(provided, reg_token):
+        is_authorized = True
+    elif api_token and provided and secrets.compare_digest(provided, api_token):
+        is_authorized = True
+
+    if not is_authorized:
+        return JSONResponse(
+            {"error": "unauthorized", "error_description": "Valid registration_token or api_token required for dynamic client registration."},
+            status_code=401
+        )
 
     try:
         body = await request.json()
@@ -707,8 +781,27 @@ async def oauth_authorize(request: Request):
         code_challenge = params.get("code_challenge", "")
         code_challenge_method = params.get("code_challenge_method", "S256")
 
-        client_info = _get_oauth_client(client_id) if client_id else None
-        client_name = client_info.get("client_name", "Mammouth AI") if client_info else "Mammouth AI"
+        # F-01 Fix: Require valid registered client_id
+        if not client_id:
+            return JSONResponse({"error": "invalid_request", "error_description": "client_id is required"}, status_code=400)
+        client_info = _get_oauth_client(client_id)
+        if not client_info:
+            return JSONResponse({"error": "invalid_client", "error_description": "Unknown client_id. Register via /oauth/register first."}, status_code=400)
+        client_name = client_info.get("client_name", "Mammouth AI")
+
+        # F-01 Fix: Require PKCE code_challenge (mandatory, not optional)
+        if not code_challenge:
+            return JSONResponse({"error": "invalid_request", "error_description": "code_challenge is required (PKCE S256)"}, status_code=400)
+
+        # F-01 Fix: Generate CSRF token bound to these exact authorization parameters
+        csrf_token = _create_oauth_csrf_token({
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": response_type,
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": code_challenge_method,
+        })
 
         consent_html = f"""<!DOCTYPE html>
 <html lang="de">
@@ -823,6 +916,7 @@ async def oauth_authorize(request: Request):
             <input type="hidden" name="state" value="{html.escape(state)}">
             <input type="hidden" name="code_challenge" value="{html.escape(code_challenge)}">
             <input type="hidden" name="code_challenge_method" value="{html.escape(code_challenge_method)}">
+            <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}">
             <div class="buttons">
                 <button type="submit" name="action" value="deny" class="btn-deny">Ablehnen</button>
                 <button type="submit" name="action" value="allow" class="btn-allow">Zugriff erlauben</button>
@@ -836,11 +930,22 @@ async def oauth_authorize(request: Request):
     elif request.method == "POST":
         form = await request.form()
         action = form.get("action", "deny")
-        client_id = form.get("client_id", "")
-        redirect_uri = form.get("redirect_uri", "")
-        state = form.get("state", "")
-        code_challenge = form.get("code_challenge", "")
-        code_challenge_method = form.get("code_challenge_method", "S256")
+        csrf_token = form.get("csrf_token", "")
+
+        # F-01 Fix: Validate and consume CSRF token — retrieve server-side stored authorization params
+        csrf_params = _consume_oauth_csrf_token(csrf_token)
+        if not csrf_params:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Invalid or expired CSRF token. Please restart the authorization flow."},
+                status_code=403
+            )
+
+        # Use server-side stored parameters (not attacker-controlled form fields)
+        client_id = csrf_params.get("client_id", "")
+        redirect_uri = csrf_params.get("redirect_uri", "")
+        state = csrf_params.get("state", "")
+        code_challenge = csrf_params.get("code_challenge", "")
+        code_challenge_method = csrf_params.get("code_challenge_method", "S256")
 
         if not redirect_uri:
             redirect_uri = "https://mammouth.ai/api/mcp/oauth/callback"
@@ -905,21 +1010,37 @@ async def oauth_token(request: Request):
         code = body.get("code", "")
         code_verifier = body.get("code_verifier", "")
         client_id = body.get("client_id", "")
+        client_secret = body.get("client_secret", "")
 
         code_data = _get_and_consume_oauth_code(code)
         if not code_data:
             return JSONResponse({"error": "invalid_grant", "error_description": "Invalid or expired authorization code"}, status_code=400)
 
+        # F-09 Fix: Verify client_id matches the code's bound client_id
+        code_client_id = code_data.get("client_id", "")
+        if code_client_id and client_id and not secrets.compare_digest(client_id, code_client_id):
+            return JSONResponse({"error": "invalid_grant", "error_description": "client_id does not match the authorization code"}, status_code=400)
+        effective_client_id = client_id or code_client_id
+
+        # F-09 Fix: Verify client_secret against registered client
+        if effective_client_id:
+            client_info = _get_oauth_client(effective_client_id)
+            if client_info and client_info.get("client_secret"):
+                if not client_secret or not secrets.compare_digest(client_secret, client_info["client_secret"]):
+                    return JSONResponse({"error": "invalid_client", "error_description": "Invalid client_secret"}, status_code=401)
+
+        # F-01/F-09 Fix: PKCE is mandatory — reject codes without a challenge
         challenge = code_data.get("code_challenge", "")
         method = code_data.get("code_challenge_method", "S256")
-        if challenge:
-            if not _verify_pkce(code_verifier, challenge, method):
-                return JSONResponse({"error": "invalid_grant", "error_description": "PKCE verification failed"}, status_code=400)
+        if not challenge:
+            return JSONResponse({"error": "invalid_grant", "error_description": "PKCE code_challenge was not provided during authorization"}, status_code=400)
+        if not _verify_pkce(code_verifier, challenge, method):
+            return JSONResponse({"error": "invalid_grant", "error_description": "PKCE verification failed"}, status_code=400)
 
         access_token = f"mcp_at_{secrets.token_urlsafe(32)}"
         refresh_token = f"mcp_rt_{secrets.token_urlsafe(32)}"
         expires_in = 2592000  # 30 days
-        _save_oauth_token(access_token, refresh_token, client_id or code_data.get("client_id", ""), time.time() + expires_in)
+        _save_oauth_token(access_token, refresh_token, effective_client_id, time.time() + expires_in)
 
         return JSONResponse({
             "access_token": access_token,
@@ -988,8 +1109,15 @@ class SecurityAndAuthMiddleware:
                 await self.app(scope, receive, send_with_security_headers)
                 return
 
-            # OAuth 2.0 Discovery & Endpoints bypass pre-authentication
-            if clean_path.startswith("/.well-known/") or clean_path.startswith("/oauth/"):
+            # OAuth 2.0 Discovery & Endpoints bypass pre-authentication (exact paths only)
+            _OAUTH_PUBLIC_PATHS = {
+                "/.well-known/oauth-protected-resource",
+                "/.well-known/oauth-authorization-server",
+                "/oauth/register",
+                "/oauth/authorize",
+                "/oauth/token",
+            }
+            if clean_path in _OAUTH_PUBLIC_PATHS:
                 await self.app(scope, receive, send_with_security_headers)
                 return
 
@@ -1009,13 +1137,6 @@ class SecurityAndAuthMiddleware:
                 provided_token = ""
                 if auth_header.startswith("Bearer "):
                     provided_token = auth_header[7:].strip()
-                elif not provided_token:
-                    qs = scope.get("query_string", b"").decode("latin1")
-                    if "token=" in qs:
-                        from urllib.parse import parse_qs
-                        q_map = parse_qs(qs)
-                        if "token" in q_map and q_map["token"]:
-                            provided_token = q_map["token"][0].strip()
 
                 is_valid = False
                 if provided_token:

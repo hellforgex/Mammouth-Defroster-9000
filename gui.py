@@ -3732,37 +3732,43 @@ class MammouthControlCenter(ctk.CTk):
 
         self._log(f"Starting in-process FastMCP server on {host}:{port}...")
 
-        # Activate public tunnel in background if selected
-        tunnel_choice = self.config_data.get("server", {}).get("tunnel_mode")
-        if tunnel_choice == "Tailscale Funnel":
-            ts_path = self.config_data.get("server", {}).get("tailscale_path", r"C:\Program Files\Tailscale\tailscale.exe")
-            ts_bin = find_tailscale_binary(ts_path)
-            if ts_bin:
-                try:
-                    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-                    res = subprocess.run(
-                        [ts_bin, "funnel", "--bg", "--yes", str(port)],
-                        capture_output=True,
-                        text=True,
-                        timeout=10,
-                        creationflags=flags
-                    )
-                    if res.returncode == 0:
-                        self._log("[NETWORK] Tailscale Funnel background proxy activated.")
-                    else:
-                        err = res.stderr.strip() or res.stdout.strip()
-                        self._log(f"[NETWORK WARNING] Tailscale funnel: {err}")
-                except Exception as e:
-                    self._log(f"[NETWORK WARNING] Tailscale funnel trigger: {e}")
+        # Activate public tunnel in background only if auto_tunnel is enabled (Safe-by-default Opt-In)
+        server_cfg = self.config_data.get("server", {})
+        auto_tunnel = bool(server_cfg.get("auto_tunnel", False))
+        tunnel_choice = server_cfg.get("tunnel_mode")
 
-        elif tunnel_choice == "Cloudflare Tunnel":
-            self._start_cloudflare_tunnel(port)
+        if auto_tunnel and tunnel_choice:
+            if tunnel_choice == "Tailscale Funnel":
+                ts_path = server_cfg.get("tailscale_path", r"C:\Program Files\Tailscale\tailscale.exe")
+                ts_bin = find_tailscale_binary(ts_path)
+                if ts_bin:
+                    try:
+                        flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                        res = subprocess.run(
+                            [ts_bin, "funnel", "--bg", "--yes", str(port)],
+                            capture_output=True,
+                            text=True,
+                            timeout=10,
+                            creationflags=flags
+                        )
+                        if res.returncode == 0:
+                            self._log("[NETWORK] Tailscale Funnel background proxy activated.")
+                        else:
+                            err = res.stderr.strip() or res.stdout.strip()
+                            self._log(f"[NETWORK WARNING] Tailscale funnel: {err}")
+                    except Exception as e:
+                        self._log(f"[NETWORK WARNING] Tailscale funnel trigger: {e}")
 
-        elif tunnel_choice == "Serveo (Public SSH Tunnel)":
-            self._start_serveo_tunnel(port)
+            elif tunnel_choice == "Cloudflare Tunnel":
+                self._start_cloudflare_tunnel(port)
 
-        elif tunnel_choice == "ngrok":
-            self._start_ngrok_tunnel(port)
+            elif tunnel_choice == "Serveo (Public SSH Tunnel)":
+                self._start_serveo_tunnel(port)
+
+            elif tunnel_choice == "ngrok":
+                self._start_ngrok_tunnel(port)
+        elif not auto_tunnel and tunnel_choice:
+            self._log(f"[NETWORK] Public tunnel '{tunnel_choice}' skipped (server.auto_tunnel=false). Bound to local host.")
 
         try:
             import uvicorn

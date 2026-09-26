@@ -54,12 +54,33 @@ def _is_binary_file(file_path: Path) -> bool:
         return True
 
 
+def _clean_path_input(raw_path_str: str) -> str:
+    """Safely sanitize raw path input from LLMs / MCP clients without truncating or mangling valid path components.
+    
+    Strips accidental wrapping quotes, stray internal quotes, and unescapes double backslashes.
+    """
+    if not raw_path_str:
+        return ""
+    clean = str(raw_path_str).strip()
+    # Strip wrapping single/double quotes (e.g. '"src/main.py"' -> 'src/main.py')
+    if (clean.startswith('"') and clean.endswith('"')) or (clean.startswith("'") and clean.endswith("'")):
+        clean = clean[1:-1].strip()
+    # Remove internal double quotes (strictly prohibited by Windows filesystem)
+    clean = clean.replace('"', '')
+    # Normalize escaped double backslashes if passed from JSON-RPC
+    if clean.startswith("\\\\"):
+        clean = "\\\\" + clean[2:].replace("\\\\", "\\")
+    else:
+        clean = clean.replace("\\\\", "\\")
+    return clean.strip()
+
+
 def _normalize_and_resolve_path(raw_path_str: str) -> str:
     """Normalize UNC, DOS 8.3, symlinks, junctions, and relative segments into a canonical path."""
     if "\0" in raw_path_str:
         raise ValueError("Invalid path: null byte detected.")
 
-    clean_str = str(raw_path_str).strip()
+    clean_str = _clean_path_input(raw_path_str)
 
     # Strip UNC device namespace prefixes (\\?\UNC\server\share -> \\server\share, \\?\C:\ -> C:\, \\.\C:\ -> C:\)
     if clean_str.startswith("\\\\?\\UNC\\") or clean_str.startswith("\\\\?\\unc\\"):
@@ -94,17 +115,31 @@ def _validate_path(target_path_str: str, for_write: bool = False) -> Path:
     if "\0" in target_path_str:
         raise ValueError("Invalid path: null byte detected.")
 
+    clean_target = _clean_path_input(target_path_str)
+    if not clean_target:
+        raise ValueError("Target path cannot be empty.")
+
     enforce_sandbox, ws_root = _get_sandbox_config()
-    raw_path = Path(target_path_str)
+    ws_root_resolved = Path(os.path.realpath(os.path.abspath(str(ws_root))))
 
-    if not raw_path.is_absolute():
-        target_path_str = str(ws_root / raw_path)
+    # Check if clean_target is an absolute path with drive letter or UNC
+    is_absolute_drive = len(clean_target) >= 2 and clean_target[1] == ':' and clean_target[0].isalpha()
+    is_unc = clean_target.startswith("\\\\") or clean_target.startswith("//")
 
-    canonical_path = _normalize_and_resolve_path(target_path_str)
+    if is_absolute_drive or is_unc:
+        # Full absolute path provided
+        canonical_path = _normalize_and_resolve_path(clean_target)
+    else:
+        # Relative path (e.g. "src/file.py", "./notes.txt", "/script.py", "\test.py")
+        # Strip leading slashes to prevent Path("/foo") from jumping to drive root
+        rel_clean = clean_target.lstrip("/\\")
+        combined = os.path.join(str(ws_root_resolved), rel_clean)
+        canonical_path = _normalize_and_resolve_path(combined)
+
     canonical_cf = canonical_path.casefold()
 
     if enforce_sandbox:
-        ws_canonical = _normalize_and_resolve_path(str(ws_root))
+        ws_canonical = _normalize_and_resolve_path(str(ws_root_resolved))
         ws_cf = ws_canonical.casefold()
         sep = os.sep.casefold()
 
@@ -206,7 +241,8 @@ def file_write(
         
     try:
         validated_path.parent.mkdir(parents=True, exist_ok=True)
-        validated_path.write_text(content, encoding="utf-8")
+        with open(validated_path, "w", encoding="utf-8", newline="") as f:
+            f.write(content)
         return f"Successfully wrote {len(content)} characters to {validated_path.name}"
     except Exception as e:
         return f"Error writing file: {e}"
@@ -246,7 +282,8 @@ def file_replace_chunk(
             return f"Error: target_chunk appears {content.count(target_chunk)} times. Specify a larger unique block."
             
         new_content = content.replace(target_chunk, replacement_chunk, 1)
-        validated_path.write_text(new_content, encoding="utf-8")
+        with open(validated_path, "w", encoding="utf-8", newline="") as f:
+            f.write(new_content)
         return f"Successfully replaced chunk in {target}"
     except Exception as e:
         return f"Error modifying file: {e}"
