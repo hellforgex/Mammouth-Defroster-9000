@@ -10,11 +10,11 @@
 
 ### 🛡️ Security Audit Remediations & OAuth Hardening
 * **OAuth Consent CSRF Protection (F-01):** Bound ephemeral cryptographic anti-CSRF tokens to authorization consent requests (`/oauth/authorize`). Consent form submissions must validate against server-side session state, eliminating cross-site request forgery risks.
-* **Fail-Closed Dynamic Client Registration (F-02):** Dynamic client registration (`/oauth/register`) is now strictly fail-closed. Registration requires either a configured `registration_token` or the server's `api_token` in the `Authorization: Bearer` header.
+* **RFC 7591 Dynamic Client Registration with Allowlisting (F-02):** Dynamic client registration (`/oauth/register`) allows trusted endpoints (`mammouth.ai` and `localhost`) with strict IP rate limiting, while strictly rejecting untrusted origins unless authenticated via `registration_token` or `api_token`.
 * **Shell Statement Separator Bypass Defense (F-03):** Expanded statement splitting in `_validate_shell_command` and `_check_readonly_path_guard` to include newlines (`\n`, `\r\n`), and boolean chaining operators (`&&`, `||`). `Out-File` is explicitly blocked in read-only shell mode.
-* **Safe-by-Default Tunnel Enforcement (F-04):** `start_server.bat`, `start_server.ps1`, and `gui.py` strictly check `server.auto_tunnel == true` before initiating Tailscale Funnel. By default, the server operates safely in local loopback mode.
+* **Automatic Tailscale Funnel & Safe Tunnel Modes:** Streamlined Tailscale Funnel background proxy activation on port 8000 when selected, providing seamless public HTTPS SSE connectivity for Mammouth.ai without manual CLI steps.
 * **Query-String Token Deprecation (F-05):** Removed query-string `?token=` credential acceptance in `SecurityAndAuthMiddleware`. Credentials must be supplied via `Authorization: Bearer` headers, preventing token leakage in browser histories, referer headers, and proxy access logs.
-* **OAuth Client Secret & PKCE Verification (F-09):** The token endpoint (`/oauth/token`) verifies `client_secret` against registered client records using timing-safe comparisons and enforces mandatory PKCE S256 challenge checks.
+* **OAuth PKCE & Client Secret Verification (F-09):** The token endpoint (`/oauth/token`) verifies `client_secret` against registered confidential client records using timing-safe comparisons, while supporting standard public PKCE S256 clients.
 
 ### 📝 Parameter Parsing & File Write Hardening
 * **Elimination of Quote Truncation & Phantom Files:** Introduced path input sanitation (`_clean_path_input`) in `file_ops.py` to strip accidental wrapping and internal double quotes (`"`). Solves the issue where paths with quotes or spaces were split or truncated, creating corrupted files (such as phantom `2.0` files).
@@ -31,7 +31,7 @@
 * **Archive:** `MammouthDefroster9000-v0.4.1-windows-x64.zip`
 * **SHA-256 Checksum:**
   ```text
-  c6061d460dfc479305c77609744e53b65f13a5feccef81477ae7c3ba039257a3
+  ba13dadea17ae7230fe4cd2a629b37fe163022d2ccee6dcf7e1c1d8d889f0642
   ```
 
 ---
