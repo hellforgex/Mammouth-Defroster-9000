@@ -4089,11 +4089,28 @@ class MammouthControlCenter(ctk.CTk):
             self.destroy()
             os._exit(0)
 
+    def report_callback_exception(self, exc, val, tb):
+        import traceback
+        traceback.print_exception(exc, val, tb)
+        if hasattr(self, "_log"):
+            try:
+                self._log(f"[ERROR] UI Callback Fehler: {val}")
+            except Exception:
+                pass
+
 
 def main():
     try:
         app = MammouthControlCenter()
         app.mainloop()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        try:
+            from tkinter import messagebox
+            messagebox.showerror("Mammouth Defroster Fehler", f"Ein unerwarteter Fehler ist aufgetreten:\n{e}\n\nDetails im Konsolen-Log.")
+        except Exception:
+            pass
     finally:
         os._exit(0)
 

@@ -38,6 +38,32 @@ if sys.platform == "win32":
         edgechromium.webview_settings['OPEN_EXTERNAL_LINKS_IN_BROWSER'] = False
         edgechromium.webview_settings['ALLOW_DOWNLOADS'] = True
 
+        # Neutralize pywebview's crash-prone native event handlers on EdgeChrome class:
+        # 1. on_script_notify expects exactly [func_name, func_param, value_id].
+        #    Any other WebMessage (e.g. JSON dict from Mammouth quota or navigation)
+        #    causes ValueError: not enough values to unpack, which calls logger.exception
+        #    on a native thread without Python GIL, instantly terminating the process.
+        def _safe_edgechrome_on_script_notify(self, sender, args):
+            pass
+
+        # 2. on_navigation_completed attempts inject_pywebview, which crashes with
+        #    AttributeError: 'Window' object has no attribute 'js_api_endpoint' on custom Window instances.
+        def _safe_edgechrome_on_nav_completed(self, sender, args):
+            try:
+                if sender and hasattr(sender, "Source"):
+                    self.url = str(sender.Source)
+            except Exception:
+                pass
+
+        # 3. on_download_starting creates WinForms SaveFileDialog on .NET COM thread,
+        #    which disrupts GUI message pumps and crashes if Window.localization is missing.
+        def _safe_edgechrome_on_download_starting(self, sender, args):
+            pass
+
+        edgechromium.EdgeChrome.on_script_notify = _safe_edgechrome_on_script_notify
+        edgechromium.EdgeChrome.on_navigation_completed = _safe_edgechrome_on_nav_completed
+        edgechromium.EdgeChrome.on_download_starting = _safe_edgechrome_on_download_starting
+
         user32 = ctypes.windll.user32
         HAS_WEBVIEW2 = True
     except Exception as e:
@@ -504,6 +530,13 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             window.localization = {
                 'windows.fileFilter.allFiles': 'Alle Dateien'
             }
+            window.js_api_endpoint = None
+            window.state = {}
+            window.text_select = True
+            window.zoomable = True
+            window.draggable = False
+            window.easy_drag = False
+            window.frameless = False
             self.edge = EdgeChrome(control, window, self.profile_dir)
             # Pywebview's on_download_starting is replaced with a no-op to prevent duplicate/crashed dialogs
             self.edge.on_download_starting = lambda sender, args: None
