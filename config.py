@@ -133,14 +133,13 @@ def _encrypt_dpapi(data_str: str) -> str:
     if not data_str:
         return ""
     if not HAS_DPAPI:
-        return data_str
+        raise RuntimeError("DPAPI is unavailable. Plaintext fallback is strictly prohibited.")
     try:
         data_bytes = data_str.encode('utf-8')
         encrypted = win32crypt.CryptProtectData(data_bytes, "Mammouth_Token", None, None, None, 0)
         return "dpapi:" + base64.b64encode(encrypted).decode('ascii')
     except Exception as ex:
-        logger.warning(f"DPAPI encryption error: {ex}")
-        return data_str
+        raise RuntimeError(f"DPAPI encryption failed: {ex}")
 
 
 def _decrypt_dpapi(encrypted_str: str) -> str:
@@ -150,20 +149,19 @@ def _decrypt_dpapi(encrypted_str: str) -> str:
     if not encrypted_str.startswith("dpapi:"):
         return encrypted_str
     if not HAS_DPAPI:
-        return encrypted_str
+        raise RuntimeError("DPAPI is unavailable. Plaintext fallback is strictly prohibited.")
     try:
         raw_b64 = encrypted_str[6:]
         raw_bytes = base64.b64decode(raw_b64.encode('ascii'))
         decrypted = win32crypt.CryptUnprotectData(raw_bytes, None, None, None, 0)[1]
         return decrypted.decode('utf-8')
     except Exception as ex:
-        logger.warning(f"DPAPI decryption error: {ex}")
-        return encrypted_str
+        raise RuntimeError(f"DPAPI decryption failed: {ex}")
 
 
 def generate_secure_token() -> str:
-    """Generate a cryptographically secure 32-character URL-safe authentication token."""
-    return secrets.token_urlsafe(24)
+    """Generate a cryptographically secure 32-character hex authentication token."""
+    return "mc_" + secrets.token_hex(16)
 
 
 def get_lan_ip() -> str:
@@ -194,15 +192,17 @@ def load_config() -> Dict[str, Any]:
                     if raw_token:
                         token_was_present = True
                         if raw_token.startswith("dpapi:"):
-                            # Migrate back to plaintext for portability and human-readability
-                            decrypted = _decrypt_dpapi(raw_token)
-                            if decrypted and not decrypted.startswith("dpapi:"):
+                            try:
+                                decrypted = _decrypt_dpapi(raw_token)
                                 cfg["server"]["api_token"] = decrypted
-                            else:
+                            except Exception as ex:
+                                logger.error(f"Failed to decrypt token, generating a new one: {ex}")
                                 cfg["server"]["api_token"] = generate_secure_token()
-                            needs_save = True
+                                needs_save = True
                         else:
+                            # They manually set a plaintext token, let's keep it but mark for save to encrypt it
                             cfg["server"]["api_token"] = raw_token
+                            needs_save = True
                 if "modules" in user_cfg:
                     for mod_key, mod_val in user_cfg["modules"].items():
                         if mod_key in cfg["modules"]:
@@ -231,13 +231,11 @@ def save_config(config_data: Dict[str, Any]) -> bool:
     try:
         disk_cfg = copy.deepcopy(config_data)
         raw_tok = disk_cfg.get("server", {}).get("api_token", "")
-        # Ensure any legacy dpapi token string is decrypted to plaintext before saving
-        if raw_tok and raw_tok.startswith("dpapi:"):
-            decrypted = _decrypt_dpapi(raw_tok)
-            if decrypted and not decrypted.startswith("dpapi:"):
-                disk_cfg["server"]["api_token"] = decrypted
-            else:
-                disk_cfg["server"]["api_token"] = generate_secure_token()
+        if raw_tok and not raw_tok.startswith("dpapi:"):
+            encrypted = _encrypt_dpapi(raw_tok)
+            if not encrypted.startswith("dpapi:"):
+                raise RuntimeError("DPAPI encryption unavailable or failed. Plaintext fallback is strictly prohibited.")
+            disk_cfg["server"]["api_token"] = encrypted
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(disk_cfg, f, indent=2)
         return True

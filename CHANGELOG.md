@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.3] - 2026-09-28
+
+### 🐛 Bug Fixes & Stability Enhancements
+- **Crash Elimination on Download (`modules/embedded_browser.py`):** Resolved the `0xc0000409` (`FAST_FAIL_FATAL_APP_EXIT` in `ucrtbase.dll`) crash that terminated the application when selecting a save destination.
+- **Thread-Safe UI Queue Marshalling:** Replaced re-entrant synchronous Tkinter calls (`configure`, `after`) during WebView2 COM message dispatch with a thread-safe message queue (`_safe_ui_call` and `_schedule_ui_queue_poll`), preventing Tcl re-entrancy panics.
+- **Protected Download State Tracking:** Replaced unmanaged COM event subscriptions on `CoreWebView2DownloadOperation.StateChanged` with a non-blocking background filesystem watcher (`_watch_download_completion`) that safely signals completion without native delegate thunk crashes.
+- **Dedicated STA File Dialog Thread:** Run WinForms `SaveFileDialog` inside an isolated STA thread (`SetApartmentState(ApartmentState.STA)`), eliminating apartment state conflicts and removing legacy buffer-vulnerable struct calls.
+- **Resilient Workspace Initialization (`server.py`):** Added automatic creation of the workspace root in `local_exec_command` if not yet present on disk.
+- **OAuth Reconnection & Multi-Session Persistence (`server.py`):** Added root route aliases (`/authorize`, `/token`, `/register`) and RFC 9728 subpath support (`/.well-known/oauth-protected-resource/{subpath:path}`, `/.well-known/oauth-authorization-server/{subpath:path}`) in `server.py` and `SecurityAndAuthMiddleware`. Resolves connection drops where restarting Defroster 9000 blocked Mammouth AI from refreshing tokens or re-authenticating across sessions.
+
+## [0.4.2] - 2026-09-28
+
+### 🐛 Bug Fixes & Security Enhancements
+- **Download Dialog Freeze Fix (`modules/embedded_browser.py`):** Fixed a cross-thread deadlock where native download file dialogs and WebView2 COM events attempted to update the Tkinter UI from a background thread, causing the application to hang when saving files.
+- **DPAPI Authentication Security (`config.py`, `gui.py`, `server.py`):** Restored strict DPAPI (`CryptProtectData`) encryption for the `api_token` in `config.json`. Removed plaintext fallbacks that caused silent token regeneration and broken client configurations. Enforced cryptographically secure 32-hex character tokens (`mc_<32-hex-chars>`) as per strict fail-closed security guidelines.
+- **Robust Exception Handling:** DPAPI encryption and decryption now raise explicit errors on failure, preventing invalid state loops or silent plaintext exposure.
+
+
 All notable changes to **Mammouth Defroster 9000** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

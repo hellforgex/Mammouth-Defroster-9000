@@ -32,7 +32,8 @@ class TestGuiStartServerRegression(unittest.TestCase):
         app.after = MagicMock()
         app._switch_to_mammouth_tab = MagicMock()
 
-        with patch("gui.threading.Thread") as mock_thread, \
+        with patch("socket.socket.connect_ex", return_value=1), \
+             patch("gui.threading.Thread") as mock_thread, \
              patch("uvicorn.Config") as mock_uvicorn_cfg, \
              patch("uvicorn.Server") as mock_uvicorn_server, \
              patch("gui.build_app") as mock_build_app:

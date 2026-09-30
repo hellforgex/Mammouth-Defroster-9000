@@ -157,7 +157,7 @@ from modules.google_drive import (
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.4.1): Sovereign Windows 11 Desktop Cockpit, Vision, Google Drive & Unreal Engine 5 Automation Platform.
+    Mammouth Defroster 9000 (v0.4.3): Sovereign Windows 11 Desktop Cockpit, Vision, Google Drive & Unreal Engine 5 Automation Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, Google Drive cloud integration, and Unreal Engine automation exclusively for Mammouth.ai.
     Always prioritize safety, sandboxing, and precision.
     """
@@ -250,12 +250,18 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
         }
 
     if not os.path.exists(resolved_cwd):
-        return {
-            "stdout": "",
-            "stderr": f"Directory not found: '{resolved_cwd}'",
-            "exit_code": -1,
-            "error": "DirectoryNotFound"
-        }
+        if resolved_cwd == workdir_root:
+            try:
+                os.makedirs(resolved_cwd, exist_ok=True)
+            except Exception:
+                pass
+        if not os.path.exists(resolved_cwd):
+            return {
+                "stdout": "",
+                "stderr": f"Directory not found: '{resolved_cwd}'",
+                "exit_code": -1,
+                "error": "DirectoryNotFound"
+            }
 
     try:
         # Execute via PowerShell directly with shell=False to pass raw_cmd 1:1 including quotes and backslashes
@@ -418,6 +424,8 @@ def _is_ip_locked_out(client_ip: str, now: float) -> tuple:
     
     Returns (is_locked_out: bool, remaining_seconds: float).
     """
+    if client_ip in ("127.0.0.1", "::1", "localhost"):
+        return False, 0.0
     entry = _failed_ip_attempts.get(client_ip)
     if not entry:
         return False, 0.0
@@ -433,6 +441,8 @@ def _record_failed_auth(client_ip: str, now: float) -> float:
     From 5 consecutive failures, delay increases exponentially: 2^n seconds (capped at 60s).
     Returns active delay in seconds.
     """
+    if client_ip in ("127.0.0.1", "::1", "localhost"):
+        return 0.0
     if len(_failed_ip_attempts) >= MAX_LOCKOUT_ENTRIES:
         # Prune inactive / expired entries
         expired = [k for k, v in _failed_ip_attempts.items() if now - v.get("last_attempt", 0) > 300 and now >= v.get("lockout_until", 0)]
@@ -547,13 +557,18 @@ OAUTH_REGISTER_MAX_PER_HOUR = 5
 
 def _check_oauth_register_rate_limit(client_ip: str) -> bool:
     """Return True if registration is allowed, False if rate-limited."""
+    # Loopback / local tunnel requests are trusted local traffic
+    if client_ip in ("127.0.0.1", "::1", "localhost"):
+        max_attempts = 120
+    else:
+        max_attempts = 30
     now = time.time()
     window = 3600.0  # 1 hour
     attempts = _oauth_register_attempts.get(client_ip, [])
     # Prune entries older than 1 hour
     attempts = [t for t in attempts if now - t < window]
     _oauth_register_attempts[client_ip] = attempts
-    if len(attempts) >= OAUTH_REGISTER_MAX_PER_HOUR:
+    if len(attempts) >= max_attempts:
         return False
     attempts.append(now)
     return True
@@ -659,11 +674,17 @@ def _refresh_oauth_token(refresh_token: str) -> Optional[Dict[str, Any]]:
         row = cur.fetchone()
         if not row:
             return None
+        client_id = row["client_id"]
         new_access_token = f"mcp_at_{secrets.token_urlsafe(32)}"
         new_refresh_token = f"mcp_rt_{secrets.token_urlsafe(32)}"  # H-3: Rotate refresh token
         new_expires_at = now + 2592000
-        cur.execute("UPDATE oauth_tokens SET access_token = ?, refresh_token = ?, expires_at = ? WHERE refresh_token = ?",
-                    (new_access_token, new_refresh_token, new_expires_at, refresh_token))
+        # Insert new token pair while maintaining grace period on previous refresh token
+        cur.execute(
+            "INSERT INTO oauth_tokens (access_token, refresh_token, client_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
+            (new_access_token, new_refresh_token, client_id, new_expires_at, now)
+        )
+        # Give old refresh token a 10-minute grace period so network retries or concurrent requests don't fail
+        cur.execute("UPDATE oauth_tokens SET expires_at = ? WHERE refresh_token = ?", (now + 600, refresh_token))
         conn.commit()
         # M-2: Opportunistic cleanup of expired entries
         _cleanup_expired_oauth_entries()
@@ -701,8 +722,17 @@ def _get_base_url(request: Request) -> str:
 
 async def oauth_protected_resource(request: Request):
     base_url = _get_base_url(request).rstrip("/")
+    resource_param = request.query_params.get("resource", "").strip()
+    if resource_param:
+        resource_id = resource_param
+    elif request.url.path.endswith("/sse"):
+        resource_id = f"{base_url}/sse"
+    elif request.url.path.endswith("/mcp"):
+        resource_id = f"{base_url}/mcp"
+    else:
+        resource_id = base_url
     return JSONResponse({
-        "resource": base_url,
+        "resource": resource_id,
         "authorization_servers": [base_url]
     })
 
@@ -937,7 +967,7 @@ async def oauth_authorize(request: Request):
             <strong>{html.escape(client_name)}</strong> möchte sich mit deinem lokalen Defroster 9000 verbinden.<br><br>
             Dies gewährt Zugriff auf sandboxed MCP-Tools (Dateien, Desktop, Google Drive, Aufgaben & Automatisierung) auf diesem Host.
         </div>
-        <form method="POST" action="/oauth/authorize">
+        <form method="POST" action="{html.escape(request.url.path or '/oauth/authorize')}">
             <input type="hidden" name="client_id" value="{html.escape(client_id)}">
             <input type="hidden" name="redirect_uri" value="{html.escape(redirect_uri)}">
             <input type="hidden" name="response_type" value="{html.escape(response_type)}">
@@ -1125,7 +1155,12 @@ class SecurityAndAuthMiddleware:
                     headers = list(message.get("headers", []))
                     headers.append((b"x-content-type-options", b"nosniff"))
                     # Anti-clickjacking: DENY by default; for OAuth consent endpoints, restrict framing to mammouth.ai and self
-                    if clean_path.startswith("/oauth/"):
+                    is_oauth_consent = (
+                        clean_path.startswith("/oauth/")
+                        or clean_path.startswith("/.well-known/oauth-")
+                        or clean_path in ("/authorize", "/token", "/register")
+                    )
+                    if is_oauth_consent:
                         headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai"))
                     else:
                         headers.append((b"x-frame-options", b"DENY"))
@@ -1148,15 +1183,17 @@ class SecurityAndAuthMiddleware:
                 await self.app(scope, receive, send_with_security_headers)
                 return
 
-            # OAuth 2.0 Discovery & Endpoints bypass pre-authentication (exact paths only)
-            _OAUTH_PUBLIC_PATHS = {
-                "/.well-known/oauth-protected-resource",
-                "/.well-known/oauth-authorization-server",
-                "/oauth/register",
-                "/oauth/authorize",
-                "/oauth/token",
-            }
-            if clean_path in _OAUTH_PUBLIC_PATHS:
+            # OAuth 2.0 Discovery & Endpoints bypass pre-authentication
+            is_oauth_public = (
+                clean_path in {
+                    "/oauth/register", "/register",
+                    "/oauth/authorize", "/authorize",
+                    "/oauth/token", "/token",
+                }
+                or clean_path.startswith("/.well-known/oauth-protected-resource")
+                or clean_path.startswith("/.well-known/oauth-authorization-server")
+            )
+            if is_oauth_public:
                 await self.app(scope, receive, send_with_security_headers)
                 return
 
@@ -1172,9 +1209,9 @@ class SecurityAndAuthMiddleware:
                     await response(scope, receive, send_with_security_headers)
                     return
 
-                auth_header = header_map.get("authorization", "")
+                auth_header = header_map.get("authorization", "").strip()
                 provided_token = ""
-                if auth_header.startswith("Bearer "):
+                if auth_header.lower().startswith("bearer "):
                     provided_token = auth_header[7:].strip()
 
                 is_valid = False
@@ -1185,7 +1222,8 @@ class SecurityAndAuthMiddleware:
                         is_valid = True
 
                 if not is_valid:
-                    _record_failed_auth(client_ip, now)
+                    if provided_token:
+                        _record_failed_auth(client_ip, now)
                     response = JSONResponse(
                         {"error": "Unauthorized", "message": "Invalid or missing Bearer API authentication token."},
                         status_code=401
@@ -1220,7 +1258,7 @@ def build_app(token: Optional[str] = None):
             effective_token = server_cfg.get("api_token", "") or os.environ.get("MCP_API_TOKEN", "")
             if not effective_token:
                 import secrets
-                effective_token = f"mc_{secrets.token_urlsafe(32)}"
+                effective_token = f"mc_{secrets.token_hex(16)}"
                 server_cfg["api_token"] = effective_token
                 try:
                     from config import save_config
@@ -1241,10 +1279,15 @@ def build_app(token: Optional[str] = None):
         Route("/sse", endpoint=streamable_http_app, methods=["GET", "POST", "DELETE", "OPTIONS"]),
         Route("/messages", endpoint=streamable_http_app, methods=["GET", "POST", "DELETE", "OPTIONS"]),
         Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
+        Route("/.well-known/oauth-protected-resource/{subpath:path}", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
         Route("/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server, methods=["GET", "OPTIONS"]),
+        Route("/.well-known/oauth-authorization-server/{subpath:path}", endpoint=oauth_authorization_server, methods=["GET", "OPTIONS"]),
         Route("/oauth/register", endpoint=oauth_register, methods=["POST", "OPTIONS"]),
+        Route("/register", endpoint=oauth_register, methods=["POST", "OPTIONS"]),
         Route("/oauth/authorize", endpoint=oauth_authorize, methods=["GET", "POST", "OPTIONS"]),
+        Route("/authorize", endpoint=oauth_authorize, methods=["GET", "POST", "OPTIONS"]),
         Route("/oauth/token", endpoint=oauth_token, methods=["POST", "OPTIONS"]),
+        Route("/token", endpoint=oauth_token, methods=["POST", "OPTIONS"]),
     ]
 
     @asynccontextmanager

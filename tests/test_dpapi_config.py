@@ -28,8 +28,8 @@ class TestDPAPIConfig(unittest.TestCase):
         plain = "plain_token_123"
         self.assertEqual(_decrypt_dpapi(plain), plain)
 
-    def test_save_config_preserves_plaintext_token(self):
-        """Test that save_config saves the original plaintext key and does not hash it with DPAPI."""
+    def test_save_config_encrypts_token_with_dpapi(self):
+        """Test that save_config encrypts the token with DPAPI on disk."""
         with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as tmp:
             tmp_path = Path(tmp.name)
         try:
@@ -41,15 +41,15 @@ class TestDPAPIConfig(unittest.TestCase):
 
             with open(tmp_path, "r", encoding="utf-8") as f:
                 saved = json.load(f)
-            self.assertEqual(saved["server"]["api_token"], "original_secret_key_456")
-            self.assertFalse(saved["server"]["api_token"].startswith("dpapi:"))
+            self.assertTrue(saved["server"]["api_token"].startswith("dpapi:"))
+            self.assertEqual(_decrypt_dpapi(saved["server"]["api_token"]), "original_secret_key_456")
         finally:
             config.CONFIG_FILE = orig_file
             if tmp_path.exists():
                 tmp_path.unlink()
 
-    def test_load_config_migrates_dpapi_to_original_key(self):
-        """Test that load_config automatically converts legacy dpapi: tokens to original plaintext keys."""
+    def test_load_config_decrypts_dpapi_token(self):
+        """Test that load_config automatically decrypts legacy dpapi: tokens into in-memory plaintext."""
         with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as tmp:
             tmp_path = Path(tmp.name)
         try:
@@ -64,15 +64,14 @@ class TestDPAPIConfig(unittest.TestCase):
                 json.dump(initial_cfg, f)
 
             loaded = load_config()
-            # Token returned must be the decrypted original key
-            if encrypted_tok.startswith("dpapi:"):
-                self.assertEqual(loaded["server"]["api_token"], token_val)
+            # Token returned must be the decrypted original key in memory
+            self.assertEqual(loaded["server"]["api_token"], token_val)
             self.assertFalse(loaded["server"]["api_token"].startswith("dpapi:"))
 
-            # And it must be saved back to disk in plaintext
+            # And on disk it remains protected by DPAPI
             with open(tmp_path, "r", encoding="utf-8") as f:
                 on_disk = json.load(f)
-            self.assertFalse(on_disk["server"]["api_token"].startswith("dpapi:"))
+            self.assertTrue(on_disk["server"]["api_token"].startswith("dpapi:"))
         finally:
             config.CONFIG_FILE = orig_file
             if tmp_path.exists():

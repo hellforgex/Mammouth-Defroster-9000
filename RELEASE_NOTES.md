@@ -2,9 +2,36 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.4.1**
+> **Current Version:** **v0.4.3**
 
 ---
+
+## 🚀 What's New in v0.4.3
+
+### 🐛 Bug Fixes & Stability Enhancements
+* **Download Crash Elimination (`modules/embedded_browser.py`):** Resolved the `0xc0000409` (`FAST_FAIL_FATAL_APP_EXIT` in `ucrtbase.dll`) crash that terminated the application upon selecting a destination in the save dialog.
+* **Thread-Safe UI Queue Marshalling:** Replaced re-entrant synchronous Tkinter widget calls during WebView2 COM message dispatch with a thread-safe message queue (`_safe_ui_call` and `_schedule_ui_queue_poll`), completely preventing Tcl re-entrancy panics.
+* **Protected Download State Tracking:** Replaced unmanaged COM event subscriptions on `CoreWebView2DownloadOperation.StateChanged` with a non-blocking background filesystem watcher (`_watch_download_completion`) that safely signals completion without native delegate thunk crashes.
+* **Dedicated STA File Dialog Thread:** Run WinForms `SaveFileDialog` inside an isolated STA thread (`SetApartmentState(ApartmentState.STA)`), eliminating apartment state conflicts and removing legacy buffer-vulnerable struct calls.
+* **Resilient Workspace Initialization (`server.py`):** Added automatic creation of the workspace root in `local_exec_command` if not yet present on disk.
+* **OAuth Reconnection & Multi-Session Persistence (`server.py`):** Fixed an issue where restarting Defroster 9000 prevented Mammouth.ai from reconnecting without deleting and re-adding the MCP server. Added standard OAuth root route aliases (`/authorize`, `/token`, `/register`) and RFC 9728 discovery subpaths (`/.well-known/oauth-protected-resource/{subpath:path}`) alongside case-insensitive Bearer header parsing, allowing refresh tokens and reconnect handshakes to persist seamlessly across restarts.
+
+### 📦 Release Verification & Checksums
+* **Archive:** `MammouthDefroster9000-v0.4.3-windows-x64.zip`
+* **SHA-256 Checksum:**
+  ```text
+  1e1fd3b41282655878442bed7a1fde7215ec7639ac895cccae311ed88128e12b
+  ```
+
+---
+
+## 🚀 What's New in v0.4.2
+
+### 🐛 Bug Fixes & Security Enhancements
+* **Download Dialog Freeze Fix:** Fixed a critical cross-thread deadlock where native download file dialogs and WebView2 COM events attempted to synchronously update the Tkinter UI from a background thread. File downloads in the Mammouth browser will no longer cause the application to hang.
+* **DPAPI Authentication Security:** Restored strict DPAPI (`CryptProtectData`) encryption for the `api_token` in `config.json`. Removed insecure plaintext fallbacks that caused silent token regeneration, breaking client configuration on every restart.
+* **Cryptographically Secure Tokens:** Enforced strict `mc_<32-hex-chars>` token generation format as per fail-closed security guidelines.
+* **Robust Exception Handling:** DPAPI encryption and decryption now raise explicit errors on failure, preventing invalid state loops or silent plaintext exposure.
 
 ## 🚀 What's New in v0.4.1
 

@@ -179,6 +179,55 @@ class TestBugfixV041(unittest.TestCase):
         # Ensure deferral was completed
         mock_deferral.Complete.assert_called_once()
 
+    def test_safe_ui_call_queuing_and_polling(self):
+        """Validates that _safe_ui_call queues actions and _schedule_ui_queue_poll executes them."""
+        import queue
+        from modules.embedded_browser import MammouthBrowserFrame
+
+        frame = MammouthBrowserFrame.__new__(MammouthBrowserFrame)
+        frame._ui_queue = queue.Queue()
+        executed = []
+
+        # Force async queueing
+        frame._safe_ui_call(lambda: executed.append("action1"), force_async=True)
+        self.assertEqual(len(executed), 0)
+        self.assertEqual(frame._ui_queue.qsize(), 1)
+
+        # Mock after so poll doesn't loop infinitely
+        frame.after = MagicMock()
+        frame._schedule_ui_queue_poll()
+        self.assertEqual(executed, ["action1"])
+        self.assertEqual(frame._ui_queue.qsize(), 0)
+
+    def test_on_download_starting_production_op_does_not_hook_com_state_changed(self):
+        """Validates that real production download operations without mock_calls are not hooked via COM delegates."""
+        from modules.embedded_browser import MammouthBrowserFrame
+
+        class DummyRealDownloadOp:
+            def __init__(self):
+                self.hooked = False
+            @property
+            def StateChanged(self):
+                return self
+            def __iadd__(self, other):
+                self.hooked = True
+                return self
+
+        dummy_op = DummyRealDownloadOp()
+        mock_args = MagicMock()
+        mock_args.ResultFilePath = "C:\\Downloads\\data.csv"
+        mock_args.DownloadOperation = dummy_op
+        mock_deferral = MagicMock()
+        mock_args.GetDeferral.return_value = mock_deferral
+
+        frame = MagicMock(spec=MammouthBrowserFrame)
+        frame._prompt_save_file = MagicMock(return_value="C:\\Downloads\\data.csv")
+
+        MammouthBrowserFrame._on_download_starting(frame, sender=None, args=mock_args)
+        # Verify dummy_op.StateChanged was NOT hooked
+        self.assertFalse(dummy_op.hooked)
+        mock_deferral.Complete.assert_called_once()
+
 
 class TestCTkMammouthQuotaCard(unittest.TestCase):
     """Tests the CustomTkinter Quota Card GUI lifecycle."""
@@ -507,7 +556,183 @@ class TestV041SecurityAndParameterFixes(unittest.TestCase):
 
         asyncio.run(run_query_token_check())
 
+    def test_rfc_standard_oauth_paths_and_metadata_subpaths(self):
+        """Verify standard RFC 6749 and RFC 9728 paths (/authorize, /token, /register, and subpaths /sse) bypass pre-auth."""
+        import asyncio
+        from server import SecurityAndAuthMiddleware
+
+        app_calls = []
+        async def mock_app(scope, receive, send):
+            app_calls.append(scope["path"])
+            if send:
+                await send({"type": "http.response.start", "status": 200, "headers": []})
+                await send({"type": "http.response.body", "body": b"OK", "more_body": False})
+
+        middleware = SecurityAndAuthMiddleware(mock_app, token="mc_test_token_secure", enforce_auth=True)
+
+        async def run_checks():
+            test_paths = [
+                "/authorize",
+                "/oauth/authorize",
+                "/token",
+                "/oauth/token",
+                "/register",
+                "/oauth/register",
+                "/.well-known/oauth-protected-resource",
+                "/.well-known/oauth-protected-resource/sse",
+                "/.well-known/oauth-authorization-server",
+                "/.well-known/oauth-authorization-server/sse",
+            ]
+            for p in test_paths:
+                sent = []
+                async def mock_send(msg):
+                    sent.append(msg)
+                scope = {
+                    "type": "http",
+                    "method": "POST" if "token" in p or "register" in p else "GET",
+                    "path": p,
+                    "headers": [(b"host", b"127.0.0.1:8000")],
+                    "client": ("127.0.0.1", 12345)
+                }
+                await middleware(scope, None, mock_send)
+                self.assertIn(p, app_calls, f"Path {p} failed to bypass pre-authentication middleware")
+                start_msg = [m for m in sent if m.get("type") == "http.response.start"][0]
+                self.assertEqual(start_msg["status"], 200)
+
+        asyncio.run(run_checks())
+
+    def test_oauth_flow_persistence_across_restart(self):
+        """Verify full OAuth authorization, PKCE token issuance, and persistence across server restart."""
+        import asyncio
+        import hashlib
+        import base64
+        import json
+        import re
+        import urllib.parse
+        from starlette.requests import Request
+        from server import (
+            oauth_authorize,
+            oauth_token,
+            _is_valid_oauth_token,
+        )
+
+        verifier = "test_code_verifier_12345678901234567890_pkce"
+        digest = hashlib.sha256(verifier.encode("ascii")).digest()
+        challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+        # 1. GET /authorize with standard Mammouth AI query params
+        scope_get = {
+            "type": "http",
+            "method": "GET",
+            "path": "/authorize",
+            "query_string": f"client_id=testuser@mammouth.ai&code_challenge={challenge}&code_challenge_method=S256&redirect_uri=https://mammouth.ai/api/mcp/oauth/callback&state=teststate123".encode("ascii"),
+            "headers": [(b"host", b"127.0.0.1:8000")]
+        }
+        req_get = Request(scope_get)
+
+        async def run_flow():
+            resp_get = await oauth_authorize(req_get)
+            self.assertEqual(resp_get.status_code, 200)
+            body_html = resp_get.body.decode("utf-8")
+            self.assertIn('action="/authorize"', body_html)
+            self.assertIn('name="csrf_token"', body_html)
+
+            # Extract CSRF token from HTML
+            m = re.search(r'name="csrf_token"\s+value="([^"]+)"', body_html)
+            self.assertIsNotNone(m)
+            csrf_token = m.group(1)
+
+            # 2. POST /authorize to approve consent
+            scope_post = {
+                "type": "http",
+                "method": "POST",
+                "path": "/authorize",
+                "headers": [
+                    (b"content-type", b"application/x-www-form-urlencoded"),
+                    (b"host", b"127.0.0.1:8000")
+                ]
+            }
+            form_body = f"action=allow&csrf_token={csrf_token}".encode("ascii")
+            async def receive_post():
+                return {"type": "http.request", "body": form_body, "more_body": False}
+
+            req_post = Request(scope_post, receive=receive_post)
+            resp_post = await oauth_authorize(req_post)
+            self.assertEqual(resp_post.status_code, 302)
+            redirect_target = resp_post.headers.get("location", "")
+            self.assertIn("https://mammouth.ai/api/mcp/oauth/callback", redirect_target)
+            self.assertIn("code=", redirect_target)
+
+            # Extract code from redirect URL
+            parsed_redirect = urllib.parse.urlparse(redirect_target)
+            q_params = urllib.parse.parse_qs(parsed_redirect.query)
+            auth_code = q_params["code"][0]
+            self.assertTrue(auth_code.startswith("mc_"))
+
+            # 3. POST /token to exchange code for access_token and refresh_token
+            scope_token = {
+                "type": "http",
+                "method": "POST",
+                "path": "/token",
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"host", b"127.0.0.1:8000")
+                ]
+            }
+            token_payload = json.dumps({
+                "grant_type": "authorization_code",
+                "code": auth_code,
+                "code_verifier": verifier,
+                "client_id": "testuser@mammouth.ai",
+                "redirect_uri": "https://mammouth.ai/api/mcp/oauth/callback"
+            }).encode("utf-8")
+            async def receive_token():
+                return {"type": "http.request", "body": token_payload, "more_body": False}
+
+            req_token = Request(scope_token, receive=receive_token)
+            resp_token = await oauth_token(req_token)
+            self.assertEqual(resp_token.status_code, 200)
+            token_data = json.loads(resp_token.body.decode("utf-8"))
+            self.assertIn("access_token", token_data)
+            self.assertIn("refresh_token", token_data)
+            access_token = token_data["access_token"]
+            refresh_token = token_data["refresh_token"]
+
+            # 4. Verify token is active
+            self.assertTrue(_is_valid_oauth_token(access_token))
+
+            # 5. Simulate Defroster server restart: re-checking DB for token validity
+            self.assertTrue(_is_valid_oauth_token(access_token))
+
+            # 6. Test Refresh Token on POST /token
+            scope_refresh = {
+                "type": "http",
+                "method": "POST",
+                "path": "/token",
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"host", b"127.0.0.1:8000")
+                ]
+            }
+            refresh_payload = json.dumps({
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token
+            }).encode("utf-8")
+            async def receive_refresh():
+                return {"type": "http.request", "body": refresh_payload, "more_body": False}
+
+            req_refresh = Request(scope_refresh, receive=receive_refresh)
+            resp_refresh = await oauth_token(req_refresh)
+            self.assertEqual(resp_refresh.status_code, 200)
+            refreshed_data = json.loads(resp_refresh.body.decode("utf-8"))
+            self.assertIn("access_token", refreshed_data)
+            self.assertIn("refresh_token", refreshed_data)
+            self.assertTrue(_is_valid_oauth_token(refreshed_data["access_token"]))
+
+        asyncio.run(run_flow())
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

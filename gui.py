@@ -141,12 +141,7 @@ if is_server_binary or "--server-only" in sys.argv or "--cli" in sys.argv or "--
     key_file = server_cfg.get("ssl_keyfile")
 
     token = server_cfg.get("api_token", "").strip()
-    if token and token.startswith("dpapi:"):
-        dec = _decrypt_dpapi(token)
-        if dec and not dec.startswith("dpapi:"):
-            token = dec
-            cfg["server"]["api_token"] = token
-            save_config(cfg)
+
     if server_cfg.get("enforce_auth", True) and not token:
         token = generate_secure_token()
         cfg["server"]["api_token"] = token
@@ -215,7 +210,7 @@ ctk.set_appearance_mode(INITIAL_MODE)
 ctk.set_default_color_theme("dark-blue")
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.4.1"
+APP_VERSION = "v0.4.3"
 
 
 def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
@@ -2148,10 +2143,6 @@ class MammouthControlCenter(ctk.CTk):
     def _copy_mcp_client_config(self):
         url = self._calculate_active_endpoint_url()
         token = self.config_data.get("server", {}).get("api_token", "")
-        if token and token.startswith("dpapi:"):
-            decrypted = _decrypt_dpapi(token)
-            if decrypted and not decrypted.startswith("dpapi:"):
-                token = decrypted
         cfg_snippet = {
             "mcpServers": {
                 "MammouthDefroster9000": {
@@ -2424,9 +2415,12 @@ class MammouthControlCenter(ctk.CTk):
 
     def _copy_to_clipboard(self, text: str, label_name: str = "Item"):
         if text and text.startswith("dpapi:"):
-            decrypted = _decrypt_dpapi(text)
-            if decrypted and not decrypted.startswith("dpapi:"):
-                text = decrypted
+            try:
+                decrypted = _decrypt_dpapi(text)
+                if decrypted and not decrypted.startswith("dpapi:"):
+                    text = decrypted
+            except Exception:
+                pass
         self.clipboard_clear()
         self.clipboard_append(text)
         self._log(f"[CLIPBOARD] Copied {label_name} to clipboard: {text}")
@@ -3184,10 +3178,7 @@ class MammouthControlCenter(ctk.CTk):
         ctk.CTkLabel(f6, text="Active Bearer Token:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#0F172A", "#FFFFFF")).pack(side="left")
         self.entry_token = ctk.CTkEntry(f6, width=280, show="*", fg_color=("#F8FAFC", "#1C1C1F"), border_color=("#CBD5E1", "#38393F"), text_color=("#0F172A", "#FFFFFF"))
         tok_val = self.config_data.get("server", {}).get("api_token", "")
-        if tok_val and tok_val.startswith("dpapi:"):
-            decrypted = _decrypt_dpapi(tok_val)
-            if decrypted and not decrypted.startswith("dpapi:"):
-                tok_val = decrypted
+
         self.entry_token.insert(0, tok_val)
         self.entry_token.pack(side="left", padx=(0, 5))
 
@@ -3424,9 +3415,12 @@ class MammouthControlCenter(ctk.CTk):
         )
         saved_csec = self.config_data.get("modules", {}).get("google_drive", {}).get("client_secret", "")
         if saved_csec and saved_csec.startswith("dpapi:"):
-            decrypted = _decrypt_dpapi(saved_csec)
-            if decrypted and not decrypted.startswith("dpapi:"):
-                saved_csec = decrypted
+            try:
+                decrypted = _decrypt_dpapi(saved_csec)
+                if decrypted and not decrypted.startswith("dpapi:"):
+                    saved_csec = decrypted
+            except Exception:
+                pass
         if saved_csec:
             self.entry_gdrive_client_secret.insert(0, saved_csec)
         self.entry_gdrive_client_secret.pack(side="left", padx=(0, 8))
@@ -3596,9 +3590,12 @@ class MammouthControlCenter(ctk.CTk):
         self.config_data["server"]["enforce_auth"] = self.var_enforce_auth.get()
         raw_tok = self.entry_token.get().strip()
         if raw_tok.startswith("dpapi:"):
-            decrypted = _decrypt_dpapi(raw_tok)
-            if decrypted and not decrypted.startswith("dpapi:"):
-                raw_tok = decrypted
+            try:
+                decrypted = _decrypt_dpapi(raw_tok)
+                if decrypted and not decrypted.startswith("dpapi:"):
+                    raw_tok = decrypted
+            except Exception:
+                pass
         self.config_data["server"]["api_token"] = raw_tok
         if hasattr(self, "var_admin_shell"):
             self.config_data["server"]["allow_admin_shell"] = self.var_admin_shell.get()
@@ -3655,13 +3652,6 @@ class MammouthControlCenter(ctk.CTk):
 
         if self.config_data.get("server", {}).get("enforce_auth", True):
             token = self.config_data.get("server", {}).get("api_token", "").strip()
-            if token and token.startswith("dpapi:"):
-                dec = _decrypt_dpapi(token)
-                if dec and not dec.startswith("dpapi:"):
-                    token = dec
-                    self.config_data["server"]["api_token"] = token
-                    save_config(self.config_data)
-                    self._refresh_all_endpoint_labels()
             if not token:
                 token = generate_secure_token()
                 self.config_data["server"]["api_token"] = token
