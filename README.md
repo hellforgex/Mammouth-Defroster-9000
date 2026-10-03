@@ -34,7 +34,7 @@ You do **not** need Python, Git, or terminal knowledge. Everything is bundled in
 ```
 
 1. **Download the Release Package**:  
-   👉 **[Download MammouthDefroster9000-v0.4.1-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~86.5 MB)
+   👉 **[Download MammouthDefroster9000-v0.4.3-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~86.7 MB)
 2. **Extract the ZIP**:  
    Extract the archive to any convenient folder on your Windows PC (e.g. `C:\MammouthDefroster9000` or your Desktop).
 3. **Launch the Cockpit**:  
@@ -191,7 +191,7 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
 
 <details>
 <summary><b>1. Do I need Python installed on my computer?</b></summary>
-<p><b>No!</b> If you download the pre-built release ZIP (<code>MammouthDefroster9000-v0.4.0-windows-x64.zip</code>), everything is self-contained. It includes all necessary runtimes, libraries, and executables. Just unzip and run!</p>
+<p><b>No!</b> If you download the pre-built release ZIP (<code>MammouthDefroster9000-v0.4.3-windows-x64.zip</code>), everything is self-contained. It includes all necessary runtimes, libraries, and executables. Just unzip and run!</p>
 </details>
 
 <details>

@@ -20,7 +20,7 @@
 * **Archive:** `MammouthDefroster9000-v0.4.3-windows-x64.zip`
 * **SHA-256 Checksum:**
   ```text
-  1e1fd3b41282655878442bed7a1fde7215ec7639ac895cccae311ed88128e12b
+  fb57a269b09938a6a50032c6630e73bfd85b88783658b028544951c7f3cccfa0
   ```
 
 ---
@@ -186,7 +186,7 @@
 
 | File | Platform | Size | Description |
 | :--- | :---: | :---: | :--- |
-| **`MammouthDefroster9000-v0.4.0-windows-x64.zip`** | **Windows x64** | **~86.4 MB** | Official optimized standalone release package with executables, modules, and documentation. |
+| **`MammouthDefroster9000-v0.4.3-windows-x64.zip`** | **Windows x64** | **~86.7 MB** | Official optimized standalone release package with executables, modules, and documentation. |
 
 ---
 
