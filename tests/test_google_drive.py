@@ -37,6 +37,9 @@ from modules.google_drive import (
 class TestGoogleDriveModule(unittest.TestCase):
     def setUp(self):
         self.mock_token = "mock-access-token-123"
+        # Auth headers are cached in-process; start every test from a clean cache
+        from modules.google_drive import _invalidate_auth_cache
+        _invalidate_auth_cache()
 
     @patch("modules.google_drive.get_drive_auth_headers")
     def test_gdrive_status_unauthenticated(self, mock_get_headers):

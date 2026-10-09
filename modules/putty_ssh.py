@@ -116,9 +116,15 @@ def ssh_save_host(
     password: Optional[str] = None,
     private_key_path: Optional[str] = None,
     port: int = 22,
-    description: Optional[str] = None
+    description: Optional[str] = None,
+    clear_password: bool = False
 ) -> str:
-    """Save an SSH server login profile encrypted with Windows DPAPI."""
+    """Save an SSH server login profile encrypted with Windows DPAPI.
+
+    An empty password keeps the already stored password of this alias (as long as host and
+    username are unchanged), so editing e.g. the description no longer wipes it.
+    Set clear_password=True to remove a stored password explicitly.
+    """
     clean_alias = _sanitize_param(alias, "alias")
     clean_host = _sanitize_param(host, "host")
     clean_user = _sanitize_param(username, "username")
@@ -126,8 +132,17 @@ def ssh_save_host(
     if not clean_alias or not clean_host:
         return "Error: alias and host are required."
 
-    encrypted_pw = _encrypt_dpapi(password) if password else ""
     hosts = _load_hosts()
+    existing = hosts.get(clean_alias) or {}
+    if password:
+        encrypted_pw = _encrypt_dpapi(password)
+    elif (not clear_password and existing.get("password")
+          and existing.get("host") == clean_host
+          and existing.get("username") == (clean_user or "root")):
+        # Never carry a stored password over to a different host/user (would leak it there)
+        encrypted_pw = existing["password"]
+    else:
+        encrypted_pw = ""
     hosts[clean_alias] = {
         "host": clean_host,
         "username": clean_user or "root",
@@ -335,6 +350,16 @@ def ssh_transfer_file(
     pscp_bin = shutil.which("pscp") or r"C:\Program Files\PuTTY\pscp.exe"
     if not os.path.exists(pscp_bin) and not shutil.which("pscp"):
         return {"error": "PuTTY pscp.exe not found on system."}
+
+    # The local side is subject to the same workspace sandbox as the file tools: otherwise an
+    # upload could exfiltrate e.g. ~/.ssh keys or config.json, and a download could drop files
+    # into the Startup folder.
+    direction = "upload" if str(direction).lower().strip() == "upload" else "download"
+    try:
+        from modules.file_ops import _validate_path
+        local_path = str(_validate_path(local_path, for_write=(direction == "download")))
+    except Exception as ex:
+        return {"error": f"Security/Validation Error for local_path: {ex}"}
 
     hosts_data = _load_hosts()
     target_host = host

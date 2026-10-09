@@ -62,6 +62,42 @@ class TestAuthLockout(unittest.TestCase):
         self.assertFalse(is_locked_after)
         self.assertNotIn(client_ip, _failed_ip_attempts)
 
+    def test_valid_token_passes_despite_lockout(self):
+        """A locked tunnel IP must still let requests with a valid token through (and reset the lock)."""
+        import asyncio
+        from server import SecurityAndAuthMiddleware
+
+        token = "mc_" + "a" * 32
+        statuses = []
+
+        async def app(scope, receive, send):
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+        async def receive():
+            return {"type": "http.request", "body": b""}
+
+        async def send(message):
+            if message["type"] == "http.response.start":
+                statuses.append(message["status"])
+
+        def request(bearer):
+            scope = {
+                "type": "http", "method": "POST", "path": "/sse", "client": ("127.0.0.1", 5000),
+                "headers": [(b"x-forwarded-for", b"203.0.113.7"), (b"authorization", f"Bearer {bearer}".encode())],
+            }
+            asyncio.run(SecurityAndAuthMiddleware(app, token=token)(scope, receive, send))
+
+        now = time.time()
+        for _ in range(6):
+            _record_failed_auth("203.0.113.7", now)
+        self.assertTrue(_is_ip_locked_out("203.0.113.7", now)[0])
+
+        request("mc_wrong")
+        request(token)
+        self.assertEqual(statuses, [429, 200])
+        self.assertNotIn("203.0.113.7", _failed_ip_attempts)
+
     def test_lockout_dict_bounding(self):
         """Test that _failed_ip_attempts does not exceed MAX_LOCKOUT_ENTRIES."""
         now = time.time()

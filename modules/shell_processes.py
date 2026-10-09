@@ -1,9 +1,11 @@
 import os
 import re
 import subprocess
+import threading
 import time
 import uuid
 import sys
+from collections import deque
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -82,18 +84,83 @@ READONLY_FILE_COMMANDS = {
 }
 
 
-def _get_workspace_root_resolved() -> str:
-    """Retrieve normalized, casefolded absolute workspace root path."""
+def resolve_workspace_root() -> str:
+    """Absolute workspace root. Relative config values are anchored to the application directory
+    (BASE_DIR), never to the process cwd, so every module sandboxes against the same folder."""
     try:
         from config import load_config
-        cfg = load_config()
-        ws = cfg.get("server", {}).get("workspace_root", "./workspace")
+        ws = load_config().get("server", {}).get("workspace_root") or "./workspace"
     except Exception:
         ws = "./workspace"
-    return os.path.realpath(os.path.abspath(ws)).casefold()
+    ws = os.path.expandvars(os.path.expanduser(str(ws)))
+    if not os.path.isabs(ws):
+        ws = os.path.join(str(BASE_DIR), ws)
+    return os.path.realpath(os.path.abspath(ws))
 
 
-def _check_readonly_path_guard(raw_cmd: str) -> None:
+def _get_workspace_root_resolved() -> str:
+    """Retrieve normalized, casefolded absolute workspace root path."""
+    return resolve_workspace_root().casefold()
+
+
+# Forces UTF-8 on Windows PowerShell 5.1 output pipes (default is the OEM codepage, e.g. cp850),
+# so umlauts survive when we decode stdout/stderr as UTF-8.
+POWERSHELL_UTF8_PREFIX = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $OutputEncoding=[System.Text.Encoding]::UTF8; "
+
+
+def _kill_process_tree(proc: subprocess.Popen) -> None:
+    """Terminate a process together with all of its children (Windows: taskkill /T)."""
+    if proc.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=10,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        else:
+            proc.kill()
+    except Exception:
+        pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+
+
+def run_process_tree(args: List[str], cwd: Optional[str], timeout: float, encoding: str = "utf-8") -> tuple:
+    """Run a command and capture output; on timeout the whole process tree is killed.
+
+    subprocess.run() only kills the direct child on timeout, so a grandchild holding the
+    inherited pipes (e.g. `ping -n 100000`) would keep the call blocked until it exits.
+    Returns (stdout, stderr, returncode). Raises subprocess.TimeoutExpired on timeout.
+    """
+    proc = subprocess.Popen(
+        args,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        encoding=encoding,
+        errors="replace",
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_process_tree(proc)
+        try:
+            proc.communicate(timeout=5)
+        except Exception:
+            pass
+        raise
+    return stdout, stderr, proc.returncode
+
+
+def _check_readonly_path_guard(raw_cmd: str, cwd: Optional[str] = None) -> None:
     """R7-N1 & R7-N2: Enforce path extraction, resolution against workspace sandbox, and root-recurse blocking."""
     # 1. Regex check on raw command for sensitive credential/configuration names
     for pat in SENSITIVE_PATH_DENYLIST_PATTERNS:
@@ -110,7 +177,7 @@ def _check_readonly_path_guard(raw_cmd: str) -> None:
 
     # 3. R7-N1: Path Argument Extraction & Resolution against workspace
     workspace_root = _get_workspace_root_resolved()
-    segments = re.split(r'\||;|&&|\|\||[\r\n]+', raw_cmd)
+    segments = re.split(r'\||;|&|[\r\n]+', raw_cmd)
     for seg in segments:
         seg = seg.strip()
         if not seg:
@@ -127,8 +194,10 @@ def _check_readonly_path_guard(raw_cmd: str) -> None:
                 arg_val = tok.strip('\'"')
                 if not arg_val:
                     continue
-                # Resolve relative or absolute path
-                resolved = os.path.realpath(os.path.abspath(arg_val)).casefold()
+                # Resolve relative paths against the directory the command will actually run in
+                base_dir = cwd or str(BASE_DIR)
+                candidate = arg_val if os.path.isabs(arg_val) or (len(arg_val) >= 2 and arg_val[1] == ":") else os.path.join(base_dir, arg_val)
+                resolved = os.path.realpath(os.path.abspath(candidate)).casefold()
 
                 # Denylist check on resolved path
                 for pat in SENSITIVE_PATH_DENYLIST_PATTERNS:
@@ -188,6 +257,25 @@ def _deobfuscate_powershell(cmd: str) -> tuple:
     return s, s_no_quotes
 
 
+# Constructs that let a "read-only" first token run arbitrary nested commands, e.g.
+#   Get-ChildItem | Where-Object { Stop-Process ... }     (script block)
+#   Write-Output (Remove-Item x)  /  "$(Stop-Computer)"  (sub-expression)
+#   Select-Object @{e={Set-Content ...}}                  (calculated property)
+#   echo x > C:\file                                       (redirection writes to disk)
+#   dir & calc                                             (cmd.exe command separator)
+READONLY_FORBIDDEN_CONSTRUCTS = [
+    (r'[{}]', "script blocks '{ }'"),
+    (r'[()]', "sub-expressions '( )'"),
+    (r'\$\(', "sub-expressions '$( )'"),
+    (r'@\{', "hashtables / calculated properties '@{ }'"),
+    (r'(?<![-\w])\d?>{1,2}', "output redirection '>'"),
+    (r'<', "input redirection '<'"),
+    (r'(?<!&)&(?!&)', "command separator '&'"),
+    (r'`', "escape character '`'"),
+    (r'%', "ForEach-Object alias / environment expansion '%'"),
+]
+
+
 def _is_admin_shell_allowed() -> bool:
     try:
         from config import load_config
@@ -197,7 +285,7 @@ def _is_admin_shell_allowed() -> bool:
         return False
 
 
-def _validate_shell_command(command: str, allow_admin: Optional[bool] = None) -> str:
+def _validate_shell_command(command: str, allow_admin: Optional[bool] = None, cwd: Optional[str] = None) -> str:
     """Validate shell command against dangerous patterns and read-only allowlist."""
     clean = str(command).strip()
     clean = _unwrap_powershell_wrapper(clean)
@@ -216,7 +304,17 @@ def _validate_shell_command(command: str, allow_admin: Optional[bool] = None) ->
     # 2. Check Read-Only Allowlist if admin shell is not enabled
     admin_enabled = allow_admin if allow_admin is not None else _is_admin_shell_allowed()
     if not admin_enabled:
-        pipeline_segments = re.split(r'\||;|&&|\|\||[\r\n]+', s_no_quotes)
+        # Quoted literals cannot execute anything: drop single-quoted strings and double-quoted
+        # strings without '$' (PowerShell only expands $ inside double quotes) before scanning.
+        literal_free = re.sub(r"'[^']*'", "''", clean)
+        literal_free = re.sub(r'"[^"$`]*"', '""', literal_free)
+        for construct_pattern, construct_name in READONLY_FORBIDDEN_CONSTRUCTS:
+            if re.search(construct_pattern, literal_free):
+                raise PermissionError(
+                    f"Read-Only Shell: {construct_name} are not allowed in Read-Only mode because they can execute nested commands. "
+                    f"Enable 'server.allow_admin_shell=true' in configuration for full PowerShell syntax."
+                )
+        pipeline_segments = re.split(r'\||;|&&|\|\||&|[\r\n]+', s_no_quotes)
         for seg in pipeline_segments:
             seg_tokens = seg.strip().split()
             if not seg_tokens:
@@ -228,8 +326,8 @@ def _validate_shell_command(command: str, allow_admin: Optional[bool] = None) ->
                     raise PermissionError("Admin shell required: 'reg' command is only allowed with 'query' in Read-Only mode.")
                 continue
 
-            if first_token == "out-file":
-                raise PermissionError("Admin shell required: 'Out-File' modifies disk and is blocked in Read-Only mode.")
+            if first_token in ("out-file", "tee-object", "tee"):
+                raise PermissionError(f"Admin shell required: '{first_token}' modifies disk and is blocked in Read-Only mode.")
 
             is_allowed_prefix = any(first_token.startswith(pref) for pref in READONLY_CMDLET_PREFIXES)
             is_allowed_binary = (
@@ -244,9 +342,33 @@ def _validate_shell_command(command: str, allow_admin: Optional[bool] = None) ->
                 )
 
         # R7-N1 / R7-N2: Path Guard for Read-Only commands accessing files
-        _check_readonly_path_guard(clean)
+        _check_readonly_path_guard(clean, cwd=cwd)
 
     return clean
+
+
+def _resolve_work_dir(cwd: Optional[str], working_directory: Optional[str]) -> str:
+    work_dir = cwd if cwd and os.path.exists(cwd) else working_directory
+    if not work_dir or not os.path.exists(work_dir):
+        work_dir = "C:\\" if os.path.exists("C:\\") else os.getcwd()
+    return os.path.realpath(os.path.abspath(work_dir))
+
+
+_BACKGROUND_LOCK = threading.Lock()
+_FINISHED_RETENTION_SECONDS = 3600
+
+
+def _prune_finished_background_processes() -> None:
+    """Drop registry entries of processes that finished more than an hour ago (log files stay on disk)."""
+    now = time.time()
+    with _BACKGROUND_LOCK:
+        for tid, info in list(BACKGROUND_PROCESSES.items()):
+            if info["proc"].poll() is None:
+                continue
+            if not info.get("finished_at"):
+                info["finished_at"] = now
+            elif now - info["finished_at"] > _FINISHED_RETENTION_SECONDS:
+                BACKGROUND_PROCESSES.pop(tid, None)
 
 
 def powershell_exec(
@@ -263,8 +385,9 @@ def powershell_exec(
         cwd: Optional alias for working_directory.
         timeout_seconds: Execution timeout in seconds (default 120).
     """
+    work_dir = _resolve_work_dir(cwd, working_directory)
     try:
-        clean_cmd = _validate_shell_command(command)
+        clean_cmd = _validate_shell_command(command, cwd=work_dir)
     except Exception as ex:
         return {
             "stdout": "",
@@ -273,24 +396,16 @@ def powershell_exec(
             "error": str(ex)
         }
 
-    work_dir = cwd if cwd and os.path.exists(cwd) else working_directory
-    if not work_dir or not os.path.exists(work_dir):
-        work_dir = "C:\\" if os.path.exists("C:\\") else os.getcwd()
-
     try:
-        process = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", clean_cmd],
-            capture_output=True,
-            text=True,
+        stdout, stderr, returncode = run_process_tree(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", POWERSHELL_UTF8_PREFIX + clean_cmd],
             cwd=work_dir,
             timeout=timeout_seconds,
-            encoding="utf-8",
-            errors="replace"
         )
         return {
-            "stdout": process.stdout,
-            "stderr": process.stderr,
-            "exit_code": process.returncode
+            "stdout": stdout,
+            "stderr": stderr,
+            "exit_code": returncode
         }
     except subprocess.TimeoutExpired:
         return {
@@ -322,8 +437,9 @@ def cmd_exec(
         cwd: Optional alias for working_directory.
         timeout_seconds: Execution timeout in seconds (default 120).
     """
+    work_dir = _resolve_work_dir(cwd, working_directory)
     try:
-        clean_cmd = _validate_shell_command(command)
+        clean_cmd = _validate_shell_command(command, cwd=work_dir)
     except Exception as ex:
         return {
             "stdout": "",
@@ -332,24 +448,18 @@ def cmd_exec(
             "error": str(ex)
         }
 
-    work_dir = cwd if cwd and os.path.exists(cwd) else working_directory
-    if not work_dir or not os.path.exists(work_dir):
-        work_dir = "C:\\" if os.path.exists("C:\\") else os.getcwd()
-
     try:
-        process = subprocess.run(
-            ["cmd.exe", "/c", clean_cmd],
-            capture_output=True,
-            text=True,
+        # cmd.exe writes piped output in the OEM codepage (cp850 on German systems)
+        stdout, stderr, returncode = run_process_tree(
+            ["cmd.exe", "/d", "/c", clean_cmd],
             cwd=work_dir,
             timeout=timeout_seconds,
-            encoding="utf-8",
-            errors="replace"
+            encoding="oem" if os.name == "nt" else "utf-8",
         )
         return {
-            "stdout": process.stdout,
-            "stderr": process.stderr,
-            "exit_code": process.returncode
+            "stdout": stdout,
+            "stderr": stderr,
+            "exit_code": returncode
         }
     except subprocess.TimeoutExpired:
         return {
@@ -386,21 +496,21 @@ def process_spawn(
         cwd: Optional alias for working_directory.
         name: Short descriptive name for this background task.
     """
-    active_count = sum(1 for info in BACKGROUND_PROCESSES.values() if info["proc"].poll() is None)
+    with _BACKGROUND_LOCK:
+        active_count = sum(1 for info in BACKGROUND_PROCESSES.values() if info["proc"].poll() is None)
     if active_count >= MAX_BACKGROUND_PROCESSES:
         return {"error": f"Resource Limit Exceeded: Maximum active background tasks ({MAX_BACKGROUND_PROCESSES}) reached. Stop finished tasks before launching more."}
 
+    work_dir = _resolve_work_dir(cwd, working_directory)
     try:
-        clean_cmd = _validate_shell_command(command)
+        clean_cmd = _validate_shell_command(command, cwd=work_dir)
     except Exception as ex:
         return {"error": f"Security Error: {ex}"}
 
+    _prune_finished_background_processes()
     task_id = str(uuid.uuid4())[:8]
     task_name = name or f"task-{task_id}"
     log_file = LOGS_DIR / f"{task_id}.log"
-    work_dir = cwd if cwd and os.path.exists(cwd) else working_directory
-    if not work_dir or not os.path.exists(work_dir):
-        work_dir = "C:\\" if os.path.exists("C:\\") else os.getcwd()
     
     try:
         creation_flags = 0
@@ -410,7 +520,7 @@ def process_spawn(
 
         with open(log_file, "w", encoding="utf-8") as log_handle:
             proc = subprocess.Popen(
-                ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", clean_cmd],
+                ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", POWERSHELL_UTF8_PREFIX + clean_cmd],
                 cwd=work_dir,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
@@ -418,15 +528,17 @@ def process_spawn(
                 creationflags=creation_flags
             )
         
-        BACKGROUND_PROCESSES[task_id] = {
-            "id": task_id,
-            "name": task_name,
-            "command": clean_cmd,
-            "pid": proc.pid,
-            "proc": proc,
-            "log_file": str(log_file),
-            "start_time": time.strftime("%Y-%m-%d %H:%M:%S")
-        }
+        with _BACKGROUND_LOCK:
+            BACKGROUND_PROCESSES[task_id] = {
+                "id": task_id,
+                "name": task_name,
+                "command": clean_cmd,
+                "pid": proc.pid,
+                "proc": proc,
+                "log_file": str(log_file),
+                "start_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": None
+            }
         
         return {
             "status": "started",
@@ -477,8 +589,7 @@ def process_get_output(task_id: str, tail_lines: int = 100) -> Dict[str, Any]:
     
     try:
         with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-        tail = lines[-tail_lines:] if len(lines) > tail_lines else lines
+            tail = deque(f, maxlen=max(1, int(tail_lines)))
         proc = BACKGROUND_PROCESSES[task_id]["proc"]
         poll = proc.poll()
         return {
@@ -497,10 +608,8 @@ def process_kill_background(task_id: str) -> Dict[str, Any]:
     
     proc = BACKGROUND_PROCESSES[task_id]["proc"]
     try:
-        proc.terminate()
-        time.sleep(0.5)
-        if proc.poll() is None:
-            proc.kill()
+        # Kill the whole tree: terminating only powershell.exe would orphan its children
+        _kill_process_tree(proc)
         return {"task_id": task_id, "status": "terminated"}
     except Exception as e:
         return {"error": f"Failed to kill process: {e}"}

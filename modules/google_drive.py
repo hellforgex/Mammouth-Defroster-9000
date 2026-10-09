@@ -3,6 +3,9 @@ import sys
 import json
 import time
 import hashlib
+import secrets
+import html
+import re
 import urllib.parse
 import threading
 from pathlib import Path
@@ -75,11 +78,12 @@ except ImportError:
         return True, (BASE_DIR / "workspace").resolve()
 
     def _validate_path(target_path_str: str, for_write: bool = False) -> Path:
+        # Fail closed: without the real sandbox validator only plain paths inside ./workspace pass
+        ws_root = (BASE_DIR / "workspace").resolve()
         raw_path = Path(target_path_str)
-        if not raw_path.is_absolute():
-            resolved = ((BASE_DIR / "workspace") / raw_path).resolve()
-        else:
-            resolved = raw_path.resolve()
+        resolved = (raw_path if raw_path.is_absolute() else ws_root / raw_path).resolve()
+        if resolved != ws_root and ws_root not in resolved.parents:
+            raise PermissionError(f"Sandbox Violation: '{target_path_str}' is outside the workspace.")
         return resolved
 
 
@@ -139,6 +143,11 @@ def _load_stored_token() -> Optional[Dict[str, Any]]:
 
 
 def _save_stored_token(token_data: Dict[str, Any]) -> None:
+    _invalidate_auth_cache()
+    _save_stored_token_file(token_data)
+
+
+def _save_stored_token_file(token_data: Dict[str, Any]) -> None:
     """Save token to gdrive_token.json with DPAPI encryption."""
     serialized = json.dumps(token_data, indent=2)
     encrypted = _encrypt_dpapi(serialized)
@@ -252,11 +261,35 @@ def _get_service_account_token() -> Optional[str]:
     return None
 
 
+# Cache of the currently valid access token: avoids re-reading + DPAPI-decrypting the token file
+# and re-signing a service-account JWT (plus a token POST) on every single Drive call.
+_auth_cache_lock = threading.Lock()
+_auth_cache: Dict[str, Any] = {"token": None, "expires_at": 0.0}
+
+
+def _invalidate_auth_cache() -> None:
+    with _auth_cache_lock:
+        _auth_cache["token"] = None
+        _auth_cache["expires_at"] = 0.0
+
+
 def get_drive_auth_headers() -> Tuple[Optional[Dict[str, str]], Optional[str]]:
     """Get HTTP authorization headers for Google Drive requests (OAuth Bearer or Service Account).
     
     Returns (headers_dict, error_message).
     """
+    with _auth_cache_lock:
+        if _auth_cache["token"] and time.time() < _auth_cache["expires_at"]:
+            return {"Authorization": f"Bearer {_auth_cache['token']}"}, None
+    headers, err, expires_at = _resolve_drive_auth()
+    if headers:
+        with _auth_cache_lock:
+            _auth_cache["token"] = headers["Authorization"][7:]
+            _auth_cache["expires_at"] = expires_at
+    return headers, err
+
+
+def _resolve_drive_auth() -> Tuple[Optional[Dict[str, str]], Optional[str], float]:
     # 1. Try OAuth 2.0 User Token
     token_data = _load_stored_token()
     client_info = _load_client_credentials()
@@ -266,21 +299,21 @@ def get_drive_auth_headers() -> Tuple[Optional[Dict[str, str]], Optional[str]]:
         access_token = token_data.get("access_token")
 
         if access_token and time.time() < expires_at:
-            return {"Authorization": f"Bearer {access_token}"}, None
+            return {"Authorization": f"Bearer {access_token}"}, None, float(expires_at)
 
         # Expired: attempt refresh
         if client_info:
             refreshed = _refresh_access_token(client_info, token_data)
             if refreshed and "access_token" in refreshed:
-                return {"Authorization": f"Bearer {refreshed['access_token']}"}, None
+                return {"Authorization": f"Bearer {refreshed['access_token']}"}, None, float(refreshed.get("expires_at", time.time() + 3000))
 
-    # 2. Try Service Account Token
+    # 2. Try Service Account Token (JWT lifetime 3600s, cache for 55 min)
     sa_token = _get_service_account_token()
     if sa_token:
-        return {"Authorization": f"Bearer {sa_token}"}, None
+        return {"Authorization": f"Bearer {sa_token}"}, None, time.time() + 3300
 
     # 3. If nothing active
-    return None, "Google Drive is not authenticated. Please click 'Launch Login Browser' in the Cockpit GUI to sign in with your Google account."
+    return None, "Google Drive is not authenticated. Please click 'Launch Login Browser' in the Cockpit GUI to sign in with your Google account.", 0.0
 
 
 def get_active_access_token() -> Tuple[Optional[str], Optional[str]]:
@@ -302,13 +335,34 @@ class _OAuthCallbackHandler(BaseHTTPRequestHandler):
     auth_error: Optional[str] = None
     exchange_success: bool = False
     active_code_verifier: Optional[str] = None
+    expected_state: Optional[str] = None
 
     def log_message(self, format, *args):
         pass  # Suppress default server console output
 
+    def _send_error_page(self, message: str, status: int = 400):
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        # Escape: the message comes from the query string / Google's response (reflected XSS otherwise)
+        err_html = f"<html><body style='background:#0A0A0C;color:#EF4444;font-family:sans-serif;padding:40px;'><h2>Authentication Failed</h2><p>{html.escape(str(message))}</p></body></html>"
+        self.wfile.write(err_html.encode("utf-8"))
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
+
+        # Ignore unrelated requests (favicon, local port scanners …) instead of aborting the login
+        if parsed.path not in ("", "/") or not ("code" in params or "error" in params):
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        expected = _OAuthCallbackHandler.expected_state
+        received = params.get("state", [""])[0]
+        if expected and not secrets.compare_digest(received, expected):
+            self._send_error_page("Invalid OAuth state. Please restart the Google Drive login.", status=403)
+            return
 
         if "code" in params:
             code = params["code"][0]
@@ -346,19 +400,11 @@ class _OAuthCallbackHandler(BaseHTTPRequestHandler):
                 self.wfile.write(success_html.encode("utf-8"))
             else:
                 _OAuthCallbackHandler.auth_error = res.get("error", "Token exchange failed")
-                self.send_response(400)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.end_headers()
-                err_html = f"<html><body style='background:#0A0A0C;color:#EF4444;font-family:sans-serif;padding:40px;'><h2>Authentication Failed</h2><p>{res.get('error')}</p></body></html>"
-                self.wfile.write(err_html.encode("utf-8"))
+                self._send_error_page(res.get("error", "Token exchange failed"))
         else:
             err = params.get("error", ["Unknown error"])[0]
             _OAuthCallbackHandler.auth_error = err
-            self.send_response(400)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.end_headers()
-            err_html = f"<html><body style='background:#0A0A0C;color:#EF4444;font-family:sans-serif;padding:40px;'><h2>Authentication Failed</h2><p>{err}</p></body></html>"
-            self.wfile.write(err_html.encode("utf-8"))
+            self._send_error_page(err)
 
 
 def start_oauth_flow(port: int = 8085, timeout_seconds: int = 120) -> Dict[str, Any]:
@@ -390,6 +436,8 @@ def start_oauth_flow(port: int = 8085, timeout_seconds: int = 120) -> Dict[str, 
     digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
     code_challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
     _OAuthCallbackHandler.active_code_verifier = code_verifier
+    oauth_state = secrets.token_urlsafe(24)
+    _OAuthCallbackHandler.expected_state = oauth_state
 
     auth_params = {
         "client_id": client_id,
@@ -399,7 +447,8 @@ def start_oauth_flow(port: int = 8085, timeout_seconds: int = 120) -> Dict[str, 
         "access_type": "offline",
         "prompt": "consent",
         "code_challenge": code_challenge,
-        "code_challenge_method": "S256"
+        "code_challenge_method": "S256",
+        "state": oauth_state
     }
     auth_url = f"{OAUTH_AUTH_URL}?{urllib.parse.urlencode(auth_params)}"
 
@@ -485,6 +534,7 @@ def auto_authenticate_if_needed(timeout_seconds: int = 60) -> bool:
 
 def disconnect_gdrive() -> bool:
     """Disconnect Google Drive by removing the stored token and credentials files."""
+    _invalidate_auth_cache()
     for p in [TOKEN_FILE, CREDENTIALS_FILE]:
         if p.exists():
             try:
@@ -549,11 +599,12 @@ def gdrive_status() -> Dict[str, Any]:
 
 
 def _ensure_auth_headers() -> Dict[str, str]:
-    """Ensure valid authorization headers or auto-trigger authentication."""
+    """Return valid authorization headers or fail fast.
+
+    MCP tool calls must not pop up a login browser on the host and block a worker for 45s while
+    polling: the login is started by the human in the Cockpit GUI.
+    """
     headers, err = get_drive_auth_headers()
-    if not headers:
-        if auto_authenticate_if_needed(45):
-            headers, err = get_drive_auth_headers()
     if not headers:
         raise PermissionError(err)
     return headers
@@ -678,13 +729,26 @@ def gdrive_read_file(file_id: str, max_chars: int = 50000) -> str:
                 headers=headers,
                 params={"mimeType": "text/plain"}
             )
-        # Standard file download
+        # Standard file download: stream and stop after max_chars instead of loading GBs into RAM
         else:
-            resp = client.get(
-                f"{DRIVE_API_BASE}/files/{file_id}",
-                headers=headers,
-                params={"alt": "media"}
-            )
+            max_bytes = max(1, int(max_chars)) * 4 + 4  # UTF-8: at most 4 bytes per char
+            with client.stream("GET", f"{DRIVE_API_BASE}/files/{file_id}", headers=headers, params={"alt": "media"}) as stream_resp:
+                if stream_resp.status_code != 200:
+                    stream_resp.read()
+                    raise RuntimeError(f"Download failed ({stream_resp.status_code}): {stream_resp.text}")
+                buf = bytearray()
+                truncated = False
+                for chunk in stream_resp.iter_bytes():
+                    buf.extend(chunk)
+                    if len(buf) >= max_bytes:
+                        truncated = True
+                        break
+            if b"\x00" in buf[:8192]:
+                return f"[Binary file ({mime or 'unknown type'}) — use gdrive_download_to_workspace instead of reading it as text.]"
+            content_text = bytes(buf).decode("utf-8", errors="replace")
+            if truncated or len(content_text) > max_chars:
+                return content_text[:max_chars] + f"\n\n[... Truncated after {max_chars} characters ...]"
+            return content_text
 
         if resp.status_code != 200:
             raise RuntimeError(f"Download failed ({resp.status_code}): {resp.text}")
@@ -718,44 +782,54 @@ def gdrive_download_to_workspace(file_id: str, destination_filename: str = "") -
         drive_name = meta.get("name", f"gdrive_{file_id}")
         mime = meta.get("mimeType", "")
 
-        target_name = destination_filename.strip() or drive_name
+        if destination_filename.strip():
+            target_name = destination_filename.strip()  # caller-chosen path, still sandbox-validated below
+        else:
+            # Drive names come from (possibly foreign) shared files: never let them act as a path
+            target_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", Path(drive_name.replace("\\", "/")).name).strip(" .") or f"gdrive_{file_id}"
         
         # Handle Google Docs / Sheets automatic extensions
-        if mime == "application/vnd.google-apps.document" and not target_name.endswith(".txt") and not target_name.endswith(".md"):
-            target_name += ".txt"
-            download_resp = client.get(
-                f"{DRIVE_API_BASE}/files/{file_id}/export",
-                headers=headers,
-                params={"mimeType": "text/plain"}
-            )
-        elif mime == "application/vnd.google-apps.spreadsheet" and not target_name.endswith(".csv"):
-            target_name += ".csv"
-            download_resp = client.get(
-                f"{DRIVE_API_BASE}/files/{file_id}/export",
-                headers=headers,
-                params={"mimeType": "text/csv"}
-            )
+        if mime == "application/vnd.google-apps.document":
+            if not target_name.endswith(".txt") and not target_name.endswith(".md"):
+                target_name += ".txt"
+            dl_url, dl_params = f"{DRIVE_API_BASE}/files/{file_id}/export", {"mimeType": "text/plain"}
+        elif mime == "application/vnd.google-apps.spreadsheet":
+            if not target_name.endswith(".csv"):
+                target_name += ".csv"
+            dl_url, dl_params = f"{DRIVE_API_BASE}/files/{file_id}/export", {"mimeType": "text/csv"}
         else:
-            download_resp = client.get(
-                f"{DRIVE_API_BASE}/files/{file_id}",
-                headers=headers,
-                params={"alt": "media"}
-            )
+            dl_url, dl_params = f"{DRIVE_API_BASE}/files/{file_id}", {"alt": "media"}
 
-        if download_resp.status_code != 200:
-            raise RuntimeError(f"Download failed ({download_resp.status_code}): {download_resp.text}")
-
-        # Validate path against sandbox
+        # Validate path against sandbox BEFORE transferring anything
         dest_path = _validate_path(target_name, for_write=True)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        dest_path.write_bytes(download_resp.content)
+
+        # Stream to a temp file and move it into place: no full copy in RAM, no half-written target
+        tmp_path = dest_path.with_name(dest_path.name + ".part")
+        size_bytes = 0
+        try:
+            with client.stream("GET", dl_url, headers=headers, params=dl_params) as download_resp:
+                if download_resp.status_code != 200:
+                    download_resp.read()
+                    raise RuntimeError(f"Download failed ({download_resp.status_code}): {download_resp.text}")
+                with open(tmp_path, "wb") as out:
+                    for chunk in download_resp.iter_bytes():
+                        out.write(chunk)
+                        size_bytes += len(chunk)
+            os.replace(tmp_path, dest_path)
+        finally:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except Exception:
+                    pass
 
         return {
             "status": "success",
             "file_id": file_id,
             "drive_name": drive_name,
             "saved_to": str(dest_path),
-            "size_bytes": len(download_resp.content)
+            "size_bytes": size_bytes
         }
 
 

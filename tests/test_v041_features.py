@@ -310,6 +310,7 @@ class TestUnifiedWebMessage(unittest.TestCase):
         }
         # In WebView2, if JS sends postMessage(JSON.stringify(...)), get_WebMessageAsJson returns JSON string of that string
         mock_args = MagicMock()
+        mock_args.Source = "https://mammouth.ai/app"
         mock_args.get_WebMessageAsJson.return_value = json.dumps(json.dumps(payload_obj))
 
         MammouthBrowserFrame._unified_web_message(frame, sender=None, args=mock_args)
@@ -335,12 +336,30 @@ class TestUnifiedWebMessage(unittest.TestCase):
             }
         }
         mock_args = MagicMock()
+        mock_args.Source = "https://mammouth.ai/app"
         mock_args.get_WebMessageAsJson.return_value = json.dumps(payload_obj)
 
         MammouthBrowserFrame._unified_web_message(frame, sender=None, args=mock_args)
 
         self.assertEqual(len(received_payload), 1)
         self.assertEqual(received_payload[0]["current"]["usagePlan"], "standard")
+
+    def test_web_message_from_foreign_origin_is_ignored(self):
+        from modules.embedded_browser import MammouthBrowserFrame
+        import json
+
+        received_payload = []
+        frame = MagicMock(spec=MammouthBrowserFrame)
+        frame.quota_cb = lambda p: received_payload.append(p)
+        frame.after = MagicMock(side_effect=lambda ms, cb: cb())
+
+        mock_args = MagicMock()
+        mock_args.Source = "https://evil.example/phish"
+        mock_args.get_WebMessageAsJson.return_value = json.dumps({"type": "mammouth_quota", "payload": {"ok": True}})
+
+        MammouthBrowserFrame._unified_web_message(frame, sender=None, args=mock_args)
+
+        self.assertEqual(received_payload, [])
 
     def test_edgechrome_handlers_neutralized_and_instantiation_safe(self):
         """Validates EdgeChrome monkeypatches are active and direct instantiation does not raise State TypeError."""
@@ -652,7 +671,24 @@ class TestV041SecurityAndParameterFixes(unittest.TestCase):
                     (b"host", b"127.0.0.1:8000")
                 ]
             }
-            form_body = f"action=allow&csrf_token={csrf_token}".encode("ascii")
+            # Approving requires the owner's Defroster API token (proof the consent comes from the owner)
+            from config import load_config
+            owner_token = load_config()["server"]["api_token"]
+
+            # 2a. Wrong owner token re-renders the consent page with HTTP 403 and issues no code
+            bad_body = f"action=allow&csrf_token={csrf_token}&owner_token=wrong".encode("ascii")
+            async def receive_bad_owner():
+                return {"type": "http.request", "body": bad_body, "more_body": False}
+            resp_bad_owner = await oauth_authorize(Request(scope_post, receive=receive_bad_owner))
+            self.assertEqual(resp_bad_owner.status_code, 403)
+            m_retry = re.search(r'name="csrf_token"\s+value="([^"]+)"', resp_bad_owner.body.decode("utf-8"))
+            self.assertIsNotNone(m_retry)
+            csrf_token = m_retry.group(1)
+
+            form_body = (
+                f"action=allow&csrf_token={csrf_token}&owner_token="
+                + urllib.parse.quote(owner_token, safe="")
+            ).encode("ascii")
             async def receive_post():
                 return {"type": "http.request", "body": form_body, "more_body": False}
 

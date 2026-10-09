@@ -1,3 +1,4 @@
+import threading
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -16,22 +17,32 @@ MAX_KEY_LENGTH = 256
 MAX_CATEGORY_LENGTH = 128
 MAX_CONTENT_LENGTH = 262144  # 256 KB max per memory entry
 
+_schema_ready_paths = set()  # DB files whose schema was created in this process
+_schema_lock = threading.Lock()
+
+
 def _get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    with conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS memories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key TEXT UNIQUE NOT NULL,
-                content TEXT NOT NULL,
-                category TEXT DEFAULT 'general',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_key ON memories(key)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category)")
+    db_key = str(DB_PATH)
+    if db_key not in _schema_ready_paths:
+        # Schema DDL + commit only once per DB file and process instead of on every call / scheduler tick
+        with _schema_lock:
+            if db_key not in _schema_ready_paths:
+                with conn:
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS memories (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            key TEXT UNIQUE NOT NULL,
+                            content TEXT NOT NULL,
+                            category TEXT DEFAULT 'general',
+                            created_at TEXT NOT NULL,
+                            updated_at TEXT NOT NULL
+                        )
+                    """)
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_key ON memories(key)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category)")
+                _schema_ready_paths.add(db_key)
     return conn
 
 def memory_save(key: str, content: str, category: str = "general") -> str:

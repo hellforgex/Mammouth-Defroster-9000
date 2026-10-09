@@ -44,6 +44,8 @@ if exist "dist\MammouthDefroster9000\service_account.json" del /f /q "dist\Mammo
 if exist "dist\MammouthDefroster9000\storage_state.json" del /f /q "dist\MammouthDefroster9000\storage_state.json"
 
 REM Copy sanitized configs and examples
+if not exist "dist\MammouthDefroster9000\assets" mkdir "dist\MammouthDefroster9000\assets"
+copy "assets\*" "dist\MammouthDefroster9000\assets\" /Y
 copy "config.example.json" "dist\MammouthDefroster9000\config.json" /Y
 copy "config.example.json" "dist\MammouthDefroster9000\config.example.json" /Y
 copy "hosts.example.json" "dist\MammouthDefroster9000\hosts.example.json" /Y
@@ -61,20 +63,20 @@ copy "install.ps1" "dist\MammouthDefroster9000\" /Y
 if exist "cloudflared.exe" copy "cloudflared.exe" "dist\MammouthDefroster9000\" /Y
 
 echo ===================================================
-echo   Packaging release ZIP: MammouthDefroster9000-v0.4.3-windows-x64.zip
+echo   Packaging release ZIP: MammouthDefroster9000-v0.5.1-windows-x64.zip
 echo ===================================================
-powershell -Command "Compress-Archive -Path 'dist\MammouthDefroster9000\*' -DestinationPath '..\MammouthDefroster9000-v0.4.3-windows-x64.zip' -Force"
-%PYTHON_EXE% -c "import hashlib; h = hashlib.sha256(open('..\MammouthDefroster9000-v0.4.3-windows-x64.zip', 'rb').read()).hexdigest().lower(); open('..\MammouthDefroster9000-v0.4.3-windows-x64.zip.sha256', 'w').write(h + '\n')"
+powershell -Command "Compress-Archive -Path 'dist\MammouthDefroster9000\*' -DestinationPath '..\MammouthDefroster9000-v0.5.1-windows-x64.zip' -Force"
+%PYTHON_EXE% -c "import hashlib; h = hashlib.sha256(open('..\MammouthDefroster9000-v0.5.1-windows-x64.zip', 'rb').read()).hexdigest().lower(); open('..\MammouthDefroster9000-v0.5.1-windows-x64.zip.sha256', 'w').write(h + '\n')"
 
 echo ===================================================
-echo   Syncing to unpacked test directory: ..\MammouthDefroster9000-v0.4.3
+echo   Syncing to unpacked test directory: ..\MammouthDefroster9000-v0.5.1
 echo ===================================================
-if not exist "..\MammouthDefroster9000-v0.4.3" mkdir "..\MammouthDefroster9000-v0.4.3"
-robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.4.3" /E /NP /NFL /NDL /R:0 /W:0 /XF config.json oauth.db tasks.db memory.db hosts.json credentials.json /XD data workspace
+if not exist "..\MammouthDefroster9000-v0.5.1" mkdir "..\MammouthDefroster9000-v0.5.1"
+robocopy "dist\MammouthDefroster9000" "..\MammouthDefroster9000-v0.5.1" /E /NP /NFL /NDL /R:0 /W:0 /XF config.json oauth.db tasks.db memory.db hosts.json credentials.json /XD data workspace
 
 if not exist "..\releases" mkdir "..\releases"
-copy "..\MammouthDefroster9000-v0.4.3-windows-x64.zip" "..\releases\" /Y
-copy "..\MammouthDefroster9000-v0.4.3-windows-x64.zip.sha256" "..\releases\" /Y
+copy "..\MammouthDefroster9000-v0.5.1-windows-x64.zip" "..\releases\" /Y
+copy "..\MammouthDefroster9000-v0.5.1-windows-x64.zip.sha256" "..\releases\" /Y
 
 echo ===================================================
 echo   Build completed successfully! Output: dist\MammouthDefroster9000

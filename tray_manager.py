@@ -28,18 +28,23 @@ try:
     import win32clipboard
     def copy_to_clipboard(text: str):
         win32clipboard.OpenClipboard()
-        win32clipboard.EmptyClipboard()
-        win32clipboard.SetClipboardText(text)
-        win32clipboard.CloseClipboard()
+        try:
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+        finally:
+            win32clipboard.CloseClipboard()
 except ImportError:
     import subprocess
     def copy_to_clipboard(text: str):
-        cmd = f"Set-Clipboard -Value '{text}'"
-        subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True)
+        # Text goes through stdin so quotes in it cannot alter the command.
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "$input | Out-String | ForEach-Object { Set-Clipboard -Value $_.TrimEnd() }"],
+            input=text, capture_output=True, text=True, encoding="utf-8", timeout=10,
+        )
 
 import uvicorn
 from server import app, log_path
-from modules.unreal_engine import unreal_ping
+from modules.mammouth_code import launch_mammouth_terminal, get_mammouth_code_status
 from modules.screen_capture import screen_capture
 
 
@@ -68,16 +73,26 @@ class DefrosterTrayApp:
         return "https://[your-tailscale-node].ts.net/sse"
 
     def load_icon_image(self):
-        # Look for icon.ico or icon.png in assets
-        for icon_candidate in [
-            BASE_DIR.parent / "assets" / "icon.ico",
+        # Look for icon.ico or icon.png in assets across frozen, dev, and _internal layouts
+        candidates = [
             BASE_DIR / "assets" / "icon.ico",
-            BASE_DIR.parent / "assets" / "icon.png",
+            BASE_DIR / "_internal" / "assets" / "icon.ico",
+            Path(getattr(sys, "_MEIPASS", BASE_DIR)) / "assets" / "icon.ico",
+            Path(__file__).parent / "assets" / "icon.ico",
+            BASE_DIR.parent / "assets" / "icon.ico",
+            BASE_DIR.parent / "src" / "assets" / "icon.ico",
             BASE_DIR / "assets" / "icon.png",
-        ]:
+            BASE_DIR / "_internal" / "assets" / "icon.png",
+            Path(getattr(sys, "_MEIPASS", BASE_DIR)) / "assets" / "icon.png",
+            Path(__file__).parent / "assets" / "icon.png",
+            BASE_DIR.parent / "assets" / "icon.png",
+            BASE_DIR.parent / "src" / "assets" / "icon.png",
+        ]
+        for icon_candidate in candidates:
             if icon_candidate.exists():
                 try:
-                    return PILImage.open(str(icon_candidate))
+                    with PILImage.open(str(icon_candidate)) as img:
+                        return img.copy()
                 except Exception:
                     pass
         # Fallback: Generate a nice neon cyan/fire mammoth circle
@@ -92,17 +107,20 @@ class DefrosterTrayApp:
             log_level="info",
             use_colors=False
         )
-        self.uvicorn_server = uvicorn.Server(config)
+        server = uvicorn.Server(config)
+        self.uvicorn_server = server
         self.is_running = True
 
         def _run():
             try:
-                self.uvicorn_server.run()
+                server.run()
             except Exception as e:
                 with open(log_path, "a", encoding="utf-8") as f:
                     f.write(f"\n[SERVER THREAD ERROR] {e}\n")
             finally:
-                self.is_running = False
+                # Only clear the flag if no newer server instance replaced this one.
+                if self.uvicorn_server is server:
+                    self.is_running = False
 
         self.server_thread = threading.Thread(target=_run, daemon=True)
         self.server_thread.start()
@@ -110,11 +128,13 @@ class DefrosterTrayApp:
     def restart_server(self, icon=None, item=None):
         if self.uvicorn_server:
             self.uvicorn_server.should_exit = True
-            time.sleep(0.8)
+        if self.server_thread and self.server_thread.is_alive():
+            # Wait until the old server released the port before binding again.
+            self.server_thread.join(timeout=10)
         self.start_server_thread()
         if self.icon:
             try:
-                self.icon.notify("Mammouth Defroster 9000 server restarted on port 8000.", "Server Restarted")
+                self.icon.notify(f"Mammouth Defroster 9000 server restarted on port {self.port}.", "Server Restarted")
             except Exception:
                 pass
 
@@ -150,15 +170,20 @@ class DefrosterTrayApp:
                 except Exception:
                     pass
 
-    def on_check_unreal(self, icon=None, item=None):
-        status = unreal_ping()
-        st = status.get("status", "offline")
-        msg = f"Status: {st}\nProject: {status.get('project_name', 'None')}" if st == "connected" else "Unreal Engine Editor not connected."
-        if self.icon:
-            try:
-                self.icon.notify(msg, "Unreal Engine 5 Status")
-            except Exception:
-                pass
+    def on_launch_mammouth_code(self, icon=None, item=None):
+        res = launch_mammouth_terminal()
+        if res.get("success"):
+            if self.icon:
+                try:
+                    self.icon.notify("Launched Mammouth Code in new terminal window.", "Mammouth Code")
+                except Exception:
+                    pass
+        else:
+            if self.icon:
+                try:
+                    self.icon.notify(f"Launch failed: {res.get('error', 'Unknown')}", "Mammouth Code")
+                except Exception:
+                    pass
 
     def on_exit(self, icon=None, item=None):
         if self.uvicorn_server:
@@ -169,14 +194,14 @@ class DefrosterTrayApp:
 
     def create_menu(self):
         return Menu(
-            item("🦣 Mammouth Defroster 9000 (v0.1.2)", None, enabled=False),
-            item("🟢 Status: Online (Port 8000)", None, enabled=False),
+            item("🦣 Mammouth Defroster 9000", None, enabled=False),
+            item(f"🟢 Status: Online (Port {self.port})", None, enabled=False),
             Menu.SEPARATOR,
             item("🌐 Copy Public SSE URL", self.on_copy_url),
             item("📋 Open Server Logs", self.on_open_logs),
             item("📁 Open Workspace Folder", self.on_open_workspace),
             item("📸 Take Desktop Screenshot", self.on_take_screenshot),
-            item("🎮 Check Unreal Engine 5 Status", self.on_check_unreal),
+            item("💻 Launch Mammouth Code", self.on_launch_mammouth_code),
             Menu.SEPARATOR,
             item("🔄 Restart Server", self.restart_server),
             item("❌ Exit Defroster 9000", self.on_exit),

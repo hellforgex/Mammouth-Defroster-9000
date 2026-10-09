@@ -2,7 +2,79 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.4.3**
+> **Current Version:** **v0.5.1**
+
+---
+
+## 🚀 What's New in v0.5.1
+
+### 🔒 Centralized OAuth & Persistent MCP Authentication
+* **Zero-Loss Connection Persistence:** The SQLite OAuth database (`oauth.db`) is now stored centrally in `%APPDATA%\MammouthDefroster9000\oauth.db`. Upgrading versions or moving application directories will never break registered MCP connections or require deleting and re-registering clients in Mammouth.ai.
+* **Automatic One-Time Migration:** Seamlessly detects and imports existing clients, tokens, and scopes from local directory databases on first launch without modifying or corrupting legacy data.
+* **Fast Indexed Token Lookup:** Migrated token verification to indexed SHA-256 hash queries (`access_hash`, `refresh_hash`), eliminating high-latency DPAPI decryption of all database records per request.
+* **Extended 90-Day Refresh Lifetimes:** Dedicated 90-day renewal cycle (`refresh_expires_at`), preventing expired 30-day access tokens from prematurely invalidating client reconnect capabilities.
+
+### 🛡️ Security Hardening & Owner Verification
+* **Owner-Proof OAuth Authorization:** Client approval in the OAuth consent flow strictly mandates verification with the Defroster API token (`secrets.compare_digest`). Insecure CSRF fallbacks have been eliminated.
+* **Smart Lockout & Remote Proxy Header Resolution:** Progressive backoff and IP lockouts only apply to invalid or unauthenticated requests. Valid authorized tokens immediately bypass rate counters, ensuring shared proxy/tunnel clients are not blocked by a single misconfigured peer. Client IP resolution parses `CF-Connecting-IP` and `X-Forwarded-For`.
+* **PowerShell & Shell Command Gating:** `local_exec_command` is strictly disabled unless the `shell_processes` module is explicitly enabled in the Cockpit. Read-only mode enforces deep token verification to block script blocks, subexpressions, redirection operators, piping chains, and file overwrites.
+* **SSRF & Browser Automation Shields:** Playwright automation context enforces `chromium_sandbox=True` for native Microsoft Edge. Web scraping and browser agent tools actively reject private IP spaces, link-local addresses, and cloud metadata endpoints (`169.254.169.254`, `metadata.google.internal`).
+* **Web Tools DNS Pinning:** Added DNS pinning per redirect hop and hard response payload limits to prevent SSRF and memory exhaustion attacks.
+* **Screen Consent Safety:** Deregistered `screen_grant_consent` and `screen_revoke_consent` MCP tools from public AI model exposure; GUI screenshots now operate strictly through localized captures.
+
+### ⚙️ Concurrency, Tunnels & UI Stability
+* **Thread-Safe Tailscale Funnel Worker:** Serialized FIFO execution queue (`queue.Queue`) for Funnel background commands, preventing race conditions where shutdown commands executed out-of-order after startup.
+* **Tkinter CTk Attribute Safety:** Replaced internal process attribute lookups with dictionary-backed access, preventing recursive delegation loops in mock and headless environments.
+* **Atomic Configuration Persistence:** Implemented atomic file writes (temporary file + `fsync` + atomic `os.replace`) paired with mtime cache tracking, preventing configuration corruption.
+* **Unicode Input Fidelity:** Replaced legacy typing calls with native Win32 `SendInput` handling for flawless international character typing.
+
+### 📦 Release Verification & Checksums
+* **Archive:** `MammouthDefroster9000-v0.5.1-windows-x64.zip`
+* **SHA-256 Checksum:**
+  ```text
+  92b0a8d95b7e555590a05b54f9f61d8012dd35b72a1de06dbbda2f7b2c02aa3e
+  ```
+
+---
+
+## 🚀 What's New in v0.5.0
+
+### 🌐 Playwright Browser Automation Agent (12 MCP Tools)
+* **Claude Desktop-Equivalent Browser Control:** Mammouth AI can now programmatically navigate websites, interact with SPAs (React/Vue/Nuxt), click buttons, fill forms, extract rendered DOM content, and manage tabs.
+* **Zero-Download Footprint:** Uses Microsoft Playwright running directly against the system-installed **Microsoft Edge** (`channel="msedge"`), eliminating any need for extra 150 MB Chromium downloads.
+* **Live Visual Feedback & Headless Mode:** Opens a visible Edge window by default so the user can watch the AI browse in real-time (and intervene if a CAPTCHA or MFA challenge appears). Toggleable to silent Headless mode in the Cockpit GUI or `config.json`.
+* **Numbered Interactive Element Indexing:** Automatically inspects the active page and indexes buttons, inputs, links, and textareas with compact numeric IDs (`[1]`, `[2]`), enabling accurate, deterministic clicks and form filling without relying on error-prone pixel coordinates.
+* **Multimodal Vision Screenshots:** Dedicated `browser_screenshot` tool returning high-resolution images via `FastMCPImage` for visual reasoning by multimodal models (Claude 3.5 Sonnet, GPT-4o, Gemini 2.0).
+* **Rendered Markdown Extraction:** `browser_get_content` executes client-side scripts before stripping clutter and extracting clean, structured Markdown (headings, tables, links).
+* **Persistent Sessions & Storage:** Dedicated isolated profile directory (`data/agent_browser_profile/`) preserving cookies, logins, and sessions across server restarts.
+* **SSRF Shield:** Blocks navigation to cloud metadata endpoints (`169.254.169.254`, `metadata.google.internal`).
+
+### 💻 Mammouth Code CLI Agent Bridge (`modules/mammouth_code.py`)
+* **1-Click Official Installer & Upgrader:** Direct PowerShell installer (`irm https://code.mammouth.ai/install.ps1 | iex`) with automatic version checks and upgrade commands.
+* **Top-Level Interactive Terminal Launcher:** Reliable console launcher opening PowerShell or Windows Terminal with `$env:MAMMOUTH_API_KEY` pre-configured.
+* **Headless Background Task Runner:** Runs autonomous tasks via `mammouth run` and streams execution logs directly to the Defroster Cockpit.
+* **Dual-Bridge MCP Auto-Sync:** Automatically registers Mammouth Defroster 9000 tools into `opencode.json` so CLI agents have full local tool access.
+
+### ⏱️ Automated Task Scheduler & Triggers (`modules/task_scheduler.py`)
+* **Recurring Background Prompts:** Schedules repeating prompts dispatched to Mammouth Web chat, Mammouth Code CLI, or local scripts.
+* **Pre-Built Presets:** Bundled templates including Live Sports Tickers (5 min), Crypto & Market Watch (15 min), and System & Hardware Diagnostics (10 min).
+* **Cockpit GUI Dashboard:** Live countdown timers, execution counters, and one-click pause, resume, and trigger controls.
+
+### 🧘 Zen Mode & Authentic Mammouth AI Brand Theme
+* **Brand Theme Alignment:** Complete overhaul utilizing the authentic Mammouth AI palette: Warm Charcoal (`#242428`), Pure Ivory (`#FCFAF7`), and Tusk Bronze (`#B88557`).
+* **Zen Workspace:** One-click toggle collapsing the sidebar and maximizing the viewport for focused chat sessions.
+* **Global Win32 Summon Hotkey:** System-wide shortcut (`Ctrl+Shift+M`) to instantly summon or minimize the Cockpit from any application.
+
+### 🔒 Security Hardening & Zero Plaintext Fallback
+* **SQLite OAuth DPAPI Encryption:** Windows DPAPI hardware-backed encryption (`_encrypt_dpapi()`) for access and refresh tokens in `oauth.db`.
+* **Timing-Attack Resistance:** Constant-time comparisons using `secrets.compare_digest()`.
+
+### 📦 Release Verification & Checksums
+* **Archive:** `MammouthDefroster9000-v0.5.0-windows-x64.zip`
+* **SHA-256 Checksum:**
+  ```text
+  0d1c96565c1877e9277fe23991b77b4e17229de7656534d8bf3331d360808f2b
+  ```
 
 ---
 

@@ -616,51 +616,10 @@ class TestSecurityAuditBlockerFixes(unittest.TestCase):
             self.assertTrue(res_path.endswith("app.zip"))
             self.assertTrue(os.path.exists(res_path))
 
-    def test_h3_remote_execution_hmac_enforced(self):
-        """H-3: Ensure RemoteExecutionConfig generates session key and pongs require HMAC challenge/response."""
-        from modules.remote_execution import (
-            RemoteExecutionConfig,
-            _RemoteExecutionBroadcastConnection,
-            _RemoteExecutionMessage,
-            _generate_hmac_challenge,
-            _compute_hmac_response,
-            _ACTIVE_NONCES
-        )
-
-        # 1. Auto-generates token if empty
-        cfg = RemoteExecutionConfig(api_token="")
-        self.assertTrue(cfg.api_token.startswith("ue_sec_"))
-        self.assertGreater(len(cfg.api_token), 20)
-
-        conn = _RemoteExecutionBroadcastConnection(cfg, "local_test_node")
-        from modules.remote_execution import _RemoteExecutionBroadcastNodes
-        conn._nodes = _RemoteExecutionBroadcastNodes()
-
-        # 2. Pong missing challenge_nonce or challenge_hmac is dropped
-        msg_no_hmac = _RemoteExecutionMessage("pong", "remote_node_1", data={"engine_version": "5.3"})
-        conn._handle_pong_message(msg_no_hmac)
-        self.assertEqual(len(conn.remote_nodes), 0, "Pong without nonce/hmac must be dropped")
-
-        # 3. Pong with bad hmac is dropped
-        nonce = _generate_hmac_challenge()
-        msg_bad_hmac = _RemoteExecutionMessage("pong", "remote_node_2", data={
-            "challenge_nonce": nonce,
-            "challenge_hmac": "invalid_hmac_signature"
-        })
-        conn._handle_pong_message(msg_bad_hmac)
-        self.assertEqual(len(conn.remote_nodes), 0, "Pong with invalid HMAC must be dropped")
-
-        # 4. Valid pong is accepted
-        valid_nonce = _generate_hmac_challenge()
-        valid_hmac = _compute_hmac_response(cfg.api_token, valid_nonce)
-        msg_valid = _RemoteExecutionMessage("pong", "remote_node_3", data={
-            "challenge_nonce": valid_nonce,
-            "challenge_hmac": valid_hmac,
-            "engine_version": "5.3.2"
-        })
-        conn._handle_pong_message(msg_valid)
-        self.assertEqual(len(conn.remote_nodes), 1)
-        self.assertEqual(conn.remote_nodes[0]["node_id"], "remote_node_3")
+    def test_ue5_module_retired_in_v050(self):
+        """Verify that retired remote_execution module is no longer bundled."""
+        with self.assertRaises(ImportError):
+            import modules.remote_execution
 
 
 if __name__ == "__main__":

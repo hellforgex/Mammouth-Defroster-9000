@@ -30,8 +30,11 @@ def wait_for_server(port: int, timeout: float = 15.0) -> bool:
         time.sleep(0.3)
     return False
 
-def make_http_request(url: str, token: str = None) -> tuple[int, dict, str]:
+def make_http_request(url: str, token: str = None, headers: dict = None) -> tuple[int, dict, str]:
     req = urllib.request.Request(url)
+    if headers:
+        for k, v in headers.items():
+            req.add_header(k, v)
     if token is not None:
         req.add_header("Authorization", f"Bearer {token}")
     try:
@@ -131,28 +134,22 @@ def run_runtime_checks(server_exe_path: str, test_port: int = 8991):
         assert status_d == 401, f"Expected 401 for tampered token, got {status_d}"
         print("  -> PASS: Tampered token rejected with HTTP 401 via compare_digest")
 
-        # Check (b): 5x bad token => progressive backoff (HTTP 429)
-        print("\n[5/5] Check (b): Testing progressive backoff (5x bad token lockout)...")
-        # We already had Failure #1 (Check a: no token) and Failure #2 (Check d: tampered token).
-        # Send Failure #3 and #4:
-        for attempt in [3, 4]:
+        # Check (b): 5x bad token => progressive backoff (HTTP 429) for remote clients
+        print("\n[5/5] Check (b): Testing progressive backoff (5x bad token lockout for remote client)...")
+        remote_headers = {"X-Forwarded-For": "198.51.100.77"}
+        for attempt in range(1, 6):
             bad_tok = f"attacker_token_{attempt}"
-            st, _, _ = make_http_request(protected_url, token=bad_tok)
+            st, _, _ = make_http_request(protected_url, token=bad_tok, headers=remote_headers)
             print(f"  -> Attempt {attempt}/5: HTTP Status: {st}")
             assert st == 401, f"Expected 401 on attempt {attempt}, got {st}"
 
-        # Send Failure #5 (this sets lockout_until = now + 1.0s):
-        st, _, _ = make_http_request(protected_url, token="attacker_token_5")
-        print(f"  -> Attempt 5/5: HTTP Status: {st}")
-        assert st == 401, f"Expected 401 on attempt 5, got {st}"
-
-        # Now lockout is active: The 6th request must trigger progressive backoff lockout -> HTTP 429
-        status_b, headers_b, body_b = make_http_request(protected_url, token="any_token")
+        # Now lockout is active for 198.51.100.77: The 6th request must trigger progressive backoff lockout -> HTTP 429
+        status_b, headers_b, body_b = make_http_request(protected_url, token="any_token", headers=remote_headers)
         print(f"  -> Locked-out attempt (6th): HTTP Status: {status_b}")
         assert status_b == 429, f"Expected 429 Too Many Requests after 5 failures, got {status_b}"
         retry_after = headers_b.get('retry-after', headers_b.get('Retry-After'))
         print(f"  -> Lockout response headers: Retry-After={retry_after}")
-        print("  -> PASS: Progressive backoff active! Returns HTTP 429 after 5 failures")
+        print("  -> PASS: Progressive backoff active! Returns HTTP 429 after 5 failures for remote client")
 
         print("\n" + "=" * 60)
         print("ALL 4 RUNTIME CHECKS (a, b, c, d) PASSED ON COMPILED EXE!")

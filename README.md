@@ -16,7 +16,7 @@
 </h3>
 
 <p align="center">
-  <b>Mammouth Defroster 9000 (MD-9000)</b> is a sovereign FastMCP desktop cockpit and Windows automation platform engineered by <b>noskillz</b>. It connects your remote <a href="https://mammouth.ai">Mammouth.ai</a> assistant directly to your local Windows PC — letting your AI see your desktop, automate clicks & keystrokes, edit code in a safe workspace, run PowerShell commands, monitor hardware, and even control Unreal Engine 5.
+  <b>Mammouth Defroster 9000 (MD-9000)</b> is a sovereign FastMCP desktop cockpit and Windows automation platform engineered by <b>noskillz</b>. It connects your remote <a href="https://mammouth.ai">Mammouth.ai</a> assistant directly to your local Windows PC — letting your AI see your desktop, automate clicks & keystrokes, edit code in a safe workspace, run PowerShell commands, monitor hardware, and orchestrate the official Mammouth Code CLI agent.
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@ You do **not** need Python, Git, or terminal knowledge. Everything is bundled in
 ```
 
 1. **Download the Release Package**:  
-   👉 **[Download MammouthDefroster9000-v0.4.3-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~86.7 MB)
+   👉 **[Download MammouthDefroster9000-v0.5.1-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~90.2 MB)
 2. **Extract the ZIP**:  
    Extract the archive to any convenient folder on your Windows PC (e.g. `C:\MammouthDefroster9000` or your Desktop).
 3. **Launch the Cockpit**:  
@@ -99,7 +99,7 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
 
 ---
 
-## 🛠️ 10 Defrosted Modules (71 Tools Total)
+## 🛠️ 13 Defrosted Modules (81 Tools Total)
 
 <table align="center" width="100%">
   <thead>
@@ -112,6 +112,13 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td><b>🌐 Playwright Browser Agent</b></td>
+      <td align="center">Enabled</td>
+      <td align="center">🛡️ Sandboxed Edge</td>
+      <td>Claude Desktop-equivalent autonomous web browser control via Playwright & system Microsoft Edge: navigation, numbered element indexing, form fills, clicks, full-DOM Markdown, and multimodal visual screenshots.</td>
+      <td><code>browser_navigate</code>, <code>browser_snapshot</code>, <code>browser_screenshot</code>, <code>browser_click</code>, <code>browser_fill</code>, <code>browser_get_content</code>, <code>browser_evaluate</code>, <code>browser_tabs</code> <i>(12 tools)</i></td>
+    </tr>
     <tr>
       <td><b>👁️ Desktop Vision</b></td>
       <td align="center">Enabled</td>
@@ -127,11 +134,18 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
       <td><code>mouse_move</code>, <code>mouse_click</code>, <code>mouse_drag</code>, <code>mouse_scroll</code>, <code>keyboard_type</code>, <code>keyboard_hotkey</code>, <code>desktop_get_screen_info</code></td>
     </tr>
     <tr>
-      <td><b>🎮 Unreal Engine 5</b></td>
+      <td><b>💻 Mammouth Code CLI</b></td>
       <td align="center">Enabled</td>
-      <td align="center">🟢 Safe</td>
-      <td>Live UE5 Editor automation via Remote Control & Python API: inspect scenes, spawn actors, manipulate lights/materials, and capture viewports.</td>
-      <td><code>unreal_ping</code>, <code>unreal_execute_python</code>, <code>unreal_spawn_actor</code>, <code>unreal_take_screenshot</code> <i>(23 tools total)</i></td>
+      <td align="center">🔒 DPAPI / Sandboxed</td>
+      <td>Terminal coding agent integration: 1-click install/update, interactive launcher, headless task execution (<code>mammouth run</code>), and dual-bridge MCP auto-configuration.</td>
+      <td><code>mammouth_code_status</code>, <code>mammouth_code_launch_terminal</code>, <code>mammouth_code_run_task</code>, <code>mammouth_code_install_or_update</code>, <code>mammouth_code_sync_mcp</code> <i>(5 tools)</i></td>
+    </tr>
+    <tr>
+      <td><b>☁️ Google Drive</b></td>
+      <td align="center">Enabled</td>
+      <td align="center">🔒 OAuth / Sandboxed</td>
+      <td>Browse, search, read, write, upload, and download Google Drive files with OAuth2 or Service Account authentication.</td>
+      <td><code>gdrive_status</code>, <code>gdrive_list_files</code>, <code>gdrive_read_file</code>, <code>gdrive_download_to_workspace</code>, <code>gdrive_upload_from_workspace</code> <i>(11 tools)</i></td>
     </tr>
     <tr>
       <td><b>🧠 Long-Term Memory</b></td>
@@ -146,6 +160,13 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
       <td align="center">🟢 Safe</td>
       <td>Persistent task manager and Kanban workflow (<code>todo</code>, <code>in_progress</code>, <code>done</code>, <code>blocked</code>).</td>
       <td><code>task_create</code>, <code>task_update</code>, <code>task_list</code>, <code>task_delete</code></td>
+    </tr>
+    <tr>
+      <td><b>⏱️ Task Scheduler & Automations</b></td>
+      <td align="center">Enabled</td>
+      <td align="center">🟢 Safe</td>
+      <td>Automated recurring task triggers for Mammouth AI Web chat (e.g. 5-minute football live ticker), Mammouth Code CLI, or local scripts with live UI countdowns and preset templates.</td>
+      <td><code>task_schedule_create</code>, <code>task_schedule_list</code>, <code>task_schedule_control</code>, <code>task_schedule_delete</code>, <code>task_schedule_get_presets</code> <i>(5 tools)</i></td>
     </tr>
     <tr>
       <td><b>📁 File & Code Ops</b></td>
@@ -191,7 +212,7 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
 
 <details>
 <summary><b>1. Do I need Python installed on my computer?</b></summary>
-<p><b>No!</b> If you download the pre-built release ZIP (<code>MammouthDefroster9000-v0.4.3-windows-x64.zip</code>), everything is self-contained. It includes all necessary runtimes, libraries, and executables. Just unzip and run!</p>
+<p><b>No!</b> If you download the pre-built release ZIP (<code>MammouthDefroster9000-v0.5.1-windows-x64.zip</code>), everything is self-contained. It includes all necessary runtimes, libraries, and executables. Just unzip and run!</p>
 </details>
 
 <details>
@@ -258,19 +279,23 @@ mammouth-defroster-9000/
 ├── modules/
 │   ├── memory.py            # SQLite Long-term memory
 │   ├── tasks_kanban.py      # SQLite Kanban & task tracker
+│   ├── task_scheduler.py    # Automated Task Scheduler & Recurring Prompts
+│   ├── mammouth_code.py     # Mammouth Code CLI terminal agent integration
+│   ├── global_hotkey.py     # Native Win32 Ctrl+Shift+M summon hotkey
+│   ├── embedded_browser.py  # WebView2 Mammouth AI web chat & Zen Mode
 │   ├── file_ops.py          # Sandboxed code & file operations
 │   ├── shell_processes.py   # PowerShell execution & background daemons
 │   ├── putty_ssh.py         # DPAPI-encrypted PuTTY / Plink / PSCP remote tools
 │   ├── system_monitor.py    # Hardware & Windows diagnostics
 │   ├── screen_capture.py    # Desktop vision & interactive consent gate
 │   ├── desktop_input.py     # Win32 user32 mouse & keyboard automation
-│   ├── unreal_engine.py     # Unreal Engine 5/4 Live Automation
+│   ├── google_drive.py      # Google Drive cloud file operations
 │   └── web_tools.py         # SSRF-protected web scraper & status checks
-├── config.py                # Configuration manager & token handling
+├── config.py                # Configuration manager & DPAPI token encryption
 ├── config.example.json      # Hardened template configuration
 ├── hosts.example.json       # Template SSH hosts configuration
-├── server.py                # FastMCP server with Auth & CORS middleware
-├── gui.py                   # CustomTkinter Windows 11 Desktop Cockpit
+├── server.py                # FastMCP server with Auth, DPAPI OAuth DB & CORS
+├── gui.py                   # CustomTkinter Windows 11 Desktop Cockpit (Obsidian Theme)
 ├── start_gui.bat            # Quick GUI launcher script
 ├── start_server.bat         # Headless CLI server launcher
 ├── build.bat                # PyInstaller slim packager & ZIP generator

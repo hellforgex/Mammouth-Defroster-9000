@@ -1,3 +1,4 @@
+import itertools
 import os
 import re
 import json
@@ -29,19 +30,16 @@ PROTECTED_SENSITIVE_DIRS = [
 
 
 def _get_sandbox_config():
-    """Load workspace sandbox settings from config.json."""
-    default_ws = (BASE_DIR / "workspace").resolve()
-    if CONFIG_FILE.exists():
-        try:
-            cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-            server_cfg = cfg.get("server", {})
-            enforce_sandbox = server_cfg.get("enforce_workspace_sandbox", True)
-            ws_root_str = server_cfg.get("workspace_root", "./workspace")
-            ws_root = (BASE_DIR / ws_root_str).resolve() if not Path(ws_root_str).is_absolute() else Path(ws_root_str).resolve()
-            return enforce_sandbox, ws_root
-        except Exception:
-            pass
-    return True, default_ws
+    """Load workspace sandbox settings (cached load_config; same root resolution as the shell module)."""
+    try:
+        from config import load_config
+        from modules.shell_processes import resolve_workspace_root
+        server_cfg = load_config().get("server", {})
+        enforce_sandbox = server_cfg.get("enforce_workspace_sandbox", True)
+        return enforce_sandbox, Path(resolve_workspace_root())
+    except Exception:
+        # Fail closed: sandbox stays enforced on the default workspace
+        return True, (BASE_DIR / "workspace").resolve()
 
 
 def _is_binary_file(file_path: Path) -> bool:
@@ -197,17 +195,19 @@ def file_read(
         return f"Error: Path is not a file: {target}"
         
     try:
-        content = validated_path.read_text(encoding="utf-8", errors="replace")
-        lines = content.splitlines()
-        
-        if start_line is not None or end_line is not None:
-            s = max(0, (start_line - 1) if start_line else 0)
-            e = end_line if end_line else len(lines)
-            selected_lines = lines[s:e]
-            content = "\n".join(selected_lines)
-            
+        max_chars = max(1, int(max_chars))
+        # Stream instead of loading the whole file: only the requested lines / first max_chars are read
+        with open(validated_path, "r", encoding="utf-8", errors="replace") as fh:
+            if start_line is not None or end_line is not None:
+                s = max(0, (start_line - 1) if start_line else 0)
+                e = end_line if end_line else None
+                content = "\n".join(line.rstrip("\r\n") for line in itertools.islice(fh, s, e))
+            else:
+                content = fh.read(max_chars + 1)
+
         if len(content) > max_chars:
-            return content[:max_chars] + f"\n\n[... Truncated, total length is {len(content)} characters ...]"
+            total_bytes = validated_path.stat().st_size
+            return content[:max_chars] + f"\n\n[... Truncated after {max_chars} characters, file size is {total_bytes} bytes ...]"
         return content
     except Exception as e:
         return f"Error reading file: {e}"

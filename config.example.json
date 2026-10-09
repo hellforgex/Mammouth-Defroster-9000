@@ -8,19 +8,24 @@
     "enable_tls": false,
     "ssl_certfile": "",
     "ssl_keyfile": "",
+    "registration_token": "",
     "auto_check_updates": true,
     "tunnel_mode": "Tailscale Funnel",
-
     "endpoint_path": "/sse",
     "auto_tunnel": false,
     "auto_start_server": true,
     "tailscale_path": "",
+    "cloudflared_path": "cloudflared",
+    "ngrok_path": "ngrok",
     "cloudflare_custom_url": "",
     "ngrok_custom_url": "",
     "custom_public_url": "",
     "appearance_mode": "Dark",
     "enforce_workspace_sandbox": true,
     "workspace_root": "./workspace",
+    "start_in_web_tab": false,
+    "global_hotkey_enabled": true,
+    "global_hotkey": "Ctrl+Shift+M",
     "allowed_origins": [
       "https://mammouth.ai",
       "https://app.mammouth.ai",
@@ -35,6 +40,9 @@
       "enabled": true
     },
     "tasks_kanban": {
+      "enabled": true
+    },
+    "task_scheduler": {
       "enabled": true
     },
     "file_ops": {
@@ -56,7 +64,7 @@
       "enabled": true,
       "require_consent": true
     },
-    "unreal_engine": {
+    "mammouth_code": {
       "enabled": true
     },
     "desktop_input": {
@@ -64,7 +72,25 @@
     },
     "google_drive": {
       "enabled": true
+    },
+    "browser_agent": {
+      "enabled": true
     }
+  },
+  "browser_agent": {
+    "channel": "msedge",
+    "headless": false,
+    "viewport_width": 1280,
+    "viewport_height": 800,
+    "timeout_seconds": 30,
+    "user_data_dir": "./data/agent_browser_profile"
+  },
+  "mammouth_code": {
+    "binary_path": "",
+    "api_key": "",
+    "auto_sync_mcp": true,
+    "default_terminal": "wt",
+    "headless_timeout_seconds": 180
   },
   "embedded_browser": {
     "enabled": true,
@@ -72,7 +98,7 @@
     "auto_open_on_server_start": true,
     "user_data_dir": "./data/browser_profile",
     "quota_sidebar_enabled": true,
-    "quota_refresh_interval_seconds": 300
+    "quota_refresh_interval_seconds": 300,
+    "zen_mode": false
   }
 }
-

@@ -20,6 +20,33 @@ import pyperclip
 
 HAS_WEBVIEW2 = False
 _INIT_ERROR = ""
+_DOWNLOAD_COUNT_LOCK = threading.Lock()
+
+
+def _is_trusted_web_origin(source: Any, start_url: Any = None) -> bool:
+    """True if a WebView2 message came from mammouth.ai or the configured start page.
+
+    Pages from other sites can call window.chrome.webview.postMessage too, so bridge
+    calls and telemetry from any other origin are ignored."""
+    if not isinstance(source, str) or not source:
+        return False
+    try:
+        host = (urllib.parse.urlsplit(source).hostname or "").lower()
+        scheme = urllib.parse.urlsplit(source).scheme.lower()
+    except Exception:
+        return False
+    if scheme != "https" or not host:
+        return False
+    if host == "mammouth.ai" or host.endswith(".mammouth.ai"):
+        return True
+    if isinstance(start_url, str) and start_url:
+        try:
+            start_host = (urllib.parse.urlsplit(start_url).hostname or "").lower()
+        except Exception:
+            start_host = ""
+        if start_host and host == start_host:
+            return True
+    return False
 
 if sys.platform == "win32":
     try:
@@ -178,6 +205,18 @@ PLAN_MULTIPLIERS = {
     "none": (0, "Free / None")
 }
 
+# Mammouth AI Authentic Color Scheme (Matching Official Branding Kit)
+BROWSER_TOOLBAR_BG = ("#EDE3D4", "#1E1E22")
+BROWSER_TOOLBAR_BORDER = ("#DDC7AB", "#423E3A")
+BROWSER_BTN_BG = ("#EDE3D4", "#38363A")
+BROWSER_BTN_HOVER = ("#DDC7AB", "#464349")
+BROWSER_BTN_BORDER = ("#DDC7AB", "#4E4944")
+BROWSER_TEXT = ("#311A17", "#FCFAF7")
+BROWSER_TEXT_MUTED = ("#754533", "#A89F97")
+BROWSER_ACCENT = ("#9F6C45", "#B88557")
+BROWSER_ACCENT_HOVER = ("#754533", "#C8A37C")
+BROWSER_VIEWPORT_BG = ("#F2EBE1", "#242428")
+
 BASE_THRESHOLD_CENTS = 150  # GAUGE_MAX_CENTS in Mammouth.ai ($1.50 per 3h session window)
 
 
@@ -280,6 +319,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         profile_dir: Optional[str] = None,
         screenshot_cb: Optional[Callable[[], Optional[str]]] = None,
         quota_cb: Optional[Callable[[Dict[str, Any]], None]] = None,
+        zen_toggle_cb: Optional[Callable[[], None]] = None,
         **kwargs
     ):
         super().__init__(master, **kwargs)
@@ -287,6 +327,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         self.start_url = start_url or "https://mammouth.ai"
         self.screenshot_cb = screenshot_cb
         self.quota_cb = quota_cb
+        self.zen_toggle_cb = zen_toggle_cb
         self._last_quota_data: Optional[Dict[str, Any]] = None
 
         # Persistent profile directory (ensures login/cookies are stored in app root, never in _internal)
@@ -312,13 +353,14 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         self._schedule_ui_queue_poll()
 
     def _build_ui(self):
-        # 1. Sleek, Borderless Navigation Bar (Blends seamlessly with the Cockpit theme)
+        # 1. Sleek, Modern Navigation Bar (Mammouth Authentic Sandstone / Warm Charcoal)
         self.toolbar = ctk.CTkFrame(
             self,
             height=32,
             corner_radius=0,
-            fg_color=("#FFFFFF", "#202124"),
-            border_width=0
+            fg_color=BROWSER_TOOLBAR_BG,
+            border_width=1,
+            border_color=BROWSER_TOOLBAR_BORDER
         )
         self.toolbar.pack(fill="x", padx=0, pady=0)
 
@@ -332,12 +374,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=28,
             height=24,
             corner_radius=4,
-            fg_color=("#F1F5F9", "#2F2F33"),
-            hover_color=("#E2E8F0", "#38393F"),
-            text_color=("#0F172A", "#FFFFFF"),
+            fg_color=BROWSER_BTN_BG,
+            hover_color=BROWSER_BTN_HOVER,
+            text_color=BROWSER_TEXT,
             font=ctk.CTkFont(size=10, weight="bold"),
             border_width=1,
-            border_color=("#CBD5E1", "#3E4048"),
+            border_color=BROWSER_BTN_BORDER,
             command=self.go_back
         )
         self.btn_back.pack(side="left", padx=2)
@@ -348,12 +390,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=28,
             height=24,
             corner_radius=4,
-            fg_color=("#F1F5F9", "#2F2F33"),
-            hover_color=("#E2E8F0", "#38393F"),
-            text_color=("#0F172A", "#FFFFFF"),
+            fg_color=BROWSER_BTN_BG,
+            hover_color=BROWSER_BTN_HOVER,
+            text_color=BROWSER_TEXT,
             font=ctk.CTkFont(size=10, weight="bold"),
             border_width=1,
-            border_color=("#CBD5E1", "#3E4048"),
+            border_color=BROWSER_BTN_BORDER,
             command=self.go_forward
         )
         self.btn_forward.pack(side="left", padx=2)
@@ -364,12 +406,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=28,
             height=24,
             corner_radius=4,
-            fg_color=("#F1F5F9", "#2F2F33"),
-            hover_color=("#E2E8F0", "#38393F"),
-            text_color=("#0F172A", "#FFFFFF"),
+            fg_color=BROWSER_BTN_BG,
+            hover_color=BROWSER_BTN_HOVER,
+            text_color=BROWSER_TEXT,
             font=ctk.CTkFont(size=11),
             border_width=1,
-            border_color=("#CBD5E1", "#3E4048"),
+            border_color=BROWSER_BTN_BORDER,
             command=self.reload
         )
         self.btn_reload.pack(side="left", padx=2)
@@ -380,12 +422,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=28,
             height=24,
             corner_radius=4,
-            fg_color=("#F1F5F9", "#2F2F33"),
-            hover_color=("#E2E8F0", "#38393F"),
-            text_color=("#0F172A", "#FFFFFF"),
+            fg_color=BROWSER_BTN_BG,
+            hover_color=BROWSER_BTN_HOVER,
+            text_color=BROWSER_TEXT,
             font=ctk.CTkFont(size=11),
             border_width=1,
-            border_color=("#CBD5E1", "#3E4048"),
+            border_color=BROWSER_BTN_BORDER,
             command=self.go_home
         )
         self.btn_home.pack(side="left", padx=2)
@@ -399,7 +441,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         )
         self.lbl_download_status.pack(side="left", padx=10)
 
-        # Right Action Buttons: External Browser
+        # Right Action Buttons: External Browser & Zen Mode
         btn_action_box = ctk.CTkFrame(self.toolbar, fg_color="transparent")
         btn_action_box.pack(side="right", padx=8, pady=3)
 
@@ -410,8 +452,8 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=120,
             height=24,
             corner_radius=4,
-            fg_color=("#059669", "#10B981"),
-            hover_color=("#047857", "#059669"),
+            fg_color=BROWSER_ACCENT,
+            hover_color=BROWSER_ACCENT_HOVER,
             text_color="#FFFFFF",
             font=ctk.CTkFont(size=11, weight="bold"),
             command=self._copy_mcp_url
@@ -423,8 +465,8 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=165,
             height=24,
             corner_radius=4,
-            fg_color=("#059669", "#10B981"),
-            hover_color=("#047857", "#059669"),
+            fg_color=BROWSER_ACCENT,
+            hover_color=BROWSER_ACCENT_HOVER,
             text_color="#FFFFFF",
             font=ctk.CTkFont(size=11, weight="bold"),
             command=self._take_screenshot
@@ -436,29 +478,69 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             width=135,
             height=24,
             corner_radius=4,
-            fg_color=("#F1F5F9", "#2F2F33"),
-            hover_color=("#E2E8F0", "#38393F"),
-            text_color=("#0F172A", "#FFFFFF"),
+            fg_color=BROWSER_BTN_BG,
+            hover_color=BROWSER_BTN_HOVER,
+            text_color=BROWSER_TEXT,
             font=ctk.CTkFont(size=11, weight="bold"),
             border_width=1,
-            border_color=("#CBD5E1", "#3E4048"),
+            border_color=BROWSER_BTN_BORDER,
             command=lambda: webbrowser.open(self.start_url)
         )
         self.btn_ext_browser.pack(side="right")
+
+        self.btn_zen = ctk.CTkButton(
+            btn_action_box,
+            text="🧘 Zen",
+            width=80,
+            height=24,
+            corner_radius=4,
+            fg_color=BROWSER_BTN_BG,
+            hover_color=BROWSER_BTN_HOVER,
+            text_color=BROWSER_TEXT,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            border_width=1,
+            border_color=BROWSER_BTN_BORDER,
+            command=self._on_zen_clicked
+        )
+        self.btn_zen.pack(side="right", padx=(0, 6))
 
         # 2. Seamless Full-Bleed Viewport Frame for hosting Edge WebView2
         self.viewport = ctk.CTkFrame(
             self,
             corner_radius=0,
-            fg_color=("#FFFFFF", "#202124"),
+            fg_color=BROWSER_VIEWPORT_BG,
             border_width=0
         )
         self.viewport.pack(fill="both", expand=True, padx=0, pady=0)
         self.viewport.bind("<Configure>", self._on_viewport_resize)
         self.viewport.bind("<Button-1>", lambda e: self.focus_browser())
 
+        # Shown once at build time; set_zen_state used to stack a new copy on every toggle.
         if not HAS_WEBVIEW2:
             self._show_fallback_ui()
+
+    def _on_zen_clicked(self):
+        if self.zen_toggle_cb:
+            self.zen_toggle_cb()
+
+    def set_zen_state(self, active: bool):
+        if hasattr(self, "btn_zen"):
+            if active:
+                self.btn_zen.configure(
+                    text="🧘 Normal",
+                    fg_color=BROWSER_ACCENT,
+                    hover_color=BROWSER_ACCENT_HOVER,
+                    text_color="#FFFFFF",
+                    border_color=BROWSER_ACCENT_HOVER
+                )
+            else:
+                self.btn_zen.configure(
+                    text="🧘 Zen",
+                    fg_color=BROWSER_BTN_BG,
+                    hover_color=BROWSER_BTN_HOVER,
+                    text_color=BROWSER_TEXT,
+                    border_color=BROWSER_BTN_BORDER
+                )
 
     def _show_fallback_ui(self):
         """Displays friendly fallback UI if WebView2 runtime is missing."""
@@ -470,7 +552,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             box,
             text="Edge WebView2 Laufzeitumgebung nicht verfügbar",
             font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=("#0F172A", "#F3F4F6")
+            text_color=BROWSER_TEXT
         ).pack(pady=(0, 4))
 
         err_msg = _INIT_ERROR or "Microsoft Edge WebView2 Runtime konnte auf diesem System nicht geladen werden."
@@ -478,7 +560,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             box,
             text=f"{err_msg}\n\nDu kannst Mammouth.ai weiterhin problemlos im externen Browser nutzen:",
             font=ctk.CTkFont(size=12),
-            text_color=("#64748B", "#94A3B8"),
+            text_color=BROWSER_TEXT_MUTED,
             wraplength=480
         ).pack(pady=(0, 16))
 
@@ -486,8 +568,8 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             box,
             text="🚀 Mammouth.ai im Browser öffnen",
             font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=("#059669", "#10B981"),
-            hover_color=("#047857", "#059669"),
+            fg_color=BROWSER_ACCENT,
+            hover_color=BROWSER_ACCENT_HOVER,
             height=36,
             command=lambda: webbrowser.open(self.start_url)
         ).pack()
@@ -812,6 +894,14 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                     pass
                 return
 
+            source = None
+            try:
+                source = args.Source
+            except Exception:
+                source = None
+            if not _is_trusted_web_origin(source, getattr(self, "start_url", None)):
+                return
+
             # Passively receive mammouth_quota message if dispatched
             if isinstance(parsed_data, dict) and parsed_data.get("type") == "mammouth_quota":
                 if getattr(self, "quota_cb", None) and callable(self.quota_cb):
@@ -863,7 +953,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
         pyperclip.copy(url)
         self.btn_copy_mcp.configure(text="✓ Kopiert!", fg_color="#10B981")
-        self.after(2000, lambda: self.btn_copy_mcp.configure(text="📋 Copy MCP URL", fg_color=("#059669", "#10B981")))
+        self.after(2000, lambda: self.btn_copy_mcp.configure(text="📋 Copy MCP URL", fg_color=BROWSER_ACCENT))
 
     def _take_screenshot(self):
         saved_path = None
@@ -885,7 +975,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
         if hasattr(self, "btn_screenshot"):
             self.btn_screenshot.configure(text="✓ Im Clipboard! (Ctrl+V)", fg_color="#10B981")
-            self.after(2500, lambda: self.btn_screenshot.configure(text="📸 Screenshot (Ctrl+V)", fg_color=("#059669", "#10B981")))
+            self.after(2500, lambda: self.btn_screenshot.configure(text="📸 Screenshot (Ctrl+V)", fg_color=BROWSER_ACCENT))
 
     def focus_and_paste(self, delay_ms: int = 250):
         """Focuses the embedded WebView2 control and simulates Ctrl+V to attach clipboard content.
@@ -945,6 +1035,100 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         # Schedule execution on UI thread after delay_ms to allow tab switch/window focus
         self.after(max(50, delay_ms), _do_paste_ui)
 
+    def send_chat_prompt(self, prompt: str, auto_submit: bool = True, delay_ms: int = 200) -> bool:
+        """Injects a text prompt into Mammouth.ai chat input and optionally submits it.
+        Uses native WebView2 script execution + DOM events on the UI thread."""
+        if not HAS_WEBVIEW2 or not self.hwnd:
+            return False
+
+        def _do_send_ui():
+            try:
+                # 1. Bring top-level window to foreground
+                try:
+                    top_hwnd = self.winfo_toplevel().winfo_id()
+                    user32.SetForegroundWindow(top_hwnd)
+                except Exception:
+                    pass
+
+                # 2. Focus the WebView2 Win32 window
+                if self.hwnd:
+                    try:
+                        user32.SetFocus(self.hwnd)
+                    except Exception:
+                        pass
+
+                clean_text = json.dumps(prompt)
+                submit_flag = "true" if auto_submit else "false"
+
+                # 3. Inject text and simulate submit in WebView2 CoreWebView2
+                if self.edge and hasattr(self.edge, "webview"):
+                    target_wv = self.edge.webview
+                    if hasattr(target_wv, "CoreWebView2") and target_wv.CoreWebView2:
+                        js_send = f"""
+                        (function() {{
+                            try {{
+                                var text = {clean_text};
+                                var autoSubmit = {submit_flag};
+                                var el = document.querySelector('textarea, div[contenteditable="true"], [role="textbox"], input[type="text"]');
+                                if (!el) return false;
+
+                                el.focus();
+                                if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{
+                                    var proto = Object.getPrototypeOf(el);
+                                    var setter = Object.getOwnPropertyDescriptor(proto, 'value');
+                                    if (setter && setter.set) {{
+                                        setter.set.call(el, text);
+                                    }} else {{
+                                        el.value = text;
+                                    }}
+                                    el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true }}));
+                                    el.dispatchEvent(new Event('change', {{ bubbles: true, cancelable: true }}));
+                                }} else if (el.isContentEditable) {{
+                                    el.innerText = text;
+                                    el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true }}));
+                                }}
+
+                                if (autoSubmit) {{
+                                    setTimeout(function() {{
+                                        var form = el.closest('form');
+                                        var btn = form ? (form.querySelector('button[type="submit"]') || form.querySelector('button:not([disabled])')) : null;
+                                        if (!btn) {{
+                                            var buttons = Array.from(document.querySelectorAll('button:not([disabled])'));
+                                            for (var i = 0; i < buttons.length; i++) {{
+                                                var b = buttons[i];
+                                                var aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                                                var title = (b.getAttribute('title') || '').toLowerCase();
+                                                if (aria.includes('send') || aria.includes('submit') || title.includes('send') || b.querySelector('svg')) {{
+                                                    if (b.offsetWidth > 0 && b.offsetHeight > 0) {{
+                                                        btn = b;
+                                                        break;
+                                                    }}
+                                                }}
+                                            }}
+                                        }}
+                                        if (btn) {{
+                                            btn.click();
+                                        }} else {{
+                                            var ev = new KeyboardEvent('keydown', {{
+                                                key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
+                                            }});
+                                            el.dispatchEvent(ev);
+                                        }}
+                                    }}, 150);
+                                }}
+                                return true;
+                            }} catch (e) {{
+                                return false;
+                            }}
+                        }})();
+                        """
+                        target_wv.CoreWebView2.ExecuteScriptAsync(js_send)
+            except Exception:
+                pass
+
+        self.after(max(50, delay_ms), _do_send_ui)
+        return True
+
     def focus_browser(self):
         """Brings Win32 keyboard and mouse focus to the embedded WebView2 window."""
         if self.hwnd and self.is_embedded:
@@ -953,8 +1137,15 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             except Exception:
                 pass
 
-    def _safe_close_popup(self, form, wv=None):
+    def _safe_close_popup(self, form, wv=None, attempts: int = 0):
         """Safely closes and disposes a popup window after downloads finish."""
+        # Closing the popup cancels downloads it still owns, so wait while any are running.
+        if getattr(self, "_active_download_count", 0) > 0 and attempts < 60:
+            try:
+                self.after(60000, lambda: self._safe_close_popup(form, wv, attempts + 1))
+                return
+            except Exception:
+                pass
         try:
             form.Close()
         except Exception:
@@ -1021,12 +1212,14 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         try:
             start_time = time.time()
             crdownload_path = file_path + ".crdownload"
-            # Watch for up to 300 seconds (5 minutes)
-            while time.time() - start_time < 300:
+            # Watch for up to 5 minutes, or up to 60 minutes while data is still arriving
+            while time.time() - start_time < 3600:
                 time.sleep(0.5)
                 # If .crdownload exists, download is still actively writing
                 if os.path.exists(crdownload_path):
                     continue
+                if time.time() - start_time > 300:
+                    break
                 # If final file exists and is non-empty, verify it's not locked
                 if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
                     try:
@@ -1039,6 +1232,9 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                         continue
         except Exception:
             pass
+        finally:
+            with _DOWNLOAD_COUNT_LOCK:
+                self._active_download_count = max(0, getattr(self, "_active_download_count", 0) - 1)
 
     def _prompt_save_file(self, initial_dir: str, suggested_name: str) -> Optional[str]:
         """Prompts the user with native SaveFileDialog. Returns chosen file path or None if cancelled."""
@@ -1114,6 +1310,8 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                     else:
                         # In production, track completion via safe Python background watcher
                         # rather than attaching native COM delegates that can crash or abort
+                        with _DOWNLOAD_COUNT_LOCK:
+                            self._active_download_count = getattr(self, "_active_download_count", 0) + 1
                         threading.Thread(
                             target=self._watch_download_completion,
                             args=(dest, final_name),

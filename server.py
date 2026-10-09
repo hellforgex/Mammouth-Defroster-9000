@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import json
 import html
 import secrets
@@ -56,7 +57,7 @@ except ImportError:
             create_base_app
         )
 
-from config import load_config
+from config import load_config, _encrypt_dpapi, _decrypt_dpapi
 
 # Import modular capabilities
 from modules.memory import memory_save, memory_recall, memory_get, memory_delete, memory_list
@@ -96,12 +97,26 @@ from modules.system_monitor import (
 from modules.screen_capture import (
     screen_capture,
     screen_list_monitors,
-    screen_grant_consent,
-    screen_revoke_consent
 )
 from modules.web_tools import (
     web_fetch_url,
     web_check_status
+)
+from modules.browser_agent import (
+    browser_navigate,
+    browser_snapshot,
+    browser_screenshot,
+    browser_click,
+    browser_fill,
+    browser_press_key,
+    browser_hover,
+    browser_scroll,
+    browser_get_content,
+    browser_evaluate,
+    browser_tabs,
+    browser_status,
+    browser_close,
+    init_browser_agent
 )
 from modules.desktop_input import (
     desktop_get_screen_info,
@@ -114,30 +129,24 @@ from modules.desktop_input import (
     keyboard_press,
     keyboard_hotkey
 )
-from modules.unreal_engine import (
-    unreal_ping,
-    unreal_get_project_info,
-    unreal_execute_python,
-    unreal_execute_console_command,
-    unreal_get_actors,
-    unreal_spawn_actor,
-    unreal_spawn_shape_actor,
-    unreal_set_actor_transform,
-    unreal_delete_actor,
-    unreal_get_selected_actors,
-    unreal_set_selected_actors,
-    unreal_focus_actor,
-    unreal_get_current_level,
-    unreal_load_level,
-    unreal_save_current_level,
-    unreal_new_level,
-    unreal_list_assets,
-    unreal_get_asset_info,
-    unreal_create_material,
-    unreal_assign_material_to_actor,
-    unreal_delete_asset,
-    unreal_spawn_light,
-    unreal_take_screenshot,
+from modules.mammouth_code import (
+    get_mammouth_code_status as mammouth_code_status,
+    launch_mammouth_terminal as mammouth_code_launch_terminal,
+    run_mammouth_task as mammouth_code_run_task,
+    install_or_update_mammouth_code as mammouth_code_install_or_update,
+    sync_opencode_mcp_config as mammouth_code_sync_mcp,
+)
+from modules.task_scheduler import (
+    scheduler_create_task,
+    scheduler_list_tasks,
+    scheduler_get_task,
+    scheduler_update_task,
+    scheduler_delete_task,
+    scheduler_pause_task,
+    scheduler_resume_task,
+    scheduler_trigger_task_now,
+    scheduler_get_presets,
+    TaskSchedulerEngine
 )
 from modules.google_drive import (
     gdrive_status,
@@ -153,12 +162,13 @@ from modules.google_drive import (
     gdrive_delete_file
 )
 
-# Initialize FastMCP Server with Mammouth Defroster 9000, Google Drive & Unreal Engine capabilities
+
+# Initialize FastMCP Server with Mammouth Defroster 9000, Mammouth Code & Google Drive capabilities
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.4.3): Sovereign Windows 11 Desktop Cockpit, Vision, Google Drive & Unreal Engine 5 Automation Platform.
-    Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, Google Drive cloud integration, and Unreal Engine automation exclusively for Mammouth.ai.
+    Mammouth Defroster 9000 (v0.5.1): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
+    Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, Google Drive cloud integration, and Mammouth Code CLI agent automation exclusively for Mammouth.ai.
     Always prioritize safety, sandboxing, and precision.
     """
 )
@@ -183,7 +193,6 @@ def require_module(mod_name: str):
     return decorator
 
 
-@mcp.tool()
 def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
     """Run a shell command on this Windows host, scoped to the configured workspace root.
 
@@ -209,7 +218,8 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
     # --- Security Gate: validate command against shell blocklist & allowlist ---
     try:
         from modules.shell_processes import _validate_shell_command
-        _validate_shell_command(raw_cmd)
+        # Execute exactly the command string that was validated
+        raw_cmd = _validate_shell_command(raw_cmd)
     except PermissionError as ex:
         return {
             "stdout": "",
@@ -226,9 +236,9 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
         }
 
     # --- Dynamic cwd whitelist: anchor relative cwd to workspace root ---
-    cfg = load_config()
-    raw_root = cfg.get("server", {}).get("workspace_root") or r"D:\Ai-Workdir"
-    workdir_root = os.path.realpath(os.path.abspath(raw_root))
+    from modules.shell_processes import resolve_workspace_root
+    workdir_root = resolve_workspace_root()
+    timeout = max(1, min(int(timeout or 600), 600))
 
     clean_cwd = str(cwd or "").strip().strip("'\"").strip()
     if clean_cwd:
@@ -265,19 +275,16 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
 
     try:
         # Execute via PowerShell directly with shell=False to pass raw_cmd 1:1 including quotes and backslashes
-        proc = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", raw_cmd],
+        from modules.shell_processes import run_process_tree, POWERSHELL_UTF8_PREFIX
+        stdout, stderr, returncode = run_process_tree(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", POWERSHELL_UTF8_PREFIX + raw_cmd],
             cwd=resolved_cwd,
-            capture_output=True,
-            text=True,
             timeout=timeout,
-            encoding="utf-8",
-            errors="replace"
         )
         return {
-            "stdout": proc.stdout or "",
-            "stderr": proc.stderr or "",
-            "exit_code": proc.returncode,
+            "stdout": stdout or "",
+            "stderr": stderr or "",
+            "exit_code": returncode,
             "error": None
         }
     except subprocess.TimeoutExpired:
@@ -294,6 +301,71 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
             "exit_code": -1,
             "error": str(ex)
         }
+
+
+def task_schedule_create(
+    name: str,
+    prompt: str,
+    interval_minutes: float = 5.0,
+    repeat_count: int = 0,
+    target: str = "mammouth_web",
+    start_immediately: bool = False
+) -> Dict[str, Any]:
+    """Schedule an automated recurring task to be triggered in the Defroster GUI.
+    
+    Args:
+        name: Short title (e.g. '⚽ Livebericht Fußballspiel: FC Bayern vs. BVB')
+        prompt: Action prompt to trigger (e.g. 'Suche nach aktuellem Spielstand, Toren und erstelle Livebericht')
+        interval_minutes: Interval in minutes between triggers (default 5.0 min, min 0.2)
+        repeat_count: Number of executions (0 = continuous/unlimited, e.g. 18 for a 90min game)
+        target: 'mammouth_web' (sends prompt to Mammouth chat), 'mammouth_code' (runs CLI agent), or 'powershell'
+        start_immediately: Whether to trigger the first run immediately (in 2s) or wait for first interval
+    """
+    interval_seconds = max(10, int(float(interval_minutes) * 60))
+    return scheduler_create_task(
+        name=name,
+        prompt=prompt,
+        interval_seconds=interval_seconds,
+        repeat_count=repeat_count,
+        target=target,
+        auto_submit=True,
+        switch_tab=True,
+        start_immediately=start_immediately
+    )
+
+
+def task_schedule_list(status: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List all scheduled automation tasks (active, paused, completed)."""
+    return scheduler_list_tasks(status=status)
+
+
+def task_schedule_control(task_id: int, action: str) -> Dict[str, Any]:
+    """Control a scheduled task.
+    
+    Args:
+        task_id: ID of the scheduled task
+        action: 'pause', 'resume', 'trigger_now', or 'stop'
+    """
+    act = str(action).lower().strip()
+    if act == "pause":
+        return scheduler_pause_task(task_id)
+    elif act == "resume":
+        return scheduler_resume_task(task_id)
+    elif act == "trigger_now":
+        return scheduler_trigger_task_now(task_id)
+    elif act == "stop":
+        return scheduler_update_task(task_id, status="stopped")
+    return {"error": f"Unknown action '{action}'. Valid: 'pause', 'resume', 'trigger_now', 'stop'"}
+
+
+def task_schedule_delete(task_id: int) -> str:
+    """Delete a scheduled task by ID."""
+    return scheduler_delete_task(task_id)
+
+
+def task_schedule_get_presets() -> List[Dict[str, Any]]:
+    """Get available pre-configured task templates (e.g. football live ticker, crypto prices, system health)."""
+    return scheduler_get_presets()
 
 
 def register_active_tools():
@@ -314,6 +386,13 @@ def register_active_tools():
         mcp.tool()(require_module("tasks_kanban")(task_list))
         mcp.tool()(require_module("tasks_kanban")(task_delete))
 
+    if mods.get("task_scheduler", {}).get("enabled", True):
+        mcp.tool()(require_module("task_scheduler")(task_schedule_create))
+        mcp.tool()(require_module("task_scheduler")(task_schedule_list))
+        mcp.tool()(require_module("task_scheduler")(task_schedule_control))
+        mcp.tool()(require_module("task_scheduler")(task_schedule_delete))
+        mcp.tool()(require_module("task_scheduler")(task_schedule_get_presets))
+
     if mods.get("file_ops", {}).get("enabled", True):
         mcp.tool()(require_module("file_ops")(file_read))
         mcp.tool()(require_module("file_ops")(file_write))
@@ -323,6 +402,7 @@ def register_active_tools():
         mcp.tool()(require_module("file_ops")(directory_tree))
 
     if mods.get("shell_processes", {}).get("enabled", False):
+        mcp.tool()(require_module("shell_processes")(local_exec_command))
         mcp.tool()(require_module("shell_processes")(command_run))
         mcp.tool()(require_module("shell_processes")(powershell_exec))
         mcp.tool()(require_module("shell_processes")(cmd_exec))
@@ -349,37 +429,19 @@ def register_active_tools():
     if mods.get("screen_capture", {}).get("enabled", True):
         mcp.tool()(require_module("screen_capture")(screen_capture))
         mcp.tool()(require_module("screen_capture")(screen_list_monitors))
-        mcp.tool()(require_module("screen_capture")(screen_grant_consent))
-        mcp.tool()(require_module("screen_capture")(screen_revoke_consent))
+        # screen_grant_consent / screen_revoke_consent are intentionally NOT exposed as MCP tools:
+        # consent must come from the human via the GUI, never from the model itself.
 
     if mods.get("web_tools", {}).get("enabled", True):
         mcp.tool()(require_module("web_tools")(web_fetch_url))
         mcp.tool()(require_module("web_tools")(web_check_status))
 
-    if mods.get("unreal_engine", {}).get("enabled", True):
-        mcp.tool()(require_module("unreal_engine")(unreal_ping))
-        mcp.tool()(require_module("unreal_engine")(unreal_get_project_info))
-        mcp.tool()(require_module("unreal_engine")(unreal_execute_python))
-        mcp.tool()(require_module("unreal_engine")(unreal_execute_console_command))
-        mcp.tool()(require_module("unreal_engine")(unreal_get_actors))
-        mcp.tool()(require_module("unreal_engine")(unreal_spawn_actor))
-        mcp.tool()(require_module("unreal_engine")(unreal_spawn_shape_actor))
-        mcp.tool()(require_module("unreal_engine")(unreal_set_actor_transform))
-        mcp.tool()(require_module("unreal_engine")(unreal_delete_actor))
-        mcp.tool()(require_module("unreal_engine")(unreal_get_selected_actors))
-        mcp.tool()(require_module("unreal_engine")(unreal_set_selected_actors))
-        mcp.tool()(require_module("unreal_engine")(unreal_focus_actor))
-        mcp.tool()(require_module("unreal_engine")(unreal_get_current_level))
-        mcp.tool()(require_module("unreal_engine")(unreal_load_level))
-        mcp.tool()(require_module("unreal_engine")(unreal_save_current_level))
-        mcp.tool()(require_module("unreal_engine")(unreal_new_level))
-        mcp.tool()(require_module("unreal_engine")(unreal_list_assets))
-        mcp.tool()(require_module("unreal_engine")(unreal_get_asset_info))
-        mcp.tool()(require_module("unreal_engine")(unreal_create_material))
-        mcp.tool()(require_module("unreal_engine")(unreal_assign_material_to_actor))
-        mcp.tool()(require_module("unreal_engine")(unreal_delete_asset))
-        mcp.tool()(require_module("unreal_engine")(unreal_spawn_light))
-        mcp.tool()(require_module("unreal_engine")(unreal_take_screenshot))
+    if mods.get("mammouth_code", {}).get("enabled", True):
+        mcp.tool()(require_module("mammouth_code")(mammouth_code_status))
+        mcp.tool()(require_module("mammouth_code")(mammouth_code_launch_terminal))
+        mcp.tool()(require_module("mammouth_code")(mammouth_code_run_task))
+        mcp.tool()(require_module("mammouth_code")(mammouth_code_install_or_update))
+        mcp.tool()(require_module("mammouth_code")(mammouth_code_sync_mcp))
 
     if mods.get("desktop_input", {}).get("enabled", True):
         mcp.tool()(require_module("desktop_input")(desktop_get_screen_info))
@@ -404,6 +466,21 @@ def register_active_tools():
         mcp.tool()(require_module("google_drive")(gdrive_update_file))
         mcp.tool()(require_module("google_drive")(gdrive_create_folder))
         mcp.tool()(require_module("google_drive")(gdrive_delete_file))
+
+    if mods.get("browser_agent", {}).get("enabled", True):
+        mcp.tool()(require_module("browser_agent")(browser_navigate))
+        mcp.tool()(require_module("browser_agent")(browser_snapshot))
+        mcp.tool()(require_module("browser_agent")(browser_screenshot))
+        mcp.tool()(require_module("browser_agent")(browser_click))
+        mcp.tool()(require_module("browser_agent")(browser_fill))
+        mcp.tool()(require_module("browser_agent")(browser_press_key))
+        mcp.tool()(require_module("browser_agent")(browser_hover))
+        mcp.tool()(require_module("browser_agent")(browser_scroll))
+        mcp.tool()(require_module("browser_agent")(browser_get_content))
+        mcp.tool()(require_module("browser_agent")(browser_evaluate))
+        mcp.tool()(require_module("browser_agent")(browser_tabs))
+        mcp.tool()(require_module("browser_agent")(browser_status))
+        mcp.tool()(require_module("browser_agent")(browser_close))
 
 
 register_active_tools()
@@ -474,6 +551,36 @@ def _record_successful_auth(client_ip: str) -> None:
     _failed_ip_attempts.pop(client_ip, None)
 
 
+_LOOPBACK_PEERS = ("127.0.0.1", "::1", "localhost")
+
+
+def _resolve_client_ip(peer_ip: str, header_map: Dict[str, str]) -> str:
+    """Determine the real client IP behind a local tunnel (cloudflared, Tailscale Funnel, ngrok).
+
+    Only a loopback peer (the local tunnel process) is trusted to supply forwarding headers.
+    CF-Connecting-IP is set by Cloudflare itself; otherwise the LAST X-Forwarded-For entry is used,
+    because that is the one appended by the tunnel — earlier entries are client-controlled and spoofable.
+    A tunnelled request without a usable header is tagged so it never inherits the loopback exemption.
+    """
+    if peer_ip not in _LOOPBACK_PEERS:
+        return peer_ip
+    cf_ip = header_map.get("cf-connecting-ip", "").strip()
+    if cf_ip:
+        return cf_ip
+    forwarded_for = header_map.get("x-forwarded-for", "").strip()
+    if forwarded_for:
+        last_hop = forwarded_for.split(",")[-1].strip()
+        return last_hop or "tunnel-unknown"
+    if header_map.get("x-forwarded-host") or header_map.get("x-forwarded-proto"):
+        return "tunnel-unknown"
+    return peer_ip
+
+
+def _request_client_ip(request: Request) -> str:
+    peer = request.client.host if request.client else "unknown"
+    return _resolve_client_ip(peer, {k.lower(): v for k, v in request.headers.items()})
+
+
 # ==========================================
 # OAUTH 2.0 & RFC 7591 AUTHENTICATION SERVER
 # ==========================================
@@ -511,7 +618,42 @@ def _consume_oauth_csrf_token(csrf_token: str) -> Optional[Dict[str, str]]:
     return entry["params"]
 
 
-OAUTH_DB_PATH = ROOT_DIR / "oauth.db"
+def _resolve_oauth_db_path() -> Path:
+    """Where OAuth clients and tokens live.
+
+    The release build keeps them in %APPDATA%\\MammouthDefroster9000 so registered MCP
+    connections survive updates (every release unpacks into its own folder). Source runs and
+    tests keep using the local file; MAMMOUTH_DEFROSTER_OAUTH_DB overrides both.
+    """
+    override = os.environ.get("MAMMOUTH_DEFROSTER_OAUTH_DB", "").strip()
+    if override:
+        return Path(override)
+    local_db = ROOT_DIR / "oauth.db"
+    appdata = os.environ.get("APPDATA", "").strip()
+    if not getattr(sys, "frozen", False) or not appdata:
+        return local_db
+    central_db = Path(appdata) / "MammouthDefroster9000" / "oauth.db"
+    try:
+        central_db.parent.mkdir(parents=True, exist_ok=True)
+        if not central_db.exists() and local_db.exists():
+            # One-time takeover of the connections registered with this install
+            shutil.copy2(local_db, central_db)
+    except Exception as exc:
+        print(f"[OAUTH] Central DB unavailable, using local oauth.db: {exc}", file=sys.stderr)
+        return local_db
+    return central_db
+
+
+OAUTH_DB_PATH = _resolve_oauth_db_path()
+
+
+def _token_hash(token: str) -> str:
+    """SHA-256 lookup key for high-entropy random tokens (no salt needed: tokens are 256-bit random)."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+OAUTH_REFRESH_TTL = 7776000  # 90 days
+OAUTH_REFRESH_EXTRA_LEGACY = 5184000  # rows from before refresh_expires_at: access expiry + 60 days
+
 
 def _init_oauth_db():
     """Initialize SQLite tables for OAuth 2.0 dynamic clients, codes, and tokens."""
@@ -546,6 +688,51 @@ def _init_oauth_db():
                     created_at REAL
                 )
             """)
+            # SHA-256 lookup columns: token validation becomes one indexed query instead of
+            # DPAPI-decrypting every stored token on every request.
+            existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(oauth_tokens)")}
+            if "access_hash" not in existing_cols:
+                conn.execute("ALTER TABLE oauth_tokens ADD COLUMN access_hash TEXT")
+            if "refresh_hash" not in existing_cols:
+                conn.execute("ALTER TABLE oauth_tokens ADD COLUMN refresh_hash TEXT")
+            # Refresh tokens outlive their access token, otherwise a client idle past 30 days
+            # can no longer refresh and has to go through the full OAuth flow again.
+            if "refresh_expires_at" not in existing_cols:
+                conn.execute("ALTER TABLE oauth_tokens ADD COLUMN refresh_expires_at REAL")
+            conn.execute(
+                "UPDATE oauth_tokens SET refresh_expires_at = expires_at + ? WHERE refresh_expires_at IS NULL",
+                (OAUTH_REFRESH_EXTRA_LEGACY,)
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_oauth_tokens_access_hash ON oauth_tokens(access_hash)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_oauth_tokens_refresh_hash ON oauth_tokens(refresh_hash)")
+            conn.commit()
+
+            # Migrate legacy rows: encrypt plaintext tokens with DPAPI and backfill lookup hashes (one-time)
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT rowid, access_token, refresh_token FROM oauth_tokens WHERE access_hash IS NULL")
+                rows = cur.fetchall()
+                for rowid, at, rt in rows:
+                    try:
+                        plain_at = _decrypt_dpapi(at) if at else ""
+                        plain_rt = _decrypt_dpapi(rt) if rt else ""
+                    except Exception:
+                        # Undecryptable row (other user/machine): it can never validate again, drop it
+                        cur.execute("DELETE FROM oauth_tokens WHERE rowid = ?", (rowid,))
+                        continue
+                    cur.execute(
+                        "UPDATE oauth_tokens SET access_token = ?, refresh_token = ?, access_hash = ?, refresh_hash = ? WHERE rowid = ?",
+                        (
+                            _encrypt_dpapi(plain_at) if plain_at else "",
+                            _encrypt_dpapi(plain_rt) if plain_rt else "",
+                            _token_hash(plain_at) if plain_at else None,
+                            _token_hash(plain_rt) if plain_rt else None,
+                            rowid,
+                        )
+                    )
+                conn.commit()
+            except Exception as mig_err:
+                print(f"[OAUTH] Token DPAPI migration notice: {mig_err}", file=sys.stderr)
     except Exception as exc:
         print(f"[OAUTH] DB Init error: {exc}", file=sys.stderr)
 
@@ -580,7 +767,10 @@ def _cleanup_expired_oauth_entries():
     try:
         with sqlite3.connect(OAUTH_DB_PATH) as conn:
             conn.execute("DELETE FROM oauth_codes WHERE expires_at < ? OR used = 1", (now,))
-            conn.execute("DELETE FROM oauth_tokens WHERE expires_at < ?", (now,))
+            conn.execute(
+                "DELETE FROM oauth_tokens WHERE expires_at < ? AND (refresh_expires_at IS NULL OR refresh_expires_at < ?)",
+                (now, now)
+            )
             conn.commit()
     except Exception:
         pass
@@ -639,28 +829,50 @@ def _get_and_consume_oauth_code(code: str) -> Optional[Dict[str, Any]]:
 
 def _save_oauth_token(access_token: str, refresh_token: str, client_id: str, expires_at: float):
     now = time.time()
+    # DPAPI encrypt both access and refresh tokens (Fail-Closed: zero plaintext fallback)
+    enc_access_token = _encrypt_dpapi(access_token)
+    enc_refresh_token = _encrypt_dpapi(refresh_token) if refresh_token else ""
     with sqlite3.connect(OAUTH_DB_PATH) as conn:
         conn.execute(
-            "INSERT INTO oauth_tokens (access_token, refresh_token, client_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
-            (access_token, refresh_token, client_id, expires_at, now)
+            "INSERT INTO oauth_tokens (access_token, refresh_token, client_id, expires_at, created_at, access_hash, refresh_hash, refresh_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (enc_access_token, enc_refresh_token, client_id, expires_at, now,
+             _token_hash(access_token), _token_hash(refresh_token) if refresh_token else None,
+             max(expires_at, now + OAUTH_REFRESH_TTL))
         )
         conn.commit()
+
+
+# Short-lived in-memory cache of validated access tokens (hash -> expires_at) so steady MCP
+# traffic does not hit SQLite on every request. Entries are re-checked against the DB after 60s.
+_valid_token_cache: Dict[str, float] = {}
+_valid_token_cache_lock = threading.Lock()
+_VALID_TOKEN_CACHE_TTL = 60.0
 
 
 def _is_valid_oauth_token(token: str) -> bool:
     if not token or not token.startswith("mcp_at_"):
         return False
     now = time.time()
+    token_key = _token_hash(token)
+    with _valid_token_cache_lock:
+        cached_until = _valid_token_cache.get(token_key)
+    if cached_until and now < cached_until:
+        return True
     try:
         with sqlite3.connect(OAUTH_DB_PATH) as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT expires_at FROM oauth_tokens WHERE access_token = ?", (token,))
-            row = cur.fetchone()
-            if row and now < row[0]:
-                return True
+            row = conn.execute(
+                "SELECT expires_at FROM oauth_tokens WHERE access_hash = ? AND expires_at > ?",
+                (token_key, now)
+            ).fetchone()
     except Exception:
-        pass
-    return False
+        return False
+    if not row:
+        return False
+    with _valid_token_cache_lock:
+        if len(_valid_token_cache) > 1000:
+            _valid_token_cache.clear()
+        _valid_token_cache[token_key] = min(row[0], now + _VALID_TOKEN_CACHE_TTL)
+    return True
 
 
 def _refresh_oauth_token(refresh_token: str) -> Optional[Dict[str, Any]]:
@@ -670,21 +882,36 @@ def _refresh_oauth_token(refresh_token: str) -> Optional[Dict[str, Any]]:
     with sqlite3.connect(OAUTH_DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
-        cur.execute("SELECT * FROM oauth_tokens WHERE refresh_token = ?", (refresh_token,))
-        row = cur.fetchone()
-        if not row:
+        cur.execute(
+            "SELECT rowid, client_id, expires_at FROM oauth_tokens WHERE refresh_hash = ? AND refresh_expires_at > ?",
+            (_token_hash(refresh_token), now)
+        )
+        matching_row = cur.fetchone()
+
+        if not matching_row:
             return None
-        client_id = row["client_id"]
+
+        client_id = matching_row["client_id"]
+        row_id = matching_row["rowid"]
         new_access_token = f"mcp_at_{secrets.token_urlsafe(32)}"
         new_refresh_token = f"mcp_rt_{secrets.token_urlsafe(32)}"  # H-3: Rotate refresh token
         new_expires_at = now + 2592000
+
+        # Encrypt newly issued tokens with DPAPI (Fail-Closed: zero plaintext fallback)
+        enc_new_access = _encrypt_dpapi(new_access_token)
+        enc_new_refresh = _encrypt_dpapi(new_refresh_token)
+
         # Insert new token pair while maintaining grace period on previous refresh token
         cur.execute(
-            "INSERT INTO oauth_tokens (access_token, refresh_token, client_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
-            (new_access_token, new_refresh_token, client_id, new_expires_at, now)
+            "INSERT INTO oauth_tokens (access_token, refresh_token, client_id, expires_at, created_at, access_hash, refresh_hash, refresh_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (enc_new_access, enc_new_refresh, client_id, new_expires_at, now,
+             _token_hash(new_access_token), _token_hash(new_refresh_token), now + OAUTH_REFRESH_TTL)
         )
         # Give old refresh token a 10-minute grace period so network retries or concurrent requests don't fail
-        cur.execute("UPDATE oauth_tokens SET expires_at = ? WHERE refresh_token = ?", (now + 600, refresh_token))
+        cur.execute(
+            "UPDATE oauth_tokens SET expires_at = MIN(expires_at, ?), refresh_expires_at = MIN(refresh_expires_at, ?) WHERE rowid = ?",
+            (now + 600, now + 600, row_id)
+        )
         conn.commit()
         # M-2: Opportunistic cleanup of expired entries
         _cleanup_expired_oauth_entries()
@@ -769,7 +996,7 @@ def _is_trusted_oauth_redirect_uri(uri: str) -> bool:
 
 async def oauth_register(request: Request):
     # Rate limiting — max 5 registrations per hour per IP
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _request_client_ip(request)
     if not _check_oauth_register_rate_limit(client_ip):
         return JSONResponse(
             {"error": "too_many_requests", "error_description": "Registration rate limit exceeded. Try again later."},
@@ -823,6 +1050,165 @@ async def oauth_register(request: Request):
     }, status_code=201)
 
 
+def _render_consent_page(request: Request, client_name: str, params: Dict[str, str], error_msg: str = "") -> HTMLResponse:
+    """Render the OAuth consent page with a fresh CSRF token bound to the authorization parameters."""
+    csrf_token = _create_oauth_csrf_token(dict(params))
+    error_html = f'<div class="error-box">{html.escape(error_msg)}</div>' if error_msg else ""
+    page = f"""<!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Mammouth Defroster 9000 — Autorisierung</title>
+        <style>
+            body {{
+                background-color: #0B0D13;
+                color: #E2E8F0;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                margin: 0;
+                padding: 20px;
+                box-sizing: border-box;
+            }}
+            .card {{
+                background: #141721;
+                border: 1px solid #232936;
+                border-radius: 16px;
+                width: 100%;
+                max-width: 460px;
+                padding: 32px;
+                box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+                text-align: center;
+            }}
+            .logo {{
+                font-size: 38px;
+                margin-bottom: 12px;
+            }}
+            h2 {{
+                font-size: 22px;
+                margin: 0 0 6px 0;
+                color: #F8FAFC;
+            }}
+            .subtitle {{
+                font-size: 14px;
+                color: #94A3B8;
+                margin-bottom: 20px;
+            }}
+            .badge {{
+                display: inline-block;
+                background: rgba(16, 185, 129, 0.15);
+                color: #10B981;
+                border: 1px solid rgba(16, 185, 129, 0.3);
+                padding: 4px 12px;
+                border-radius: 9999px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 20px;
+            }}
+            .info-box {{
+                background: #1A1F2C;
+                border: 1px solid #2D3748;
+                border-radius: 10px;
+                padding: 16px;
+                text-align: left;
+                font-size: 13px;
+                color: #CBD5E1;
+                margin-bottom: 24px;
+                line-height: 1.5;
+            }}
+            .buttons {{
+                display: flex;
+                gap: 12px;
+            }}
+            button {{
+                flex: 1;
+                padding: 12px;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                transition: all 0.2s;
+            }}
+            .btn-allow {{
+                background: #10B981;
+                color: #FFFFFF;
+            }}
+            .btn-allow:hover {{
+                background: #059669;
+            }}
+            .owner-label {{
+                display: block;
+                text-align: left;
+                font-size: 12px;
+                color: #94A3B8;
+                margin-bottom: 6px;
+            }}
+            .owner-input {{
+                width: 100%;
+                box-sizing: border-box;
+                padding: 10px 12px;
+                margin-bottom: 16px;
+                border-radius: 8px;
+                border: 1px solid #2D3748;
+                background: #0B0D13;
+                color: #E2E8F0;
+                font-size: 14px;
+            }}
+            .error-box {{
+                background: rgba(239, 68, 68, 0.12);
+                border: 1px solid rgba(239, 68, 68, 0.35);
+                color: #FCA5A5;
+                border-radius: 8px;
+                padding: 10px 12px;
+                font-size: 13px;
+                margin-bottom: 16px;
+            }}
+            .btn-deny {{
+                background: #232936;
+                color: #94A3B8;
+            }}
+            .btn-deny:hover {{
+                background: #2D3748;
+                color: #E2E8F0;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="logo">🦣 ⚡</div>
+            <h2>Mammouth Defroster 9000</h2>
+            <div class="subtitle">MCP Verbindungsanfrage</div>
+            <div class="badge">● Sicherer MCP OAuth 2.0 Flow</div>
+            <div class="info-box">
+                <strong>{html.escape(client_name)}</strong> möchte sich mit deinem lokalen Defroster 9000 verbinden.<br><br>
+                Dies gewährt Zugriff auf sandboxed MCP-Tools (Dateien, Desktop, Google Drive, Aufgaben & Automatisierung) auf diesem Host.
+            </div>
+            {error_html}
+            <form method="POST" action="{html.escape(request.url.path or '/oauth/authorize')}">
+                <input type="hidden" name="client_id" value="{html.escape(params.get("client_id", ""))}">
+                <input type="hidden" name="redirect_uri" value="{html.escape(params.get("redirect_uri", ""))}">
+                <input type="hidden" name="response_type" value="{html.escape(params.get("response_type", ""))}">
+                <input type="hidden" name="state" value="{html.escape(params.get("state", ""))}">
+                <input type="hidden" name="code_challenge" value="{html.escape(params.get("code_challenge", ""))}">
+                <input type="hidden" name="code_challenge_method" value="{html.escape(params.get("code_challenge_method", ""))}">
+                <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}">
+                <label class="owner-label" for="owner_token">API-Token des Defrosters (aus dem Cockpit kopieren)</label>
+                <input class="owner-input" type="password" id="owner_token" name="owner_token" autocomplete="off" placeholder="mc_..." autofocus>
+                <div class="buttons">
+                    <button type="submit" name="action" value="deny" class="btn-deny">Ablehnen</button>
+                    <button type="submit" name="action" value="allow" class="btn-allow">Zugriff erlauben</button>
+                </div>
+            </form>
+        </div>
+    </body>
+    </html>"""
+    return HTMLResponse(page, status_code=403 if error_msg else 200)
+
+
 async def oauth_authorize(request: Request):
     if request.method == "GET":
         params = request.query_params
@@ -851,8 +1237,7 @@ async def oauth_authorize(request: Request):
         else:
             client_name = client_info.get("client_name", "Mammouth AI")
 
-        # Generate CSRF token bound to these exact authorization parameters
-        csrf_token = _create_oauth_csrf_token({
+        return _render_consent_page(request, client_name, {
             "client_id": client_id,
             "redirect_uri": redirect_uri,
             "response_type": response_type,
@@ -861,153 +1246,19 @@ async def oauth_authorize(request: Request):
             "code_challenge_method": code_challenge_method,
         })
 
-        consent_html = f"""<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mammouth Defroster 9000 — Autorisierung</title>
-    <style>
-        body {{
-            background-color: #0B0D13;
-            color: #E2E8F0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
-        }}
-        .card {{
-            background: #141721;
-            border: 1px solid #232936;
-            border-radius: 16px;
-            width: 100%;
-            max-width: 460px;
-            padding: 32px;
-            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
-            text-align: center;
-        }}
-        .logo {{
-            font-size: 38px;
-            margin-bottom: 12px;
-        }}
-        h2 {{
-            font-size: 22px;
-            margin: 0 0 6px 0;
-            color: #F8FAFC;
-        }}
-        .subtitle {{
-            font-size: 14px;
-            color: #94A3B8;
-            margin-bottom: 20px;
-        }}
-        .badge {{
-            display: inline-block;
-            background: rgba(16, 185, 129, 0.15);
-            color: #10B981;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            padding: 4px 12px;
-            border-radius: 9999px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-bottom: 20px;
-        }}
-        .info-box {{
-            background: #1A1F2C;
-            border: 1px solid #2D3748;
-            border-radius: 10px;
-            padding: 16px;
-            text-align: left;
-            font-size: 13px;
-            color: #CBD5E1;
-            margin-bottom: 24px;
-            line-height: 1.5;
-        }}
-        .buttons {{
-            display: flex;
-            gap: 12px;
-        }}
-        button {{
-            flex: 1;
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
-        }}
-        .btn-allow {{
-            background: #10B981;
-            color: #FFFFFF;
-        }}
-        .btn-allow:hover {{
-            background: #059669;
-        }}
-        .btn-deny {{
-            background: #232936;
-            color: #94A3B8;
-        }}
-        .btn-deny:hover {{
-            background: #2D3748;
-            color: #E2E8F0;
-        }}
-    </style>
-</head>
-<body>
-    <div class="card">
-        <div class="logo">🦣 ⚡</div>
-        <h2>Mammouth Defroster 9000</h2>
-        <div class="subtitle">MCP Verbindungsanfrage</div>
-        <div class="badge">● Sicherer MCP OAuth 2.0 Flow</div>
-        <div class="info-box">
-            <strong>{html.escape(client_name)}</strong> möchte sich mit deinem lokalen Defroster 9000 verbinden.<br><br>
-            Dies gewährt Zugriff auf sandboxed MCP-Tools (Dateien, Desktop, Google Drive, Aufgaben & Automatisierung) auf diesem Host.
-        </div>
-        <form method="POST" action="{html.escape(request.url.path or '/oauth/authorize')}">
-            <input type="hidden" name="client_id" value="{html.escape(client_id)}">
-            <input type="hidden" name="redirect_uri" value="{html.escape(redirect_uri)}">
-            <input type="hidden" name="response_type" value="{html.escape(response_type)}">
-            <input type="hidden" name="state" value="{html.escape(state)}">
-            <input type="hidden" name="code_challenge" value="{html.escape(code_challenge)}">
-            <input type="hidden" name="code_challenge_method" value="{html.escape(code_challenge_method)}">
-            <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}">
-            <div class="buttons">
-                <button type="submit" name="action" value="deny" class="btn-deny">Ablehnen</button>
-                <button type="submit" name="action" value="allow" class="btn-allow">Zugriff erlauben</button>
-            </div>
-        </form>
-    </div>
-</body>
-</html>"""
-        return HTMLResponse(consent_html)
-
     elif request.method == "POST":
         form = await request.form()
         action = form.get("action", "deny")
         csrf_token = form.get("csrf_token", "")
 
         # F-01 Fix: Validate and consume CSRF token — retrieve server-side stored authorization params
+        # No fallback to form fields: without a valid CSRF token the consent is rejected.
         csrf_params = _consume_oauth_csrf_token(csrf_token)
         if not csrf_params:
-            # Fallback to form parameters if redirect_uri belongs to trusted mammouth.ai or localhost
-            form_redirect = form.get("redirect_uri", "https://mammouth.ai/api/mcp/oauth/callback")
-            if _is_trusted_oauth_redirect_uri(form_redirect):
-                csrf_params = {
-                    "client_id": form.get("client_id", ""),
-                    "redirect_uri": form_redirect,
-                    "state": form.get("state", ""),
-                    "code_challenge": form.get("code_challenge", ""),
-                    "code_challenge_method": form.get("code_challenge_method", "S256"),
-                }
-            else:
-                return JSONResponse(
-                    {"error": "invalid_request", "error_description": "Invalid or expired CSRF token. Please restart the authorization flow."},
-                    status_code=403
-                )
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Invalid or expired CSRF token. Please restart the authorization flow."},
+                status_code=403
+            )
 
         # Use server-side stored parameters (not attacker-controlled form fields)
         client_id = csrf_params.get("client_id", "")
@@ -1035,6 +1286,22 @@ async def oauth_authorize(request: Request):
         delim = "&" if "?" in redirect_uri else "?"
 
         if action == "allow":
+            # Proof of ownership: only someone who knows this Defroster's API token may grant access.
+            # Without this check anyone who learns the public tunnel URL could approve their own client.
+            client_ip = _request_client_ip(request)
+            now = time.time()
+            is_locked, remaining = _is_ip_locked_out(client_ip, now)
+            client_name = (_get_oauth_client(client_id) or {}).get("client_name", "Mammouth AI") if client_id else "Mammouth AI"
+            if is_locked:
+                return _render_consent_page(request, client_name, csrf_params,
+                                            f"Zu viele Fehlversuche. Bitte in {int(remaining) + 1}s erneut versuchen.")
+            owner_token = str(form.get("owner_token", "") or "").strip()
+            expected_token = str(load_config().get("server", {}).get("api_token", "") or "")
+            if not owner_token or not expected_token or not secrets.compare_digest(owner_token, expected_token):
+                _record_failed_auth(client_ip, now)
+                return _render_consent_page(request, client_name, csrf_params,
+                                            "Falsches oder fehlendes API-Token. Das Token findest du im Defroster-Cockpit.")
+            _record_successful_auth(client_ip)
             code = f"mc_{secrets.token_urlsafe(32)}"
             _save_oauth_code(code, client_id, redirect_uri, code_challenge, code_challenge_method, time.time() + 600)
             target = f"{redirect_uri}{delim}code={urllib.parse.quote(code)}"
@@ -1109,7 +1376,13 @@ async def oauth_token(request: Request):
         access_token = f"mcp_at_{secrets.token_urlsafe(32)}"
         refresh_token = f"mcp_rt_{secrets.token_urlsafe(32)}"
         expires_in = 2592000  # 30 days
-        _save_oauth_token(access_token, refresh_token, effective_client_id, time.time() + expires_in)
+        try:
+            _save_oauth_token(access_token, refresh_token, effective_client_id, time.time() + expires_in)
+        except Exception as ex:
+            return JSONResponse(
+                {"error": "server_error", "error_description": f"Failed to encrypt credentials securely: {ex}"},
+                status_code=500
+            )
 
         return JSONResponse({
             "access_token": access_token,
@@ -1144,7 +1417,7 @@ class SecurityAndAuthMiddleware:
         if scope["type"] == "http":
             raw_headers = list(scope.get("headers", []))
             header_map = {k.decode("latin1").lower(): v.decode("latin1") for k, v in raw_headers}
-            client_ip = scope.get("client", ("unknown", 0))[0]
+            client_ip = _resolve_client_ip((scope.get("client") or ("unknown", 0))[0], header_map)
             method = scope.get("method", "GET")
             path = scope.get("path", "/")
             clean_path = "/" + path.lstrip("/")
@@ -1200,15 +1473,6 @@ class SecurityAndAuthMiddleware:
             # Fail-closed authentication check
             if self.enforce_auth:
                 now = time.time()
-                is_locked, remaining_delay = _is_ip_locked_out(client_ip, now)
-                if is_locked:
-                    response = JSONResponse(
-                        {"error": "TooManyRequests", "message": f"Too many failed authentication attempts. Progressive cooldown active ({int(remaining_delay) + 1}s remaining)."},
-                        status_code=429
-                    )
-                    await response(scope, receive, send_with_security_headers)
-                    return
-
                 auth_header = header_map.get("authorization", "").strip()
                 provided_token = ""
                 if auth_header.lower().startswith("bearer "):
@@ -1222,6 +1486,17 @@ class SecurityAndAuthMiddleware:
                         is_valid = True
 
                 if not is_valid:
+                    # The lockout only applies to bad tokens: every tunnelled client shares one IP
+                    # bucket, so one stale MCP entry retrying an expired token must not block the
+                    # valid connections (tokens are random 256-bit values, brute force is moot anyway).
+                    is_locked, remaining_delay = _is_ip_locked_out(client_ip, now)
+                    if is_locked:
+                        response = JSONResponse(
+                            {"error": "TooManyRequests", "message": f"Too many failed authentication attempts. Progressive cooldown active ({int(remaining_delay) + 1}s remaining)."},
+                            status_code=429
+                        )
+                        await response(scope, receive, send_with_security_headers)
+                        return
                     if provided_token:
                         _record_failed_auth(client_ip, now)
                     response = JSONResponse(
@@ -1297,8 +1572,20 @@ def build_app(token: Optional[str] = None):
             json_response=True,
             stateless=True,
         )
-        async with mcp._lifespan_manager(), streamable_http_app.session_manager.run():
-            yield
+        cfg = load_config()
+        if cfg.get("modules", {}).get("browser_agent", {}).get("enabled", True):
+            try:
+                init_browser_agent(cfg.get("browser_agent", {}))
+            except Exception as e:
+                print(f"[BROWSER AGENT] Initialization notice: {e}")
+        try:
+            async with mcp._lifespan_manager(), streamable_http_app.session_manager.run():
+                yield
+        finally:
+            try:
+                browser_close()
+            except Exception:
+                pass
 
     # Stricter CORS settings: Restrict origins to Mammouth and localhost
     configured_origins = server_cfg.get("allowed_origins", [

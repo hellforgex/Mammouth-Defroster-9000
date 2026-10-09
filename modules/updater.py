@@ -166,7 +166,7 @@ if not errorlevel 1 (
 )
 
 echo Extracting update package...
-powershell -NoProfile -Command "$tmp = Join-Path $env:TEMP ('MDefUpd_' + (Get-Random)); Expand-Archive -Path '%~3' -DestinationPath $tmp -Force; Get-ChildItem -Path $tmp -Recurse | Unblock-File; $exclude = @('config.json', 'oauth.db', 'tasks.db', 'memory.db', 'hosts.json', 'credentials.json', 'data', 'workspace'); Get-ChildItem -Path $tmp | ForEach-Object { if ($_.Name -notin $exclude -or -not (Test-Path (Join-Path '%~2' $_.Name))) { Copy-Item -Path $_.FullName -Destination '%~2' -Recurse -Force } }; Remove-Item $tmp -Recurse -Force"
+powershell -NoProfile -Command "$tmp = Join-Path $env:TEMP ('MDefUpd_' + (Get-Random)); Expand-Archive -LiteralPath $env:MDEF_UPDATE_ZIP -DestinationPath $tmp -Force; Get-ChildItem -Path $tmp -Recurse | Unblock-File; $exclude = @('config.json', 'oauth.db', 'tasks.db', 'memory.db', 'hosts.json', 'credentials.json', 'data', 'workspace'); Get-ChildItem -Path $tmp | ForEach-Object { if ($_.Name -notin $exclude -or -not (Test-Path -LiteralPath (Join-Path $env:MDEF_TARGET_DIR $_.Name))) { Copy-Item -LiteralPath $_.FullName -Destination $env:MDEF_TARGET_DIR -Recurse -Force } }; Remove-Item $tmp -Recurse -Force"
 
 echo Launching updated Mammouth Defroster 9000...
 start "" "%~2\\MammouthDefroster9000.exe"
@@ -185,9 +185,16 @@ exit
         if sys.platform == "win32":
             creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
 
+        # Paths reach PowerShell via environment variables so that quotes or
+        # apostrophes in folder names cannot break out of the command string.
+        child_env = os.environ.copy()
+        child_env["MDEF_TARGET_DIR"] = str(target_dir)
+        child_env["MDEF_UPDATE_ZIP"] = str(zip_path)
+
         subprocess.Popen(
             ["cmd.exe", "/c", batch_script, str(current_pid), target_dir, zip_path],
             creationflags=creationflags,
+            env=child_env,
             close_fds=True
         )
         return True

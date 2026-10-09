@@ -1,3 +1,4 @@
+import ctypes
 import os
 import sys
 import time
@@ -352,6 +353,58 @@ def mouse_get_position() -> Dict[str, Any]:
     return {"x": 0, "y": 0}
 
 
+class _KEYBDINPUT(ctypes.Structure):
+    _fields_ = [
+        ("wVk", ctypes.c_ushort),
+        ("wScan", ctypes.c_ushort),
+        ("dwFlags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
+class _MOUSEINPUT_PAD(ctypes.Structure):
+    # Largest INPUT union member (MOUSEINPUT) — keeps sizeof(INPUT) correct on 32/64-bit
+    _fields_ = [
+        ("dx", ctypes.c_long),
+        ("dy", ctypes.c_long),
+        ("mouseData", ctypes.c_ulong),
+        ("dwFlags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
+class _INPUT_UNION(ctypes.Union):
+    _fields_ = [("ki", _KEYBDINPUT), ("mi", _MOUSEINPUT_PAD)]
+
+
+class _INPUT(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_ulong), ("u", _INPUT_UNION)]
+
+
+_INPUT_KEYBOARD = 1
+
+
+def _send_unicode_char(char: str) -> None:
+    """Type one character via SendInput/KEYEVENTF_UNICODE.
+
+    keybd_event's scan-code parameter is a BYTE, so ord(char) was truncated to 8 bit and every
+    character above U+00FF (€, „“, Cyrillic, CJK …) came out wrong. SendInput takes a 16-bit
+    wScan; characters outside the BMP (emoji) are sent as a UTF-16 surrogate pair.
+    """
+    utf16 = char.encode("utf-16-le")
+    code_units = [int.from_bytes(utf16[i:i + 2], "little") for i in range(0, len(utf16), 2)]
+    events = []
+    for unit in code_units:
+        for flags in (KEYEVENTF_UNICODE, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP):
+            inp = _INPUT(type=_INPUT_KEYBOARD)
+            inp.u.ki = _KEYBDINPUT(wVk=0, wScan=unit, dwFlags=flags, time=0, dwExtraInfo=0)
+            events.append(inp)
+    arr = (_INPUT * len(events))(*events)
+    user32.SendInput(len(events), arr, ctypes.sizeof(_INPUT))
+
+
 def keyboard_type(text: str, delay: float = 0.01) -> Dict[str, Any]:
     """Type arbitrary text into the currently active window using native Unicode events.
     
@@ -373,9 +426,7 @@ def keyboard_type(text: str, delay: float = 0.01) -> Dict[str, Any]:
                 time.sleep(0.01)
                 user32.keybd_event(VK_MAP.get("enter", 0x0D), 0, KEYEVENTF_KEYUP, 0)
             else:
-                char_code = ord(char)
-                user32.keybd_event(0, char_code, KEYEVENTF_UNICODE, 0)
-                user32.keybd_event(0, char_code, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0)
+                _send_unicode_char(char)
             if clean_delay > 0:
                 time.sleep(clean_delay)
         return {
@@ -436,9 +487,7 @@ def keyboard_press(key: str, presses: int = 1, interval: float = 0.05) -> Dict[s
     elif user32 and len(clean_key) == 1:
         # Single unicode character fallback
         for i in range(clean_presses):
-            char_code = ord(clean_key)
-            user32.keybd_event(0, char_code, KEYEVENTF_UNICODE, 0)
-            user32.keybd_event(0, char_code, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0)
+            _send_unicode_char(key.strip())
             if i < clean_presses - 1:
                 time.sleep(clean_interval)
         return {"status": "success", "key": clean_key, "presses": clean_presses}

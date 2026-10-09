@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.5.1] - 2026-10-08
+
+### 🔒 Security Fixes
+- **OAuth consent requires owner proof:** Approving a client now requires the Defroster API token from the Cockpit; failed attempts count toward the IP lockout. The CSRF fallback was removed. Client IPs behind tunnels are taken from `CF-Connecting-IP` / the last `X-Forwarded-For` entry.
+- **Shell gating:** `local_exec_command` is only available when the `shell_processes` module is enabled and runs exactly the validated command. Read-only mode rejects script blocks, subexpressions, redirection, `&`, backticks, `%` and `Out-File`/`Tee-Object`.
+- **Screen capture consent:** `screen_grant_consent` / `screen_revoke_consent` are no longer exposed as MCP tools.
+- **Browser agent:** Navigation is limited to http(s); link-local, reserved and metadata addresses are blocked.
+- **Web tools:** DNS pinning on every redirect hop and a response size cap.
+- **Mammouth Code:** The API key is passed via environment instead of the command line; the workspace `opencode.json` references `{env:MAMMOUTH_DEFROSTER_TOKEN}` instead of the token.
+- **Google Drive:** OAuth `state` validation, escaped error pages, tools no longer open a login browser on their own.
+- **Embedded browser:** Web messages are only accepted from mammouth.ai or the configured start page.
+- **SSH:** `ssh_transfer_file` respects the file sandbox; editing a host no longer wipes the stored password.
+
+### 🐛 Bug Fixes & Stability
+- Atomic `save_config` with an mtime-based read cache; the `browser_agent` config section is loaded again.
+- OAuth tokens are looked up by SHA-256 hash with an index instead of decrypting every row per request.
+- Scheduler tasks are claimed atomically (no double runs); handlers no longer block the GUI thread.
+- Timeouts kill the whole process tree; shell output is UTF-8.
+- Tunnel lifecycle no longer leaves orphaned cloudflared/ngrok/Funnel processes; thread-safe GUI logging; global hotkey deadlock fixed.
+- Google Drive status and login polling run in the background; snipping watcher uses the clipboard sequence number.
+- Unicode typing via `SendInput`; updater passes paths via environment; tray restart waits for the old server.
+- **OAuth database is now central:** Release builds store `oauth.db` in `%APPDATA%\MammouthDefroster9000`, so registered MCP connections survive updates; the install's existing `oauth.db` is taken over once.
+- Tailscale Funnel on/off commands run in order on one worker, so switching to Funnel no longer turns it off right away.
+- A valid token always passes authentication; the IP lockout only applies to missing or invalid tokens (one stale client no longer locks out all tunnelled connections).
+- Refresh tokens get their own 90-day lifetime instead of expiring with the 30-day access token.
+- The browser agent launches Edge/Chromium with its sandbox enabled (no `--no-sandbox` warning).
+
+## [0.5.0] - 2026-10-06
+
+### 🌐 Playwright Browser Automation Agent
+- **Full Agentic Browser Control (`modules/browser_agent.py`):** Integrated Microsoft Playwright running directly against native Microsoft Edge (`channel="msedge"`), offering Claude Desktop-equivalent browser navigation, click, form fill, and JavaScript evaluation tools with zero external browser downloads.
+- **Numbered Interactive Element Indexing:** Automatically extracts and numbers visible interactive elements (`[1]`, `[2]`), providing deterministic click and fill targets for LLM decision making.
+- **Multimodal Visual Inspection:** Dedicated `browser_screenshot` tool returning high-resolution captures via `FastMCPImage` for vision-capable models.
+- **Rendered Markdown Extraction:** Extracts structured Markdown from modern client-rendered single-page applications.
+- **Persistent Profile & Session Storage:** Isolated profile directory (`data/agent_browser_profile/`) preserving logins, cookies, and local storage.
+- **SSRF Shield:** Blocks private cloud metadata endpoint navigation (`169.254.169.254`).
+
+### 💻 Mammouth Code CLI Agent Bridge
+- **Official CLI Agent Integration (`modules/mammouth_code.py`):** 1-click PowerShell installer, interactive console launcher, headless runner, and dual-bridge MCP auto-synchronization for `mammouth.exe`.
+
+### ⏱️ Automated Task Scheduler & Triggers
+- **Automated Task Scheduler (`modules/task_scheduler.py`):** Recurring background prompt executions targeting Mammouth Web chat, Mammouth Code CLI, or PowerShell scripts with bundled presets and live countdown UI timers.
+
+### 🎨 Brand Theme & Cockpit Enhancements
+- **Authentic Brand Theme:** Aligned Cockpit UI with official Mammouth AI palette (Warm Charcoal, Pure Ivory, Tusk Bronze).
+- **Zen Mode:** One-click distraction-free full-viewport toggle for the embedded web app.
+- **Global Win32 Hotkey (`modules/global_hotkey.py`):** System-wide shortcut (`Ctrl+Shift+M`) to instantly summon or minimize the Cockpit.
+
+### 🔒 Security Hardening
+- **SQLite OAuth DPAPI Encryption:** Hardware-backed DPAPI encryption for tokens stored in `oauth.db` with fail-closed security and `compare_digest` validation.
+
 ## [0.4.3] - 2026-09-28
 
 ### 🐛 Bug Fixes & Stability Enhancements

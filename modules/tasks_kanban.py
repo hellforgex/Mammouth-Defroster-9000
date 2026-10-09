@@ -1,3 +1,4 @@
+import threading
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -17,22 +18,32 @@ MAX_DESC_LENGTH = 65536  # 64 KB
 VALID_STATUSES = {"todo", "in_progress", "done", "blocked"}
 VALID_PRIORITIES = {"low", "medium", "high", "urgent"}
 
+_schema_ready_paths = set()  # DB files whose schema was created in this process
+_schema_lock = threading.Lock()
+
+
 def _get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    with conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                status TEXT DEFAULT 'todo',
-                priority TEXT DEFAULT 'medium',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
+    db_key = str(DB_PATH)
+    if db_key not in _schema_ready_paths:
+        # Schema DDL + commit only once per DB file and process instead of on every call / scheduler tick
+        with _schema_lock:
+            if db_key not in _schema_ready_paths:
+                with conn:
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS tasks (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            title TEXT NOT NULL,
+                            description TEXT DEFAULT '',
+                            status TEXT DEFAULT 'todo',
+                            priority TEXT DEFAULT 'medium',
+                            created_at TEXT NOT NULL,
+                            updated_at TEXT NOT NULL
+                        )
+                    """)
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
+                _schema_ready_paths.add(db_key)
     return conn
 
 def task_create(title: str, description: str = "", priority: str = "medium") -> Dict[str, Any]:
@@ -117,17 +128,16 @@ def task_update(
     params.append(int(effective_id))
     
     conn = _get_db()
-    with conn:
-        cursor = conn.execute(f"UPDATE tasks SET {', '.join(updates)} WHERE id = ?", params)
-        if cursor.rowcount == 0:
-            conn.close()
+    try:
+        with conn:
+            cursor = conn.execute(f"UPDATE tasks SET {', '.join(updates)} WHERE id = ?", params)
+            updated = cursor.rowcount
+        if updated == 0:
             return {"error": f"Task with ID {effective_id} not found."}
-            
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM tasks WHERE id = ?", (int(effective_id),))
-    row = cursor.fetchone()
-    conn.close()
-    return dict(row)
+        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (int(effective_id),)).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
 
 def task_list(status: Optional[str] = None, priority: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
     """List persistent tasks filtered by status or priority."""

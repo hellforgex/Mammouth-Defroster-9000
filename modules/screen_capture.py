@@ -49,7 +49,12 @@ def _cleanup_old_screenshots(max_keep: int = 25, max_age_hours: int = 24):
                 except Exception:
                     pass
 
-        remaining = [f for f in WORKSPACE_DIR.glob("*.png") if f.is_file()]
+        # Newest first, so only the oldest files beyond max_keep are deleted
+        remaining = sorted(
+            [f for f in WORKSPACE_DIR.glob("*.png") if f.is_file()],
+            key=lambda x: x.stat().st_mtime,
+            reverse=True
+        )
         if len(remaining) > max_keep:
             for old_file in remaining[max_keep:]:
                 try:
@@ -158,10 +163,28 @@ def screen_capture(
         quality: Image compression quality (1-100, default 85).
         save_to_workspace: Whether to save PNG copy in ./workspace/screenshots/ (default True).
     """
+    return _screen_capture_impl(monitor, max_width, quality, save_to_workspace, local_ui=False)
+
+
+def screen_capture_local(
+    monitor: int = 1,
+    max_width: Optional[int] = 1920,
+    quality: int = 85,
+    save_to_workspace: bool = True
+) -> Any:
+    """Screenshot initiated by the human in the desktop GUI (button / hotkey).
+
+    The click itself is the consent, so the gate is skipped for this one capture WITHOUT
+    changing the global consent state that governs MCP clients. Not registered as an MCP tool.
+    """
+    return _screen_capture_impl(monitor, max_width, quality, save_to_workspace, local_ui=True)
+
+
+def _screen_capture_impl(monitor: int, max_width: Optional[int], quality: int, save_to_workspace: bool, local_ui: bool) -> Any:
     global _user_consent_granted, _consent_mode
 
-    # M-07: Consent-Gate Check
-    if _is_consent_required() and not _user_consent_granted:
+    # M-07: Consent-Gate Check (skipped only for captures the human triggered in the GUI)
+    if not local_ui and _is_consent_required() and not _user_consent_granted:
         # If an interactive UI callback is registered (e.g. desktop cockpit GUI), prompt the user directly
         if _consent_prompt_callback is not None:
             try:
@@ -180,11 +203,11 @@ def screen_capture(
         if not _user_consent_granted:
             return {
                 "status": "consent_required",
-                "message": "Desktop screen capture requires explicit user consent. Please confirm via Desktop UI or call screen_grant_consent()."
+                "message": "Desktop screen capture requires explicit user consent. Please ask the user to allow it in the Defroster desktop UI."
             }
 
     # Consume single-use consent
-    if _consent_mode == "once":
+    if not local_ui and _consent_mode == "once":
         _user_consent_granted = False
         _consent_mode = "none"
 
