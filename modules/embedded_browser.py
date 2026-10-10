@@ -121,7 +121,7 @@ def _is_download_uri(uri: str) -> bool:
     return False
 
 
-def _native_save_file_dialog(initial_dir: str, default_name: str, title: str = "Mammouth — Datei speichern", hwnd_owner: int = 0) -> Optional[str]:
+def _native_save_file_dialog(initial_dir: str, default_name: str, title: str = "Mammouth — Save File", hwnd_owner: int = 0) -> Optional[str]:
     """Prompts the user with native Windows SaveFileDialog on a dedicated STA thread.
     Uses WinForms SaveFileDialog which is modern, thread-safe, STA-compatible and non-blocking."""
     try:
@@ -139,7 +139,7 @@ def _native_save_file_dialog(initial_dir: str, default_name: str, title: str = "
                 dialog.Title = title
                 dialog.FileName = default_name
                 dialog.InitialDirectory = initial_dir
-                dialog.Filter = "Alle Dateien (*.*)|*.*"
+                dialog.Filter = "All Files (*.*)|*.*"
                 dialog.RestoreDirectory = True
                 dialog.OverwritePrompt = True
                 res = dialog.ShowDialog()
@@ -226,7 +226,7 @@ def parse_mammouth_quota_data(payload: Optional[Any]) -> Dict[str, Any]:
         return {
             "is_logged_in": False,
             "plan_id": "unknown",
-            "plan_label": "Nicht eingeloggt",
+            "plan_label": "Not logged in",
             "total_percent": 0.0,
             "current_spend_cents": 0.0,
             "max_spend_cents": float(BASE_THRESHOLD_CENTS),
@@ -247,7 +247,7 @@ def parse_mammouth_quota_data(payload: Optional[Any]) -> Dict[str, Any]:
         return {
             "is_logged_in": False,
             "plan_id": "unknown",
-            "plan_label": "Nicht eingeloggt",
+            "plan_label": "Not logged in",
             "total_percent": 0.0,
             "current_spend_cents": 0.0,
             "max_spend_cents": float(BASE_THRESHOLD_CENTS),
@@ -474,7 +474,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
         self.btn_ext_browser = ctk.CTkButton(
             btn_action_box,
-            text="🌐 In Browser öffnen",
+            text="🌐 Open in Browser",
             width=135,
             height=24,
             corner_radius=4,
@@ -550,15 +550,15 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         ctk.CTkLabel(box, text="🌐", font=ctk.CTkFont(size=48)).pack(pady=(0, 10))
         ctk.CTkLabel(
             box,
-            text="Edge WebView2 Laufzeitumgebung nicht verfügbar",
+            text="Edge WebView2 Runtime Environment Not Available",
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color=BROWSER_TEXT
         ).pack(pady=(0, 4))
 
-        err_msg = _INIT_ERROR or "Microsoft Edge WebView2 Runtime konnte auf diesem System nicht geladen werden."
+        err_msg = _INIT_ERROR or "Microsoft Edge WebView2 Runtime could not be loaded on this system."
         ctk.CTkLabel(
             box,
-            text=f"{err_msg}\n\nDu kannst Mammouth.ai weiterhin problemlos im externen Browser nutzen:",
+            text=f"{err_msg}\n\nYou can still easily use Mammouth.ai in your external browser:",
             font=ctk.CTkFont(size=12),
             text_color=BROWSER_TEXT_MUTED,
             wraplength=480
@@ -566,7 +566,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
         ctk.CTkButton(
             box,
-            text="🚀 Mammouth.ai im Browser öffnen",
+            text="🚀 Open Mammouth.ai in Browser",
             font=ctk.CTkFont(size=13, weight="bold"),
             fg_color=BROWSER_ACCENT,
             hover_color=BROWSER_ACCENT_HOVER,
@@ -588,7 +588,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             window = Window("Mammouth", "Mammouth.ai", self.start_url)
             window.real_url = self.start_url
             window.localization = {
-                'windows.fileFilter.allFiles': 'Alle Dateien'
+                'windows.fileFilter.allFiles': 'All Files'
             }
             self.edge = EdgeChrome(control, window, self.profile_dir)
             # Pywebview's on_download_starting is replaced with a no-op to prevent duplicate/crashed dialogs
@@ -974,7 +974,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 pass
 
         if hasattr(self, "btn_screenshot"):
-            self.btn_screenshot.configure(text="✓ Im Clipboard! (Ctrl+V)", fg_color="#10B981")
+            self.btn_screenshot.configure(text="✓ In Clipboard! (Ctrl+V)", fg_color="#10B981")
             self.after(2500, lambda: self.btn_screenshot.configure(text="📸 Screenshot (Ctrl+V)", fg_color=BROWSER_ACCENT))
 
     def focus_and_paste(self, delay_ms: int = 250):
@@ -1226,7 +1226,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                         with open(file_path, "rb"):
                             pass
                         # File completed and closed!
-                        self._show_download_notification(f"✓ Gespeichert: {display_name}", success=True)
+                        self._show_download_notification(f"✓ Saved: {display_name}", success=True)
                         return
                     except (PermissionError, OSError):
                         continue
@@ -1241,7 +1241,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         return _native_save_file_dialog(
             initial_dir=initial_dir,
             default_name=suggested_name,
-            title="Mammouth — Datei speichern",
+            title="Mammouth — Save File",
             hwnd_owner=0
         )
 
@@ -1297,7 +1297,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
                 final_name = os.path.basename(dest)
                 if hasattr(self, "_show_download_notification"):
-                    self._show_download_notification(f"⬇ Lade herunter: {final_name}...", success=True)
+                    self._show_download_notification(f"⬇ Downloading: {final_name}...", success=True)
 
                 download_op = getattr(args, "DownloadOperation", None)
                 if download_op:

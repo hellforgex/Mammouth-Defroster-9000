@@ -2,7 +2,24 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.5.1**
+> **Current Version:** **v0.5.2**
+
+---
+
+## 🚀 What's New in v0.5.2
+
+### 🌐 Complete English Localization
+* **Pure English Cockpit UI:** Converted all interface texts, sidebar menu titles, status badges, metric counters, settings tabs, console outputs, and dialog alerts into clean, professional English.
+* **Refined Task Scheduler Presets:** All default automated task triggers (Live Sports Tickers, Crypto & Market Watch, System & Hardware Diagnostics, Mammouth Code Security Scan, News Flash) now feature English titles, descriptions, and prompt instructions.
+* **Unified Native Dialogs:** Native Windows save dialogs, download notifications, and browser fallback notices in the embedded WebView2 browser have been updated to English.
+* **FastMCP Server & OAuth Authorization:** All server-side tool docstrings and the browser-based OAuth 2.0 authorization template now render in pure English.
+
+### 📦 Release Verification & Checksums
+* **Archive:** `MammouthDefroster9000-v0.5.2-windows-x64.zip`
+* **SHA-256 Checksum:**
+  ```text
+  ed006576c16194e41394c7ccdd5e83b8e27df667ef70dcd264d02fa224e191e8
+  ```
 
 ---
 

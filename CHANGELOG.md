@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2] - 2026-10-10
+
+### 🌐 Complete English Localization
+- **Cockpit UI & Navigation:** Fully translated all GUI elements, sidebar navigation, metric tiles, scheduler modals, settings, tray menu, console, Mammouth Code CLI tab, and global exception handlers to English.
+- **Embedded Browser & Download Dialogs:** Converted native Windows save file picker, download notifications, toolbar actions, and WebView2 fallback messages to English.
+- **Task Scheduler Presets:** Converted all bundled preset task templates (`football_live`, `crypto_ticker`, `system_health`, `mammouth_code_scan`, `news_flash`) to English names, descriptions, and prompt payloads while retaining exact internal trigger keys.
+- **OAuth Consent Flow & Docstrings:** Updated the browser-based OAuth authorization interface and all FastMCP server tool docstrings to English.
+
 ## [0.5.1] - 2026-10-08
 
 ### 🔒 Security Fixes

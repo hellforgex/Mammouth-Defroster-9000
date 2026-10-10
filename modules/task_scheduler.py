@@ -31,48 +31,48 @@ VALID_TARGETS = {"mammouth_web", "mammouth_code", "powershell", "notification"}
 PRESET_TEMPLATES = [
     {
         "id": "football_live",
-        "name": "⚽ Livebericht: Fußballspiel",
-        "prompt": "Gib mir einen ausführlichen Livebericht zum aktuellen Fußballspiel: Suche im Web nach aktuellem Spielstand, Toren, Karten, Auswechslungen und dem Spielgeschehen der letzten 5 Minuten.",
+        "name": "⚽ Live Match Report: Football",
+        "prompt": "Provide a detailed live report on the current football match: search the web for the latest score, goals, cards, substitutions, and match events over the last 5 minutes.",
         "interval_seconds": 300,  # 5 min
         "repeat_count": 20,       # 20 runs = ~100 min
         "target": "mammouth_web",
-        "description": "Erstellt alle 5 Minuten einen Live-Ticker zum aktuellen Fußballspiel mit Toren & Highlights."
+        "description": "Generates a live ticker for the ongoing match with goals & highlights every 5 minutes."
     },
     {
         "id": "crypto_ticker",
-        "name": "📈 Krypto & Finanz-Ticker",
-        "prompt": "Prüfe die aktuellen Kurse von Bitcoin (BTC), Ethereum (ETH) und Solana (SOL) sowie den DAX/S&P 500. Fasse die wichtigsten Kurssprünge der letzten 15 Minuten kompakt zusammen.",
+        "name": "📈 Crypto & Finance Ticker",
+        "prompt": "Check the current prices of Bitcoin (BTC), Ethereum (ETH), and Solana (SOL) as well as the S&P 500 / NASDAQ. Summarize the key market movements from the last 15 minutes concisely.",
         "interval_seconds": 900,  # 15 min
         "repeat_count": 0,        # continuous
         "target": "mammouth_web",
-        "description": "Aktuelle Markt- & Kryptokurse alle 15 Minuten im Chat zusammenfassen."
+        "description": "Summarize current market and cryptocurrency prices in chat every 15 minutes."
     },
     {
         "id": "system_health",
-        "name": "🖥️ System- & Hardware-Check",
-        "prompt": "Nutze system_get_specs und system_get_processes um die aktuelle CPU-, RAM- und Prozessauslastung zu prüfen und melde Auffälligkeiten.",
+        "name": "🖥️ System & Hardware Health Check",
+        "prompt": "Use system_get_specs and system_get_processes to inspect current CPU, RAM, and process utilization, and report any anomalies.",
         "interval_seconds": 600,  # 10 min
         "repeat_count": 0,
         "target": "mammouth_web",
-        "description": "Regelmäßige Systemdiagnose und Erkennung von Lastspitzen alle 10 Minuten."
+        "description": "Periodic system diagnostics and load spike detection every 10 minutes."
     },
     {
         "id": "mammouth_code_scan",
         "name": "💻 Mammouth Code Workspace Review",
-        "prompt": "Untersuche das aktuelle Projekt auf Fehler, unvollständige Funktionen und erstelle eine To-Do-Liste für anstehende Verbesserungen.",
+        "prompt": "Examine the current project for bugs and incomplete features, and compile a to-do list of upcoming improvements.",
         "interval_seconds": 1800, # 30 min
         "repeat_count": 4,
         "target": "mammouth_code",
-        "description": "Headless Coding Agent führt alle 30 Minuten eine Code-Review durch."
+        "description": "Headless Coding Agent executes an automated code review every 30 minutes."
     },
     {
         "id": "news_flash",
-        "name": "📰 Eilmeldungen & News-Flash",
-        "prompt": "Suche nach den wichtigsten Eilmeldungen und Schlagzeilen der letzten Stunde in Politik, Tech und Wirtschaft und fasse die Top 3 zusammen.",
+        "name": "📰 Breaking News & Headlines",
+        "prompt": "Search for the top breaking news and headlines from the past hour across world, tech, and business, and summarize the top 3.",
         "interval_seconds": 3600, # 60 min
         "repeat_count": 0,
         "target": "mammouth_web",
-        "description": "Stündliche Zusammenfassung aktueller Schlagzeilen und Top-Nachrichten."
+        "description": "Hourly summary of top headlines and breaking news."
     }
 ]
 

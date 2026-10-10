@@ -252,7 +252,7 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.5.1"
+APP_VERSION = "v0.5.2"
 
 
 
@@ -474,7 +474,7 @@ class HostDialog(ctk.CTkToplevel):
         self.entry_pw.grid(row=4, column=1, padx=15, pady=8, sticky="ew")
         if alias and host_data and host_data.get("password"):
             # Empty field on edit = keep the stored (DPAPI encrypted) password
-            self.entry_pw.configure(placeholder_text="(leer lassen = gespeichertes Passwort behalten)")
+            self.entry_pw.configure(placeholder_text="(leave empty to keep saved password)")
 
         # Key Path
         ctk.CTkLabel(form_frame, text="Private Key:", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).grid(row=5, column=0, padx=15, pady=8, sticky="w")
@@ -706,7 +706,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
 
         self.lbl_title = ctk.CTkLabel(
             self.hdr_box,
-            text="🦣 Kontingent",
+            text="🦣 Quota",
             font=ctk.CTkFont(size=11, weight="bold"),
             text_color=THEME_TEXT_PRIMARY
         )
@@ -739,7 +739,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
 
         self.lbl_plan = ctk.CTkLabel(
             self.badge_plan,
-            text="Wird geladen...",
+            text="Loading...",
             font=ctk.CTkFont(size=10, weight="bold"),
             text_color=THEME_TEXT_PRIMARY
         )
@@ -770,7 +770,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
         # 5. Footer info
         self.lbl_footer = ctk.CTkLabel(
             self.inner,
-            text="⏳ 3h-Sitzungsfenster",
+            text="⏳ 3h session window",
             font=ctk.CTkFont(size=9),
             text_color=THEME_TEXT_MUTED
         )
@@ -811,7 +811,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
         self._last_refresh_timestamp = time.time()
 
         is_logged_in = parsed.get("is_logged_in", False)
-        plan_label = parsed.get("plan_label", "Nicht eingeloggt")
+        plan_label = parsed.get("plan_label", "Not logged in")
         pct = float(parsed.get("total_percent", 0.0))
 
         self.lbl_plan.configure(text=plan_label)
@@ -819,7 +819,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
         if not is_logged_in:
             self.lbl_percent.configure(text="-- %", text_color=THEME_TEXT_MUTED)
             self.badge_plan.configure(fg_color=THEME_BTN_SEC_BG)
-            self.lbl_footer.configure(text="🔒 Zum Anmelden klicken")
+            self.lbl_footer.configure(text="🔒 Click to log in")
         else:
             self.lbl_percent.configure(text=f"{int(round(pct))} %")
             if pct < 70.0:
@@ -830,7 +830,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
                 self.lbl_percent.configure(text_color=("#DC2626", "#EF4444"))
 
             self.badge_plan.configure(fg_color=THEME_BTN_SEC_HOVER)
-            self.lbl_footer.configure(text="⏳ 3h-Fenster • Gerade eben")
+            self.lbl_footer.configure(text="⏳ 3h window • Just now")
 
         # Update Legend
         for w in self.legend_frame.winfo_children():
@@ -839,7 +839,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
         if not is_logged_in:
             lbl_hint = ctk.CTkLabel(
                 self.legend_frame,
-                text="In Mammouth.ai einloggen",
+                text="Log in to Mammouth.ai",
                 font=ctk.CTkFont(size=10),
                 text_color=THEME_TEXT_MUTED
             )
@@ -872,7 +872,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
             else:
                 ctk.CTkLabel(
                     self.legend_frame,
-                    text="Noch keine Aktivität",
+                    text="No activity yet",
                     font=ctk.CTkFont(size=10),
                     text_color=THEME_TEXT_MUTED
                 ).pack(anchor="w")
@@ -1154,7 +1154,7 @@ class MammouthControlCenter(ctk.CTk):
         # Update Available Badge Button (Initially hidden)
         self.btn_update_badge = ctk.CTkButton(
             right_box,
-            text="🔄 Update verfügbar",
+            text="🔄 Update Available",
             width=140,
             height=32,
             fg_color=("#3B82F6", "#2563EB"),
@@ -1284,8 +1284,8 @@ class MammouthControlCenter(ctk.CTk):
         self.tab_dashboard = self.tabview.add("📊 Dashboard & Live Console")
         self.tab_mammouth_code = self.tabview.add("💻 Mammouth Code CLI")
         self.tab_skills = self.tabview.add("⚡ Modular Capabilities (12 Modules)")
-        self.tab_prompts = self.tabview.add("📖 Prompt-Katalog")
-        self.tab_tasks = self.tabview.add("⏱️ Tasks & Automatisierung")
+        self.tab_prompts = self.tabview.add("📖 Prompt Catalog")
+        self.tab_tasks = self.tabview.add("⏱️ Tasks & Automation")
         self.tab_hosts = self.tabview.add("🔑 SSH Fleet & PuTTY Manager")
         self.tab_settings = self.tabview.add("⚙️ Security & Settings")
         self.tab_mammouth = self.tabview.add("💬 Mammouth AI Web")
@@ -1334,11 +1334,11 @@ class MammouthControlCenter(ctk.CTk):
         nav_items = [
             ("📊 Dashboard & Live Console", "⚡ Dashboard & Status"),
             ("💻 Mammouth Code CLI", "💻 Mammouth Code"),
-            ("⚡ Modular Capabilities (12 Modules)", "🛠️ Werkzeuge (12)"),
-            ("📖 Prompt-Katalog", "📖 Prompt-Katalog"),
-            ("⏱️ Tasks & Automatisierung", "⏱️ Geplante Tasks"),
+            ("⚡ Modular Capabilities (12 Modules)", "🛠️ Tools (12)"),
+            ("📖 Prompt Catalog", "📖 Prompt Catalog"),
+            ("⏱️ Tasks & Automation", "⏱️ Scheduled Tasks"),
             ("🔑 SSH Fleet & PuTTY Manager", "🔑 SSH & PuTTY Fleet"),
-            ("⚙️ Security & Settings", "⚙️ Einstellungen"),
+            ("⚙️ Security & Settings", "⚙️ Settings"),
             ("💬 Mammouth AI Web", "💬 Mammouth WebApp"),
         ]
 
@@ -1377,7 +1377,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self.lbl_nav_tools = ctk.CTkLabel(
             inner_card,
-            text=f"⚡ {self._count_active_tools()} Werkzeuge aktiv",
+            text=f"⚡ {self._count_active_tools()} Tools active",
             font=ctk.CTkFont(size=11, weight="bold"),
             text_color=THEME_SUCCESS
         )
@@ -1407,7 +1407,7 @@ class MammouthControlCenter(ctk.CTk):
 
         btn_quick_ws = ctk.CTkButton(
             bottom_box,
-            text="📂 Workspace Ordner",
+            text="📂 Workspace Folder",
             anchor="center",
             height=32,
             corner_radius=6,
@@ -1610,7 +1610,7 @@ class MammouthControlCenter(ctk.CTk):
         """Interactively launches Windows Snipping Tool (ms-screenclip:), intercepts clipboard capture,
         switches to Mammouth WebApp, and automatically pastes the image into the chat field."""
         if hasattr(self, "btn_header_screen"):
-            self.btn_header_screen.configure(text="✂️ Bereich wählen...", fg_color="#0284C7")
+            self.btn_header_screen.configure(text="✂️ Select area...", fg_color="#0284C7")
 
         from modules.screen_capture import launch_windows_snipping_tool, copy_image_to_clipboard, WORKSPACE_DIR, _cleanup_old_screenshots
         from PIL import ImageGrab, Image as PILImage
@@ -1620,7 +1620,7 @@ class MammouthControlCenter(ctk.CTk):
             # Fallback for non-Windows platforms
             saved = self._take_and_copy_screenshot()
             if saved and hasattr(self, "btn_header_screen"):
-                self.btn_header_screen.configure(text="✓ Im Clipboard!", fg_color="#10B981")
+                self.btn_header_screen.configure(text="✓ In Clipboard!", fg_color="#10B981")
                 self.after(2500, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG))
             return
 
@@ -1635,7 +1635,7 @@ class MammouthControlCenter(ctk.CTk):
             # Fallback to standard fullscreen capture
             saved = self._take_and_copy_screenshot()
             if saved and hasattr(self, "btn_header_screen"):
-                self.btn_header_screen.configure(text="✓ Im Clipboard!", fg_color="#10B981")
+                self.btn_header_screen.configure(text="✓ In Clipboard!", fg_color="#10B981")
                 self.after(2500, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG))
             return
 
@@ -1684,7 +1684,7 @@ class MammouthControlCenter(ctk.CTk):
     def _on_snip_completed(self, saved_path: str):
         self._log(f"[VISION] Snip captured: {saved_path} (Ready in clipboard and focusing chat)")
         if hasattr(self, "btn_header_screen"):
-            self.btn_header_screen.configure(text="✓ Im Clipboard & Chat!", fg_color="#10B981")
+            self.btn_header_screen.configure(text="✓ In Clipboard & Chat!", fg_color="#10B981")
             self.after(3000, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG))
 
         # 1. Bring Defroster to foreground
@@ -1719,7 +1719,7 @@ class MammouthControlCenter(ctk.CTk):
     def _on_tab_changed(self):
         current = self.tabview.get()
         self._update_nav_highlight(current)
-        if current == "⏱️ Tasks & Automatisierung" and hasattr(self, "_refresh_task_cards"):
+        if current == "⏱️ Tasks & Automation" and hasattr(self, "_refresh_task_cards"):
             self._refresh_task_cards()
         if hasattr(self, "mammouth_browser"):
             if current == "💬 Mammouth AI Web":
@@ -1735,24 +1735,24 @@ class MammouthControlCenter(ctk.CTk):
                 if update_info:
                     self.after(0, self._on_update_found, update_info)
                 elif manual:
-                    self.after(0, lambda: messagebox.showinfo("Up to Date", f"Mammouth Defroster 9000 ist auf dem neuesten Stand ({APP_VERSION})!", parent=self))
+                    self.after(0, lambda: messagebox.showinfo("Up to Date", f"Mammouth Defroster 9000 is up to date ({APP_VERSION})!", parent=self))
             except Exception as e:
                 if manual:
                     # Bind e now: Python deletes the except variable when the block ends
-                    self.after(0, lambda err=e: messagebox.showwarning("Update Check", f"Update-Prüfung fehlgeschlagen: {err}", parent=self))
+                    self.after(0, lambda err=e: messagebox.showwarning("Update Check", f"Update check failed: {err}", parent=self))
 
         t = threading.Thread(target=worker, daemon=True)
         t.start()
 
     def _on_update_found(self, update_info: Dict[str, Any]):
         self.available_update = update_info
-        ver = update_info.get("version", "vNeu")
+        ver = update_info.get("version", "vNew")
         self.btn_update_badge.configure(text=f"🔄 Update: {ver}")
         self.btn_update_badge.pack(side="left", padx=(0, 8))
-        self._log(f"[UPDATER] Eine neuere Version ist verfügbar: {ver} (Aktuell: {APP_VERSION})")
+        self._log(f"[UPDATER] A newer version is available: {ver} (Current: {APP_VERSION})")
         if hasattr(self, "update_banner") and hasattr(self, "lbl_update_banner_text") and hasattr(self, "endpoint_card"):
             self.lbl_update_banner_text.configure(
-                text=f"🎉 Neues Update verfügbar: {ver} (Installiert: {APP_VERSION}) — Schneller & stabiler mit Mammouth.ai!"
+                text=f"🎉 New update available: {ver} (Installed: {APP_VERSION}) — Faster & more stable with Mammouth.ai!"
             )
             self.update_banner.pack(fill="x", padx=10, pady=(10, 0), before=self.endpoint_card)
 
@@ -1764,19 +1764,19 @@ class MammouthControlCenter(ctk.CTk):
         upd = self.available_update
         ver = upd.get("version", "")
         name = upd.get("name", ver)
-        notes = upd.get("body", "Keine Release Notes verfügbar.")
+        notes = upd.get("body", "No release notes available.")
         size_mb = round(upd.get("zip_size", 0) / (1024 * 1024), 1)
 
         dlg = ctk.CTkToplevel(self)
-        dlg.title("Update verfügbar")
+        dlg.title("Update Available")
         dlg.geometry("520x480")
         dlg.resizable(False, False)
         dlg.configure(fg_color=THEME_BG)
         dlg.transient(self)
         dlg.grab_set()
 
-        ctk.CTkLabel(dlg, text="🎉 Neues Update verfügbar!", font=ctk.CTkFont(size=18, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(pady=(20, 4))
-        ctk.CTkLabel(dlg, text=f"Version {ver} (ca. {size_mb} MB) • Aktuell installiert: {APP_VERSION}", font=ctk.CTkFont(size=12), text_color=("#64748B", "#94A3B8")).pack(pady=(0, 10))
+        ctk.CTkLabel(dlg, text="🎉 New Update Available!", font=ctk.CTkFont(size=18, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(pady=(20, 4))
+        ctk.CTkLabel(dlg, text=f"Version {ver} (approx. {size_mb} MB) • Currently installed: {APP_VERSION}", font=ctk.CTkFont(size=12), text_color=("#64748B", "#94A3B8")).pack(pady=(0, 10))
 
         tb = ctk.CTkTextbox(dlg, width=470, height=200, corner_radius=8, font=ctk.CTkFont(size=11), fg_color=THEME_INPUT_BG, border_width=1, border_color=THEME_CARD_BORDER, text_color=THEME_TEXT_PRIMARY)
         tb.pack(padx=20, pady=5)
@@ -1802,10 +1802,10 @@ class MammouthControlCenter(ctk.CTk):
 
                 success, result = download_and_verify_update(upd, progress_cb=prog_cb)
                 if not success:
-                    self.after(0, lambda: messagebox.showerror("Update Fehler", f"Download oder Verifikation fehlgeschlagen:\n\n{result}", parent=dlg))
+                    self.after(0, lambda: messagebox.showerror("Update Error", f"Download or verification failed:\n\n{result}", parent=dlg))
                     self.after(0, lambda: btn_install.configure(state="normal"))
                 else:
-                    self.after(0, lambda: lbl_progress.configure(text="Installiere Update & starte neu..."))
+                    self.after(0, lambda: lbl_progress.configure(text="Installing update & restarting..."))
                     target_dir = str(BASE_DIR)
                     pid = os.getpid()
                     applied = apply_update_and_restart(result, target_dir, pid)
@@ -1813,13 +1813,13 @@ class MammouthControlCenter(ctk.CTk):
                         # The updater script is already waiting for this PID: close without a cancel option
                         self.after(500, lambda: self._on_close(force=True))
                     else:
-                        self.after(0, lambda: messagebox.showerror("Update Fehler", "Konnte Updater-Skript nicht starten.", parent=dlg))
+                        self.after(0, lambda: messagebox.showerror("Update Error", "Could not start updater script.", parent=dlg))
 
             threading.Thread(target=dl_worker, daemon=True).start()
 
         btn_cancel = ctk.CTkButton(
             btn_box,
-            text="Später",
+            text="Later",
             width=100,
             fg_color=THEME_BTN_SEC_BG,
             hover_color=THEME_BTN_SEC_HOVER,
@@ -1832,7 +1832,7 @@ class MammouthControlCenter(ctk.CTk):
 
         btn_install = ctk.CTkButton(
             btn_box,
-            text="⬇️ Jetzt herunterladen & installieren",
+            text="⬇️ Download & Install Now",
             font=ctk.CTkFont(weight="bold"),
             fg_color=("#059669", "#10B981"),
             hover_color=("#047857", "#059669"),
@@ -1884,7 +1884,7 @@ class MammouthControlCenter(ctk.CTk):
 
         btn_banner_action = ctk.CTkButton(
             self.update_banner,
-            text="⬇️ Jetzt aktualisieren",
+            text="⬇️ Update Now",
             width=150,
             height=28,
             fg_color=("#059669", "#10B981"),
@@ -2108,14 +2108,14 @@ class MammouthControlCenter(ctk.CTk):
         # Tile 1: Tools
         tile1 = ctk.CTkFrame(metrics_frame, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
         tile1.pack(side="left", fill="both", expand=True, padx=(0, 8))
-        ctk.CTkLabel(tile1, text="WERKZEUGE", font=ctk.CTkFont(size=10, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=14, pady=(10, 2))
-        self.lbl_stat_tools = ctk.CTkLabel(tile1, text=f"⚡ {self._count_active_tools()} Tools aktiv", font=ctk.CTkFont(size=14, weight="bold"), text_color=("#059669", "#10B981"))
+        ctk.CTkLabel(tile1, text="TOOLS", font=ctk.CTkFont(size=10, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=14, pady=(10, 2))
+        self.lbl_stat_tools = ctk.CTkLabel(tile1, text=f"⚡ {self._count_active_tools()} Tools active", font=ctk.CTkFont(size=14, weight="bold"), text_color=("#059669", "#10B981"))
         self.lbl_stat_tools.pack(anchor="w", padx=14, pady=(0, 10))
 
         # Tile 2: CPU
         tile2 = ctk.CTkFrame(metrics_frame, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
         tile2.pack(side="left", fill="both", expand=True, padx=(0, 8))
-        ctk.CTkLabel(tile2, text="CPU AUSLASTUNG", font=ctk.CTkFont(size=10, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=14, pady=(10, 2))
+        ctk.CTkLabel(tile2, text="CPU USAGE", font=ctk.CTkFont(size=10, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=14, pady=(10, 2))
         self.lbl_stat_cpu = ctk.CTkLabel(tile2, text="💻 CPU: 0.0%", font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY)
         self.lbl_stat_cpu.pack(anchor="w", padx=14)
         self.bar_cpu = ctk.CTkProgressBar(tile2, height=5, progress_color="#10B981", fg_color=("#E2E8F0", "#1E293B"))
@@ -2125,7 +2125,7 @@ class MammouthControlCenter(ctk.CTk):
         # Tile 3: RAM
         tile3 = ctk.CTkFrame(metrics_frame, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
         tile3.pack(side="left", fill="both", expand=True, padx=(0, 8))
-        ctk.CTkLabel(tile3, text="SPEICHER (RAM)", font=ctk.CTkFont(size=10, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=14, pady=(10, 2))
+        ctk.CTkLabel(tile3, text="MEMORY (RAM)", font=ctk.CTkFont(size=10, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=14, pady=(10, 2))
         self.lbl_stat_ram = ctk.CTkLabel(tile3, text="🧠 RAM: 0.0%", font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY)
         self.lbl_stat_ram.pack(anchor="w", padx=14)
         self.bar_ram = ctk.CTkProgressBar(tile3, height=5, progress_color="#38BDF8", fg_color=("#E2E8F0", "#1E293B"))
@@ -2135,7 +2135,7 @@ class MammouthControlCenter(ctk.CTk):
         # Tile 4: Uptime
         tile4 = ctk.CTkFrame(metrics_frame, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
         tile4.pack(side="left", fill="both", expand=True)
-        ctk.CTkLabel(tile4, text="SERVER LAUFZEIT", font=ctk.CTkFont(size=10, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=14, pady=(10, 2))
+        ctk.CTkLabel(tile4, text="SERVER UPTIME", font=ctk.CTkFont(size=10, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=14, pady=(10, 2))
         self.lbl_stat_uptime = ctk.CTkLabel(tile4, text="⏱️ Uptime: 00:00:00", font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY)
         self.lbl_stat_uptime.pack(anchor="w", padx=14, pady=(0, 10))
 
@@ -2175,7 +2175,7 @@ class MammouthControlCenter(ctk.CTk):
 
         btn_tasks = ctk.CTkButton(
             actions_bar,
-            text="⏱️ Geplante Tasks",
+            text="⏱️ Scheduled Tasks",
             width=140,
             height=30,
             fg_color=THEME_BTN_SEC_BG,
@@ -2184,7 +2184,7 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(weight="bold"),
             border_width=1,
             border_color=THEME_BTN_SEC_BORDER,
-            command=lambda: self._select_nav_tab("⏱️ Tasks & Automatisierung")
+            command=lambda: self._select_nav_tab("⏱️ Tasks & Automation")
         )
         btn_tasks.pack(side="left", padx=(0, 8))
 
@@ -2253,13 +2253,13 @@ class MammouthControlCenter(ctk.CTk):
         title_box.pack(side="left")
         ctk.CTkLabel(
             title_box,
-            text="📖 Mammouth.ai Prompt-Katalog",
+            text="📖 Mammouth.ai Prompt Catalog",
             font=ctk.CTkFont(size=17, weight="bold"),
             text_color=THEME_TEXT_PRIMARY
         ).pack(anchor="w")
         ctk.CTkLabel(
             title_box,
-            text="Optimierte Vorlagen für Mammouth.ai. Mit 1 Klick in die Zwischenablage kopieren & im Chat abschicken.",
+            text="Optimized prompts for Mammouth.ai. Copy to clipboard with 1 click & send in chat.",
             font=ctk.CTkFont(size=12),
             text_color=THEME_TEXT_MUTED
         ).pack(anchor="w")
@@ -2269,40 +2269,40 @@ class MammouthControlCenter(ctk.CTk):
 
         prompts = [
             (
-                "🖥️ Bildschirm-Inspektion & OCR",
+                "🖥️ Screen Inspection & OCR",
                 "Vision",
-                "Lässt Mammouth deinen Bildschirm erfassen, Menüs und Fehler analysieren.",
-                "Nutze das Tool screen_capture (monitor=1), erstelle einen Screenshot meines Bildschirms und analysiere die aktuell sichtbaren Fenster, Fehlermeldungen und Inhalte."
+                "Captures your screen for Mammouth to inspect menus, errors, and visual content.",
+                "Use the screen_capture tool (monitor=1) to take a screenshot of my screen and analyze currently visible windows, error messages, and contents."
             ),
             (
-                "📊 Systemdiagnose & Top-Prozesse",
+                "📊 System Diagnostics & Top Processes",
                 "System",
-                "Ermittelt laufende Hintergrundprozesse und deren Ressourcenverbrauch.",
-                "Führe mit system_get_processes eine Systemdiagnose durch und zeige mir die Top 5 Prozesse nach Arbeitsspeicher- und CPU-Verbrauch in einer übersichtlichen Tabelle an."
+                "Queries active background processes and their resource consumption.",
+                "Perform system diagnostics using system_get_processes and show me the top 5 processes by memory and CPU usage in a clear table."
             ),
             (
-                "📁 Workspace Projekt-Generierung",
-                "Dateien",
-                "Erstellt ein neues Skript oder eine Konfiguration direkt im lokalen Workspace.",
-                "Erstelle mit file_write im lokalen Workspace eine neue Python-Datei 'pipeline.py'. Implementiere eine saubere Pipeline mit Fehlerbehandlung und Dokumentation."
+                "📁 Workspace Project Scaffolding",
+                "Files",
+                "Creates a new script or configuration directly in the local workspace.",
+                "Create a new Python file 'pipeline.py' in the local workspace using file_write. Implement a clean pipeline with proper error handling and documentation."
             ),
             (
                 "💻 Mammouth Code CLI Task",
                 "Coding Agent",
-                "Startet eine Coding-Aufgabe headless oder im interaktiven Terminal mit Mammouth Code.",
-                "Starte mit mammouth_code_run_task eine Aufgabe: 'Analysiere das aktuelle Projekt und erstelle eine modular aufgebaute REST-API mit Tests'."
+                "Launches a coding task headlessly or in an interactive terminal with Mammouth Code.",
+                "Use mammouth_code_run_task to start a task: 'Analyze the current project and scaffold a modular REST API with tests'."
             ),
             (
-                "☁️ Google Drive Dateisuche",
+                "☁️ Google Drive File Search",
                 "Cloud",
-                "Durchsucht angebundene Google Drive Dokumente nach Schlüsselwörtern.",
-                "Nutze gdrive_list_files mit einer Suchanfrage nach aktuellen Dokumenten und liste mir Dateinamen, Links und das letzte Änderungsdatum übersichtlich auf."
+                "Searches connected Google Drive documents for keywords.",
+                "Use gdrive_list_files to search for recent documents and summarize file names, links, and last modified dates in a table."
             ),
             (
-                "🐧 SSH Linux Server Check",
+                "🐧 SSH Linux Server Health Check",
                 "Remote",
-                "Führt über PuTTY/SSH gespeicherte Host-Profile Statuskommandos aus.",
-                "Nutze putty_ssh_exec auf meinem gespeicherten Linux-Host, um 'uptime && df -h && free -m' auszuführen und fasse mir den Serverzustand zusammen."
+                "Executes status commands on saved PuTTY/SSH host profiles.",
+                "Use putty_ssh_exec on my saved Linux host to run 'uptime && df -h && free -m' and summarize the server health status."
             ),
         ]
 
@@ -2376,7 +2376,7 @@ class MammouthControlCenter(ctk.CTk):
 
             btn_copy = ctk.CTkButton(
                 btn_box,
-                text="📋 Prompt kopieren",
+                text="📋 Copy Prompt",
                 width=140,
                 height=32,
                 fg_color=("#059669", "#10B981"),
@@ -2500,13 +2500,13 @@ class MammouthControlCenter(ctk.CTk):
         title_box.pack(side="left")
         ctk.CTkLabel(
             title_box,
-            text="⏱️ Aufgaben & Automatisierung (Task Scheduler)",
+            text="⏱️ Tasks & Automation (Task Scheduler)",
             font=ctk.CTkFont(size=17, weight="bold"),
             text_color=THEME_TEXT_PRIMARY
         ).pack(anchor="w")
         ctk.CTkLabel(
             title_box,
-            text="Wiederkehrende Tasks automatisch im Mammouth AI Chat, Code CLI oder System auslösen (z.B. Fußball-Livebericht alle 5 Min).",
+            text="Trigger recurring tasks automatically in Mammouth AI Chat, Code CLI, or system (e.g., Live football ticker every 5 min).",
             font=ctk.CTkFont(size=12),
             text_color=THEME_TEXT_MUTED
         ).pack(anchor="w")
@@ -2516,7 +2516,7 @@ class MammouthControlCenter(ctk.CTk):
 
         ctk.CTkButton(
             btn_box,
-            text="⚽ Livebericht (5 Min)",
+            text="⚽ Live Match Report (5 Min)",
             width=165,
             height=32,
             fg_color=THEME_ACCENT,
@@ -2528,7 +2528,7 @@ class MammouthControlCenter(ctk.CTk):
 
         ctk.CTkButton(
             btn_box,
-            text="➕ Neuer Task",
+            text="➕ New Task",
             width=130,
             height=32,
             fg_color=THEME_SUCCESS,
@@ -2557,21 +2557,21 @@ class MammouthControlCenter(ctk.CTk):
         # Metric 1: Running tasks
         m1 = ctk.CTkFrame(self.task_kpi_frame, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=8)
         m1.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ctk.CTkLabel(m1, text="Laufende Tasks", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=12, pady=(8, 0))
-        self.lbl_task_stat_running = ctk.CTkLabel(m1, text="0 aktiv", font=ctk.CTkFont(size=16, weight="bold"), text_color=THEME_SUCCESS)
+        ctk.CTkLabel(m1, text="Running Tasks", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=12, pady=(8, 0))
+        self.lbl_task_stat_running = ctk.CTkLabel(m1, text="0 active", font=ctk.CTkFont(size=16, weight="bold"), text_color=THEME_SUCCESS)
         self.lbl_task_stat_running.pack(anchor="w", padx=12, pady=(0, 8))
 
         # Metric 2: Next trigger
         m2 = ctk.CTkFrame(self.task_kpi_frame, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=8)
         m2.pack(side="left", fill="x", expand=True, padx=4)
-        ctk.CTkLabel(m2, text="Nächster Trigger", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=12, pady=(8, 0))
-        self.lbl_task_stat_next = ctk.CTkLabel(m2, text="Kein aktiver Task", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY)
+        ctk.CTkLabel(m2, text="Next Trigger", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=12, pady=(8, 0))
+        self.lbl_task_stat_next = ctk.CTkLabel(m2, text="No active task", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY)
         self.lbl_task_stat_next.pack(anchor="w", padx=12, pady=(0, 8))
 
         # Metric 3: Total executions
         m3 = ctk.CTkFrame(self.task_kpi_frame, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=8)
         m3.pack(side="left", fill="x", expand=True, padx=(8, 0))
-        ctk.CTkLabel(m3, text="Ausführungen gesamt", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=12, pady=(8, 0))
+        ctk.CTkLabel(m3, text="Total Executions", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=12, pady=(8, 0))
         self.lbl_task_stat_total = ctk.CTkLabel(m3, text="0", font=ctk.CTkFont(size=16, weight="bold"), text_color=("#9F6C45", "#C8A37C"))
         self.lbl_task_stat_total.pack(anchor="w", padx=12, pady=(0, 8))
 
@@ -2601,7 +2601,7 @@ class MammouthControlCenter(ctk.CTk):
         total_runs = sum(t.get("runs_done", 0) for t in tasks)
 
         if hasattr(self, "lbl_task_stat_running"):
-            self.lbl_task_stat_running.configure(text=f"{active_count} aktiv")
+            self.lbl_task_stat_running.configure(text=f"{active_count} active")
         if hasattr(self, "lbl_task_stat_total"):
             self.lbl_task_stat_total.configure(text=str(total_runs))
 
@@ -2621,13 +2621,13 @@ class MammouthControlCenter(ctk.CTk):
             ctk.CTkLabel(inner, text="⏱️", font=ctk.CTkFont(size=44)).pack()
             ctk.CTkLabel(
                 inner,
-                text="Noch keine automatisierten Tasks eingerichtet",
+                text="No automated tasks configured yet",
                 font=ctk.CTkFont(size=16, weight="bold"),
                 text_color=THEME_TEXT_PRIMARY
             ).pack(pady=(10, 4))
             ctk.CTkLabel(
                 inner,
-                text="Erstelle geplante Tasks, um z.B. alle 5 Minuten einen Livebericht zum Fußballspiel oder Krypto-Updates automatisch im Mammouth AI Chat auszulösen.",
+                text="Create scheduled tasks to automatically trigger match updates, crypto alerts, or maintenance in Mammouth AI chat.",
                 font=ctk.CTkFont(size=12),
                 text_color=THEME_TEXT_MUTED,
                 wraplength=550,
@@ -2639,7 +2639,7 @@ class MammouthControlCenter(ctk.CTk):
 
             ctk.CTkButton(
                 btn_row,
-                text="⚽ Fußball-Livebericht starten (alle 5 Min)",
+                text="⚽ Start Live Football Ticker (Every 5 Min)",
                 fg_color=THEME_ACCENT,
                 hover_color=THEME_ACCENT_HOVER,
                 font=ctk.CTkFont(weight="bold"),
@@ -2649,7 +2649,7 @@ class MammouthControlCenter(ctk.CTk):
 
             ctk.CTkButton(
                 btn_row,
-                text="➕ Benutzerdefinierten Task erstellen",
+                text="➕ Create Custom Task",
                 fg_color=THEME_SUCCESS,
                 hover_color=THEME_SUCCESS_HOVER,
                 font=ctk.CTkFont(weight="bold"),
@@ -2700,7 +2700,7 @@ class MammouthControlCenter(ctk.CTk):
                 "mammouth_web": ("💬 Mammouth AI Web", ("#F2EBE1", "#2F241D"), ("#754533", "#C8A37C")),
                 "mammouth_code": ("💻 Mammouth Code", ("#EDE3D4", "#3D2B1F"), ("#9F6C45", "#B88557")),
                 "powershell": ("⚡ PowerShell", ("#EFF6FF", "#1E293B"), ("#2563EB", "#60A5FA")),
-                "notification": ("🔔 Benachrichtigung", ("#FFFBEB", "#382D1D"), ("#D97706", "#FBBF24"))
+                "notification": ("🔔 Notification", ("#FFFBEB", "#382D1D"), ("#D97706", "#FBBF24"))
             }
             tgt_text, tgt_bg, tgt_fg = target_labels.get(target, ("⚙️ Target", ("#F1F5F9", "#1E2028"), ("#64748B", "#94A3B8")))
 
@@ -2710,10 +2710,10 @@ class MammouthControlCenter(ctk.CTk):
 
             # Status badge
             status_labels = {
-                "active": ("🟢 Aktiv", ("#DCFCE7", "#14532D"), ("#16A34A", "#4ADE80")),
-                "paused": ("⏸️ Pausiert", ("#FEF3C7", "#713F12"), ("#D97706", "#FBBF24")),
-                "completed": ("🏁 Abgeschlossen", ("#F1F5F9", "#1E2028"), ("#64748B", "#94A3B8")),
-                "stopped": ("⏹️ Gestoppt", ("#FEE2E2", "#450A0A"), ("#DC2626", "#F87171"))
+                "active": ("🟢 Active", ("#DCFCE7", "#14532D"), ("#16A34A", "#4ADE80")),
+                "paused": ("⏸️ Paused", ("#FEF3C7", "#713F12"), ("#D97706", "#FBBF24")),
+                "completed": ("🏁 Completed", ("#F1F5F9", "#1E2028"), ("#64748B", "#94A3B8")),
+                "stopped": ("⏹️ Stopped", ("#FEE2E2", "#450A0A"), ("#DC2626", "#F87171"))
             }
             st_text, st_bg, st_fg = status_labels.get(status, ("•", ("#F1F5F9", "#1E2028"), ("#64748B", "#94A3B8")))
 
@@ -2728,7 +2728,7 @@ class MammouthControlCenter(ctk.CTk):
             # 1. Trigger Now
             btn_run_now = ctk.CTkButton(
                 right_actions,
-                text="⚡ Jetzt ausführen",
+                text="⚡ Run Now",
                 width=115,
                 height=28,
                 fg_color=("#059669", "#10B981"),
@@ -2790,12 +2790,12 @@ class MammouthControlCenter(ctk.CTk):
 
             ctk.CTkLabel(
                 info_row,
-                text=f"⏱️ Alle {interv_str} ({interval_sec}s)",
+                text=f"⏱️ Every {interv_str} ({interval_sec}s)",
                 font=ctk.CTkFont(size=11),
                 text_color=THEME_TEXT_MUTED
             ).pack(side="left", padx=(0, 15))
 
-            rep_str = f"🔁 Ausführung {runs_done} von {repeats}" if repeats > 0 else f"🔁 Ausführung {runs_done} (fortlaufend)"
+            rep_str = f"🔁 Run {runs_done} of {repeats}" if repeats > 0 else f"🔁 Run {runs_done} (continuous)"
             ctk.CTkLabel(
                 info_row,
                 text=rep_str,
@@ -2805,7 +2805,7 @@ class MammouthControlCenter(ctk.CTk):
 
             lbl_cd = ctk.CTkLabel(
                 info_row,
-                text="⏳ Berechne...",
+                text="⏳ Calculating...",
                 font=ctk.CTkFont(size=11, weight="bold"),
                 text_color=("#4F46E5", "#818CF8")
             )
@@ -2815,12 +2815,12 @@ class MammouthControlCenter(ctk.CTk):
             if last_run:
                 try:
                     lr_dt = datetime.fromisoformat(last_run)
-                    lr_str = lr_dt.strftime("%H:%M:%S Uhr")
+                    lr_str = lr_dt.strftime("%H:%M:%S")
                 except Exception:
                     lr_str = last_run[:19]
                 ctk.CTkLabel(
                     info_row,
-                    text=f"Zuletzt: {lr_str}",
+                    text=f"Last run: {lr_str}",
                     font=ctk.CTkFont(size=11),
                     text_color=THEME_TEXT_MUTED
                 ).pack(side="left")
@@ -2875,9 +2875,9 @@ class MammouthControlCenter(ctk.CTk):
                     if diff > 0:
                         mm = int(diff) // 60
                         ss = int(diff) % 60
-                        lbl.configure(text=f"⏳ Nächster Trigger: {mm:02d}:{ss:02d} min", text_color=("#4F46E5", "#818CF8"))
+                        lbl.configure(text=f"⏳ Next trigger: {mm:02d}:{ss:02d} min", text_color=("#4F46E5", "#818CF8"))
                     else:
-                        lbl.configure(text="⏳ Wird ausgeführt...", text_color=("#059669", "#10B981"))
+                        lbl.configure(text="⏳ Executing...", text_color=("#059669", "#10B981"))
 
                     if earliest_next_str is None or next_run < earliest_next_str:
                         earliest_next_str = next_run
@@ -2885,11 +2885,11 @@ class MammouthControlCenter(ctk.CTk):
                 except Exception:
                     lbl.configure(text=f"⏳ {next_run[:19]}")
             elif status == "paused":
-                lbl.configure(text="⏸️ Pausiert", text_color=("#D97706", "#FBBF24"))
+                lbl.configure(text="⏸️ Paused", text_color=("#D97706", "#FBBF24"))
             elif status == "completed":
-                lbl.configure(text="🏁 Abgeschlossen", text_color=THEME_TEXT_MUTED)
+                lbl.configure(text="🏁 Completed", text_color=THEME_TEXT_MUTED)
             elif status == "stopped":
-                lbl.configure(text="⏹️ Gestoppt", text_color=("#DC2626", "#F87171"))
+                lbl.configure(text="⏹️ Stopped", text_color=("#DC2626", "#F87171"))
 
         if hasattr(self, "lbl_task_stat_next"):
             if earliest_next_str:
@@ -2902,11 +2902,11 @@ class MammouthControlCenter(ctk.CTk):
                         short_name = (earliest_task_name[:16] + "...") if len(earliest_task_name or "") > 18 else earliest_task_name
                         self.lbl_task_stat_next.configure(text=f"{mm:02d}:{ss:02d} min ({short_name})")
                     else:
-                        self.lbl_task_stat_next.configure(text="Wird ausgeführt...")
+                        self.lbl_task_stat_next.configure(text="Executing...")
                 except Exception:
-                    self.lbl_task_stat_next.configure(text="Geplant")
+                    self.lbl_task_stat_next.configure(text="Scheduled")
             else:
-                self.lbl_task_stat_next.configure(text="Kein aktiver Task")
+                self.lbl_task_stat_next.configure(text="No active task")
 
     def _trigger_task_now_ui(self, task_id: int):
         scheduler_trigger_task_now(task_id)
@@ -2927,8 +2927,8 @@ class MammouthControlCenter(ctk.CTk):
     def _quick_start_football_live_task(self):
         """1-Click shortcut: Creates and launches the 5-minute football live ticker task immediately."""
         task = scheduler_create_task(
-            name="⚽ Livebericht: Fußballspiel",
-            prompt="Gib mir einen ausführlichen Livebericht zum aktuellen Fußballspiel: Suche im Web nach aktuellem Spielstand, Toren, Karten, Auswechslungen und dem Spielgeschehen der letzten 5 Minuten.",
+            name="⚽ Live Match Report: Football",
+            prompt="Provide a detailed live report of the ongoing football match: Search the web for current score, goals, cards, substitutions, and match events over the last 5 minutes.",
             interval_seconds=300,
             repeat_count=20,
             target="mammouth_web",
@@ -2936,14 +2936,14 @@ class MammouthControlCenter(ctk.CTk):
             switch_tab=True,
             start_immediately=True
         )
-        self._log(f"[TASK SCHEDULER] ⚽ Fußball-Livebericht gestartet (ID #{task.get('id')}). Nächster Trigger in 2s, danach alle 5 Minuten.")
-        self._select_nav_tab("⏱️ Tasks & Automatisierung")
+        self._log(f"[TASK SCHEDULER] ⚽ Football live report started (ID #{task.get('id')}). Next trigger in 2s, then every 5 minutes.")
+        self._select_nav_tab("⏱️ Tasks & Automation")
         self._refresh_task_cards()
 
     def _show_new_task_dialog(self, preset_id: Optional[str] = None):
         """Modal dialog to configure and launch a new scheduled automated task."""
         dlg = ctk.CTkToplevel(self)
-        dlg.title("Neuen automatisierten Task erstellen")
+        dlg.title("Create New Automated Task")
         dlg.geometry("640x580")
         dlg.resizable(False, False)
         dlg.grab_set()
@@ -2963,22 +2963,22 @@ class MammouthControlCenter(ctk.CTk):
 
         ctk.CTkLabel(
             content,
-            text="⏱️ Neuer automatisierter Task",
+            text="⏱️ New Automated Task",
             font=ctk.CTkFont(size=17, weight="bold"),
             text_color=THEME_TEXT_PRIMARY
         ).pack(anchor="w", pady=(0, 2))
         ctk.CTkLabel(
             content,
-            text="Definiere Name, Intervall und den Prompt, der automatisch ausgeführt werden soll.",
+            text="Define name, interval, and the prompt to execute automatically.",
             font=ctk.CTkFont(size=12),
             text_color=THEME_TEXT_MUTED
         ).pack(anchor="w", pady=(0, 14))
 
         # Preset selector
         presets = scheduler_get_presets()
-        preset_names = ["-- Vorlage wählen (optional) --"] + [p["name"] for p in presets]
+        preset_names = ["-- Select Preset (Optional) --"] + [p["name"] for p in presets]
 
-        ctk.CTkLabel(content, text="Vorlage (Optional):", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(content, text="Preset (Optional):", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
 
         def on_preset_selected(choice):
             for p in presets:
@@ -2999,7 +2999,7 @@ class MammouthControlCenter(ctk.CTk):
                         "mammouth_web": "💬 Mammouth AI Web Chat",
                         "mammouth_code": "💻 Mammouth Code CLI",
                         "powershell": "⚡ PowerShell",
-                        "notification": "🔔 Benachrichtigung"
+                        "notification": "🔔 Notification"
                     }
                     menu_target.set(tgt_labels_rev.get(p.get("target", "mammouth_web"), "💬 Mammouth AI Web Chat"))
                     break
@@ -3008,12 +3008,12 @@ class MammouthControlCenter(ctk.CTk):
         menu_presets.pack(fill="x", pady=(2, 10))
 
         # Task Name
-        ctk.CTkLabel(content, text="Name des Tasks:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
-        entry_name = ctk.CTkEntry(content, placeholder_text="z.B. ⚽ Livebericht Fußballspiel", width=600)
+        ctk.CTkLabel(content, text="Task Name:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
+        entry_name = ctk.CTkEntry(content, placeholder_text="e.g. ⚽ Live Football Match Report", width=600)
         entry_name.pack(fill="x", pady=(2, 10))
 
         # Action Prompt
-        ctk.CTkLabel(content, text="Prompt / Befehl (wird bei jedem Trigger übergeben):", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(content, text="Prompt / Command (sent on each trigger):", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
         txt_prompt = ctk.CTkTextbox(content, height=110, font=ctk.CTkFont(size=12))
         txt_prompt.pack(fill="x", pady=(2, 10))
 
@@ -3024,7 +3024,7 @@ class MammouthControlCenter(ctk.CTk):
         # Col 1: Interval in minutes
         col1 = ctk.CTkFrame(grid_frame, fg_color="transparent")
         col1.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        ctk.CTkLabel(col1, text="Intervall (Minuten):", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(col1, text="Interval (Minutes):", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
         entry_interval = ctk.CTkEntry(col1)
         entry_interval.insert(0, "5.0")
         entry_interval.pack(fill="x", pady=(2, 0))
@@ -3032,7 +3032,7 @@ class MammouthControlCenter(ctk.CTk):
         # Col 2: Max Repeats (0 = infinite)
         col2 = ctk.CTkFrame(grid_frame, fg_color="transparent")
         col2.pack(side="left", fill="x", expand=True, padx=3)
-        ctk.CTkLabel(col2, text="Wiederholungen (0 = Dauerhaft):", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(col2, text="Repeat Count (0 = Continuous):", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
         entry_repeats = ctk.CTkEntry(col2)
         entry_repeats.insert(0, "20")
         entry_repeats.pack(fill="x", pady=(2, 0))
@@ -3040,12 +3040,12 @@ class MammouthControlCenter(ctk.CTk):
         # Col 3: Target
         col3 = ctk.CTkFrame(grid_frame, fg_color="transparent")
         col3.pack(side="left", fill="x", expand=True, padx=(6, 0))
-        ctk.CTkLabel(col3, text="Ausführungsziel:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(col3, text="Execution Target:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
         target_options = [
             "💬 Mammouth AI Web Chat",
             "💻 Mammouth Code CLI",
             "⚡ PowerShell",
-            "🔔 Benachrichtigung"
+            "🔔 Notification"
         ]
         menu_target = ctk.CTkOptionMenu(col3, values=target_options)
         menu_target.pack(fill="x", pady=(2, 0))
@@ -3054,7 +3054,7 @@ class MammouthControlCenter(ctk.CTk):
         chk_immediate_var = ctk.BooleanVar(value=True)
         chk_immediate = ctk.CTkCheckBox(
             content,
-            text="Ersten Bericht sofort anfordern (nach 2 Sekunden, danach im Intervall)",
+            text="Trigger first execution immediately (after 2s, then on interval)",
             variable=chk_immediate_var,
             font=ctk.CTkFont(size=12)
         )
@@ -3080,10 +3080,10 @@ class MammouthControlCenter(ctk.CTk):
             name = entry_name.get().strip()
             prompt = txt_prompt.get("1.0", "end").strip()
             if not name:
-                messagebox.showerror("Fehler", "Bitte gib einen Namen für den Task ein.", parent=dlg)
+                messagebox.showerror("Error", "Please enter a name for the task.", parent=dlg)
                 return
             if not prompt:
-                messagebox.showerror("Fehler", "Bitte gib einen Prompt ein.", parent=dlg)
+                messagebox.showerror("Error", "Please enter a prompt.", parent=dlg)
                 return
 
             try:
@@ -3101,7 +3101,7 @@ class MammouthControlCenter(ctk.CTk):
                 "💬 Mammouth AI Web Chat": "mammouth_web",
                 "💻 Mammouth Code CLI": "mammouth_code",
                 "⚡ PowerShell": "powershell",
-                "🔔 Benachrichtigung": "notification"
+                "🔔 Notification": "notification"
             }
             target_str = tgt_map.get(menu_target.get(), "mammouth_web")
 
@@ -3116,13 +3116,13 @@ class MammouthControlCenter(ctk.CTk):
                 start_immediately=chk_immediate_var.get()
             )
 
-            self._log(f"[TASK SCHEDULER] ✅ Neuer Task erstellt: '{name}' (Intervall: {interv_sec}s).")
+            self._log(f"[TASK SCHEDULER] ✅ New task created: '{name}' (Interval: {interv_sec}s).")
             dlg.destroy()
             self._refresh_task_cards()
 
         ctk.CTkButton(
             btn_box,
-            text="Abbrechen",
+            text="Cancel",
             fg_color=THEME_BTN_SEC_BG,
             hover_color=THEME_BTN_SEC_HOVER,
             text_color=THEME_TEXT_PRIMARY,
@@ -3133,7 +3133,7 @@ class MammouthControlCenter(ctk.CTk):
 
         ctk.CTkButton(
             btn_box,
-            text="✅ Task erstellen & starten",
+            text="✅ Create & Start Task",
             fg_color=("#059669", "#10B981"),
             hover_color=("#047857", "#059669"),
             text_color="#FFFFFF",
@@ -3232,9 +3232,9 @@ class MammouthControlCenter(ctk.CTk):
 
                 active_cnt = self._count_active_tools()
                 if hasattr(self, "lbl_stat_tools"):
-                    self.lbl_stat_tools.configure(text=f"⚡ {active_cnt} Tools aktiv")
+                    self.lbl_stat_tools.configure(text=f"⚡ {active_cnt} Tools active")
                 if hasattr(self, "lbl_nav_tools"):
-                    self.lbl_nav_tools.configure(text=f"⚡ {active_cnt} Werkzeuge aktiv")
+                    self.lbl_nav_tools.configure(text=f"⚡ {active_cnt} Tools active")
 
                 if self.is_server_running and self.server_start_time:
                     elapsed = int(time.time() - self.server_start_time)
@@ -3522,7 +3522,7 @@ class MammouthControlCenter(ctk.CTk):
         ).pack(anchor="w")
         ctk.CTkLabel(
             title_box,
-            text="Offizieller Terminal-basierter AI Coding-Agent von Mammouth AI (Fork von OpenCode)",
+            text="Official terminal-based AI coding agent by Mammouth AI (fork of OpenCode)",
             font=ctk.CTkFont(size=12),
             text_color=THEME_TEXT_MUTED
         ).pack(anchor="w")
@@ -3532,7 +3532,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self.btn_mc_refresh = ctk.CTkButton(
             btn_box,
-            text="🔄 Status prüfen",
+            text="🔄 Check Status",
             width=120,
             height=32,
             fg_color=THEME_BTN_SEC_BG,
@@ -3547,7 +3547,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self.btn_mc_sync = ctk.CTkButton(
             btn_box,
-            text="🔗 Defroster MCP verknüpfen",
+            text="🔗 Link Defroster MCP",
             width=190,
             height=32,
             fg_color=THEME_ACCENT,
@@ -3575,7 +3575,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self.lbl_mc_status = ctk.CTkLabel(
             status_row,
-            text="Prüfe Installation...",
+            text="Checking installation...",
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=("#475569", "#CBD5E1")
         )
@@ -3583,7 +3583,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self.btn_mc_install = ctk.CTkButton(
             status_row,
-            text="⚡ Installieren / Aktualisieren",
+            text="⚡ Install / Update",
             width=200,
             height=30,
             fg_color=("#059669", "#10B981"),
@@ -3596,7 +3596,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self.lbl_mc_path = ctk.CTkLabel(
             c1_inner,
-            text="Pfad: -",
+            text="Path: -",
             font=ctk.CTkFont(size=11),
             text_color=THEME_TEXT_MUTED
         )
@@ -3617,13 +3617,13 @@ class MammouthControlCenter(ctk.CTk):
         c2_inner = ctk.CTkFrame(card_launch, fg_color="transparent")
         c2_inner.pack(fill="x", padx=15, pady=12)
 
-        ctk.CTkLabel(c2_inner, text="INTERAKTIVES TERMINAL LAUNCHEN", font=ctk.CTkFont(size=12, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 4))
-        ctk.CTkLabel(c2_inner, text="Startet ein sichtbares Konsolenfenster direkt in deinem ausgewählten Projektordner mit gesetzten Umgebungsvariablen.", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 8))
+        ctk.CTkLabel(c2_inner, text="LAUNCH INTERACTIVE TERMINAL", font=ctk.CTkFont(size=12, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 4))
+        ctk.CTkLabel(c2_inner, text="Launches a visible console window directly in your chosen project directory with preset environment variables.", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 8))
 
         ws_row = ctk.CTkFrame(c2_inner, fg_color="transparent")
         ws_row.pack(fill="x", pady=(0, 6))
 
-        ctk.CTkLabel(ws_row, text="Workspace Ordner:", width=130, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left")
+        ctk.CTkLabel(ws_row, text="Workspace Folder:", width=130, anchor="w", font=ctk.CTkFont(weight="bold")).pack(side="left")
         default_ws = self.config_data.get("server", {}).get("workspace_root", "./workspace")
         if not os.path.isabs(default_ws):
             default_ws = str((BASE_DIR / default_ws).resolve())
@@ -3634,7 +3634,7 @@ class MammouthControlCenter(ctk.CTk):
 
         btn_browse_ws = ctk.CTkButton(
             ws_row,
-            text="📁 Durchsuchen",
+            text="📁 Browse",
             width=110,
             height=32,
             fg_color=THEME_BTN_SEC_BG,
@@ -3649,7 +3649,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self.chk_mc_continue = ctk.CTkCheckBox(
             opts_row,
-            text="Letzte Session in diesem Projektordner fortsetzen (-c)",
+            text="Resume previous session in this project directory (-c)",
             font=ctk.CTkFont(size=12)
         )
         self.chk_mc_continue.pack(side="left")
@@ -3670,7 +3670,7 @@ class MammouthControlCenter(ctk.CTk):
 
         btn_term_launch = ctk.CTkButton(
             c2_inner,
-            text="▶ Interaktives Terminal öffnen",
+            text="▶ Open Interactive Terminal",
             height=36,
             fg_color=THEME_ACCENT,
             hover_color=THEME_ACCENT_HOVER,
@@ -3688,7 +3688,7 @@ class MammouthControlCenter(ctk.CTk):
         c3_inner.pack(fill="x", padx=15, pady=12)
 
         ctk.CTkLabel(c3_inner, text="HEADLESS TASK RUNNER (mammouth run)", font=ctk.CTkFont(size=12, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 4))
-        ctk.CTkLabel(c3_inner, text="Übergib Coding-Aufgaben direkt an Mammouth Code im Hintergrund. Ausgabe erscheint live im Fenster unten.", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 8))
+        ctk.CTkLabel(c3_inner, text="Send coding tasks directly to Mammouth Code in the background. Live output appears below.", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 8))
 
         self.txt_mc_prompt = ctk.CTkTextbox(c3_inner, height=70, font=ctk.CTkFont(size=12))
         self.txt_mc_prompt.pack(fill="x", pady=(0, 6))
@@ -3696,13 +3696,13 @@ class MammouthControlCenter(ctk.CTk):
         h_controls = ctk.CTkFrame(c3_inner, fg_color="transparent")
         h_controls.pack(fill="x", pady=(0, 6))
 
-        self.chk_mc_auto = ctk.CTkCheckBox(h_controls, text="Berechtigungen auto-bestätigen (--auto)", font=ctk.CTkFont(size=12))
+        self.chk_mc_auto = ctk.CTkCheckBox(h_controls, text="Auto-approve permissions (--auto)", font=ctk.CTkFont(size=12))
         self.chk_mc_auto.select()
         self.chk_mc_auto.pack(side="left")
 
         self.btn_mc_run = ctk.CTkButton(
             h_controls,
-            text="🚀 Headless Task ausführen",
+            text="🚀 Run Headless Task",
             width=200,
             height=32,
             fg_color=THEME_ACCENT,
@@ -3729,8 +3729,8 @@ class MammouthControlCenter(ctk.CTk):
         c4_inner = ctk.CTkFrame(card_cfg, fg_color="transparent")
         c4_inner.pack(fill="x", padx=15, pady=12)
 
-        ctk.CTkLabel(c4_inner, text="AUTHENTIFIZIERUNG & EINSTELLUNGEN", font=ctk.CTkFont(size=12, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 4))
-        ctk.CTkLabel(c4_inner, text="Der Mammouth API-Key wird via Windows DPAPI hardware-verschlüsselt und automatisch an Mammouth Code übergeben.", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 8))
+        ctk.CTkLabel(c4_inner, text="AUTHENTICATION & SETTINGS", font=ctk.CTkFont(size=12, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 4))
+        ctk.CTkLabel(c4_inner, text="The Mammouth API key is encrypted via Windows DPAPI and passed automatically to Mammouth Code.", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 8))
 
         key_row = ctk.CTkFrame(c4_inner, fg_color="transparent")
         key_row.pack(fill="x", pady=(0, 6))
@@ -3757,7 +3757,7 @@ class MammouthControlCenter(ctk.CTk):
 
         btn_save_key = ctk.CTkButton(
             key_row,
-            text="💾 Speichern (DPAPI)",
+            text="💾 Save (DPAPI)",
             width=160,
             height=32,
             fg_color=("#059669", "#10B981"),
@@ -3778,35 +3778,35 @@ class MammouthControlCenter(ctk.CTk):
             if st.get("installed"):
                 ver = st.get("version", "Installed")
                 self.lbl_mc_status.configure(
-                    text=f"🟢 Mammouth Code: Installiert ({ver})",
+                    text=f"🟢 Mammouth Code: Installed ({ver})",
                     text_color=("#059669", "#10B981")
                 )
-                self.btn_mc_install.configure(text="⚡ Upgraden (mammouth upgrade)")
+                self.btn_mc_install.configure(text="⚡ Upgrade (mammouth upgrade)")
             else:
                 self.lbl_mc_status.configure(
-                    text="🔴 Mammouth Code: Nicht installiert",
+                    text="🔴 Mammouth Code: Not Installed",
                     text_color=("#DC2626", "#EF4444")
                 )
-                self.btn_mc_install.configure(text="⚡ Installieren (PowerShell)")
+                self.btn_mc_install.configure(text="⚡ Install (PowerShell)")
 
             p = st.get("executable_path", "-") or "-"
             self.lbl_mc_path.configure(text=f"Executable: {p}")
 
             if st.get("mcp_bridge_synced"):
                 self.lbl_mc_bridge.configure(
-                    text="MCP Bridge: 🟢 Verbunden (mammouth-defroster-9000 aktiv in opencode.json)",
+                    text="MCP Bridge: 🟢 Connected (mammouth-defroster-9000 active in opencode.json)",
                     text_color=("#059669", "#10B981")
                 )
             else:
                 self.lbl_mc_bridge.configure(
-                    text="MCP Bridge: ⚪ Noch nicht synchronisiert (Klicke oben auf 'Defroster MCP verknüpfen')",
+                    text="MCP Bridge: ⚪ Not synced yet (Click 'Link Defroster MCP' above)",
                     text_color=THEME_TEXT_MUTED
                 )
         except Exception as ex:
             self._log(f"[MAMMOUTH CODE] Status refresh failed: {ex}")
 
     def _browse_mc_workspace(self):
-        folder = filedialog.askdirectory(title="Projektordner für Mammouth Code auswählen", parent=self)
+        folder = filedialog.askdirectory(title="Select project folder for Mammouth Code", parent=self)
         if folder:
             self.ent_mc_ws.delete(0, "end")
             self.ent_mc_ws.insert(0, folder)
@@ -3822,11 +3822,11 @@ class MammouthControlCenter(ctk.CTk):
             self._log(f"[MAMMOUTH CODE] 💻 Launched {res.get('terminal')} in '{res.get('workspace')}' (resumed={cont})")
         else:
             self._log(f"[MAMMOUTH CODE ERROR] {res.get('error')}")
-            messagebox.showerror("Fehler beim Starten", f"Mammouth Code konnte nicht gestartet werden:\n\n{res.get('error')}", parent=self)
+            messagebox.showerror("Launch Error", f"Could not launch Mammouth Code:\n\n{res.get('error')}", parent=self)
 
     def _install_mammouth_code_bg(self):
-        self.btn_mc_install.configure(text="⏳ Wird ausgeführt...", state="disabled")
-        self._log("[MAMMOUTH CODE] Installation / Upgrade gestartet...")
+        self.btn_mc_install.configure(text="⏳ Executing...", state="disabled")
+        self._log("[MAMMOUTH CODE] Installation / upgrade started...")
 
         def _worker():
             from modules.mammouth_code import install_or_update_mammouth_code
@@ -3835,11 +3835,11 @@ class MammouthControlCenter(ctk.CTk):
                 self.btn_mc_install.configure(state="normal")
                 self._refresh_mammouth_code_status()
                 if res.get("success"):
-                    self._log(f"[MAMMOUTH CODE] ✓ {res.get('action').capitalize()} erfolgreich abgeschlossen ({res.get('duration_seconds')}s)!")
-                    messagebox.showinfo("Mammouth Code", f"Mammouth Code wurde erfolgreich eingerichtet!\n\nPfad: {res.get('path')}", parent=self)
+                    self._log(f"[MAMMOUTH CODE] ✓ {res.get('action').capitalize()} completed successfully ({res.get('duration_seconds')}s)!")
+                    messagebox.showinfo("Mammouth Code", f"Mammouth Code was successfully configured!\n\nPath: {res.get('path')}", parent=self)
                 else:
-                    self._log(f"[MAMMOUTH CODE ERROR] Installation fehlgeschlagen: {res.get('stderr')}")
-                    messagebox.showerror("Fehler", f"Installation fehlgeschlagen:\n\n{res.get('stderr')}", parent=self)
+                    self._log(f"[MAMMOUTH CODE ERROR] Installation failed: {res.get('stderr')}")
+                    messagebox.showerror("Error", f"Installation failed:\n\n{res.get('stderr')}", parent=self)
             self.after(0, _done)
 
         threading.Thread(target=_worker, daemon=True).start()
@@ -3847,32 +3847,32 @@ class MammouthControlCenter(ctk.CTk):
     def _run_mc_headless_task_bg(self):
         prompt = self.txt_mc_prompt.get("1.0", "end").strip()
         if not prompt:
-            messagebox.showwarning("Leerer Prompt", "Bitte gib eine Aufgabe für Mammouth Code ein.", parent=self)
+            messagebox.showwarning("Empty Prompt", "Please enter a task prompt for Mammouth Code.", parent=self)
             return
 
         ws = self.ent_mc_ws.get().strip()
         auto_appr = bool(self.chk_mc_auto.get())
 
-        self.btn_mc_run.configure(text="⏳ Task läuft...", state="disabled")
+        self.btn_mc_run.configure(text="⏳ Task running...", state="disabled")
         self.txt_mc_console.delete("1.0", "end")
-        self.txt_mc_console.insert("end", f"🚀 Starte Task in {ws}...\nPrompt: {prompt}\n\n")
-        self._log(f"[MAMMOUTH CODE] Headless task gestartet: '{prompt[:40]}...'")
+        self.txt_mc_console.insert("end", f"🚀 Starting task in {ws}...\nPrompt: {prompt}\n\n")
+        self._log(f"[MAMMOUTH CODE] Headless task started: '{prompt[:40]}...'")
 
         def _worker():
             from modules.mammouth_code import run_mammouth_task
             res = run_mammouth_task(prompt, workspace_path=ws, auto_approve=auto_appr)
             def _done():
-                self.btn_mc_run.configure(text="🚀 Headless Task ausführen", state="normal")
+                self.btn_mc_run.configure(text="🚀 Run Headless Task", state="normal")
                 if res.get("success"):
-                    self.txt_mc_console.insert("end", f"✓ Task erfolgreich abgeschlossen ({res.get('duration_seconds')}s):\n\n")
+                    self.txt_mc_console.insert("end", f"✓ Task completed successfully ({res.get('duration_seconds')}s):\n\n")
                     self.txt_mc_console.insert("end", res.get("output", "") + "\n")
-                    self._log(f"[MAMMOUTH CODE] Task erfolgreich beendet ({res.get('duration_seconds')}s)")
+                    self._log(f"[MAMMOUTH CODE] Task completed successfully ({res.get('duration_seconds')}s)")
                 else:
-                    self.txt_mc_console.insert("end", f"❌ Fehler (Returncode {res.get('returncode')}):\n\n")
+                    self.txt_mc_console.insert("end", f"❌ Error (return code {res.get('returncode')}):\n\n")
                     self.txt_mc_console.insert("end", res.get("error", "") + "\n")
                     if res.get("output"):
                         self.txt_mc_console.insert("end", res.get("output") + "\n")
-                    self._log(f"[MAMMOUTH CODE ERROR] Task fehlgeschlagen: {res.get('error')}")
+                    self._log(f"[MAMMOUTH CODE ERROR] Task failed: {res.get('error')}")
                 self.txt_mc_console.see("end")
             self.after(0, _done)
 
@@ -3886,15 +3886,15 @@ class MammouthControlCenter(ctk.CTk):
         res = sync_opencode_mcp_config(workspace_path=ws, server_url=url, api_token=tok)
         if res.get("success"):
             cfgs = "\n".join(res.get("updated_configs", []))
-            self._log(f"[MAMMOUTH CODE] MCP Bridge synchronisiert mit: {url}")
+            self._log(f"[MAMMOUTH CODE] MCP Bridge synced with: {url}")
             messagebox.showinfo(
-                "MCP Bridge Synchronisiert",
-                f"Mammouth Defroster 9000 wurde erfolgreich als MCP Server für Mammouth Code registriert!\n\nAktualisierte Konfigurationen:\n{cfgs}\n\nMammouth Code verfügt jetzt über alle Defroster-Fähigkeiten (Vision, Systemdiagnose, Speicher, etc.)!",
+                "MCP Bridge Synced",
+                f"Mammouth Defroster 9000 was successfully registered as an MCP server for Mammouth Code!\n\nUpdated configurations:\n{cfgs}\n\nMammouth Code now has access to all Defroster capabilities (Vision, System Diagnostics, Memory, etc.)!",
                 parent=self
             )
             self._refresh_mammouth_code_status()
         else:
-            messagebox.showerror("Fehler", "MCP-Konfiguration konnte nicht aktualisiert werden.", parent=self)
+            messagebox.showerror("Error", "Could not update MCP configuration.", parent=self)
 
     def _toggle_mc_key_visibility(self):
         cur = self.ent_mc_key.cget("show")
@@ -3912,11 +3912,11 @@ class MammouthControlCenter(ctk.CTk):
         self.config_data["mammouth_code"]["api_key"] = key
         saved = save_config(self.config_data)
         if saved:
-            self._log("[SECURITY] Mammouth API-Key per Windows DPAPI hardware-verschlüsselt in config.json gesichert.")
-            messagebox.showinfo("Gespeichert", "Mammouth API-Key wurde sicher per Windows DPAPI verschlüsselt gespeichert!", parent=self)
+            self._log("[SECURITY] Mammouth API key saved to config.json encrypted via Windows DPAPI.")
+            messagebox.showinfo("Saved", "Mammouth API key securely saved with Windows DPAPI encryption!", parent=self)
             self._refresh_mammouth_code_status()
         else:
-            messagebox.showerror("Fehler", "Konfiguration konnte nicht gespeichert werden.", parent=self)
+            messagebox.showerror("Error", "Configuration could not be saved.", parent=self)
 
     # ---------------------------------------------------------
     # TAB 2: SKILLS & MODULES
@@ -4067,7 +4067,7 @@ class MammouthControlCenter(ctk.CTk):
                 self.var_admin_shell = ctk.BooleanVar(value=self.config_data.get("server", {}).get("allow_admin_shell", False))
                 sw_admin_shell = ctk.CTkSwitch(
                     sub_opts,
-                    text="⚡ Admin / Modifizierend (Vollzugriff)" if self.var_admin_shell.get() else "🔒 Nur Diagnose & Read-Only",
+                    text="⚡ Admin / Modifying (Full Access)" if self.var_admin_shell.get() else "🔒 Diagnostics & Read-Only",
                     variable=self.var_admin_shell,
                     font=ctk.CTkFont(size=12, weight="bold"),
                     text_color=("#0F172A", "#E5E7EB"),
@@ -4152,7 +4152,7 @@ class MammouthControlCenter(ctk.CTk):
 
                 sw_headless = ctk.CTkSwitch(
                     sub_opts,
-                    text="🕶️ Headless (Hintergrund)" if self.var_browser_agent_headless.get() else "👁️ Sichtbares Fenster",
+                    text="🕶️ Headless (Background)" if self.var_browser_agent_headless.get() else "👁️ Visible Window",
                     variable=self.var_browser_agent_headless,
                     font=ctk.CTkFont(size=11, weight="bold"),
                     text_color=THEME_TEXT_PRIMARY,
@@ -4164,7 +4164,7 @@ class MammouthControlCenter(ctk.CTk):
 
                 btn_start_browser = ctk.CTkButton(
                     sub_opts,
-                    text="🚀 Browser starten",
+                    text="🚀 Launch Browser",
                     width=130,
                     height=26,
                     fg_color=THEME_BTN_SEC_BG,
@@ -4179,7 +4179,7 @@ class MammouthControlCenter(ctk.CTk):
 
                 btn_close_browser = ctk.CTkButton(
                     sub_opts,
-                    text="⏹️ Schließen",
+                    text="⏹️ Close",
                     width=100,
                     height=26,
                     fg_color=("#EF4444", "#DC2626"),
@@ -4222,7 +4222,7 @@ class MammouthControlCenter(ctk.CTk):
     def _on_browser_agent_headless_toggle(self):
         val = self.var_browser_agent_headless.get()
         if hasattr(self, "sw_browser_agent_headless"):
-            self.sw_browser_agent_headless.configure(text="🕶️ Headless (Hintergrund)" if val else "👁️ Sichtbares Fenster")
+            self.sw_browser_agent_headless.configure(text="🕶️ Headless (Background)" if val else "👁️ Visible Window")
         self.config_data.setdefault("browser_agent", {})["headless"] = val
         save_config(self.config_data)
         try:
@@ -5038,7 +5038,7 @@ class MammouthControlCenter(ctk.CTk):
         self.var_browser_auto_open = ctk.BooleanVar(value=self.config_data.get("embedded_browser", {}).get("auto_open_on_server_start", True))
         sw_browser_auto = ctk.CTkSwitch(
             f_br1,
-            text="Automatisch Mammouth AI Web-Tab öffnen wenn Server startet",
+            text="Automatically open Mammouth AI web tab on server start",
             variable=self.var_browser_auto_open,
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=THEME_TEXT_PRIMARY,
@@ -5051,7 +5051,7 @@ class MammouthControlCenter(ctk.CTk):
         self.var_start_in_web_tab = ctk.BooleanVar(value=self.config_data.get("server", {}).get("start_in_web_tab", False))
         sw_start_in_web = ctk.CTkSwitch(
             f_br_zen,
-            text="Beim Programmstart direkt im Chat-Tab starten (Chat-First / Zen Mode)",
+            text="Start directly in Chat tab on launch (Chat-First / Zen Mode)",
             variable=self.var_start_in_web_tab,
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=THEME_TEXT_PRIMARY,
@@ -5064,7 +5064,7 @@ class MammouthControlCenter(ctk.CTk):
         self.var_global_hotkey = ctk.BooleanVar(value=self.config_data.get("server", {}).get("global_hotkey_enabled", True))
         sw_global_hk = ctk.CTkSwitch(
             f_br_hk,
-            text="Globaler Windows-Schnellzugriff (Ctrl+Shift+M toggelt Cockpit & fokussiert Chat)",
+            text="Global Windows shortcut (Ctrl+Shift+M toggles Cockpit & focuses chat)",
             variable=self.var_global_hotkey,
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=THEME_TEXT_PRIMARY,
@@ -5074,7 +5074,7 @@ class MammouthControlCenter(ctk.CTk):
 
         f_br2 = ctk.CTkFrame(browser_group, fg_color="transparent")
         f_br2.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f_br2, text="Start-URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        ctk.CTkLabel(f_br2, text="Startup URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
         self.entry_browser_start_url = ctk.CTkEntry(
             f_br2,
             width=320,
@@ -5097,7 +5097,7 @@ class MammouthControlCenter(ctk.CTk):
         self.var_auto_check_updates = ctk.BooleanVar(value=self.config_data.get("server", {}).get("auto_check_updates", True))
         sw_auto_upd = ctk.CTkSwitch(
             f_upd1,
-            text="Automatisch beim Start nach Updates suchen (GitHub Releases)",
+            text="Check for updates automatically on startup (GitHub Releases)",
             variable=self.var_auto_check_updates,
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=THEME_TEXT_PRIMARY,
@@ -5107,10 +5107,10 @@ class MammouthControlCenter(ctk.CTk):
 
         f_upd2 = ctk.CTkFrame(upd_group, fg_color="transparent")
         f_upd2.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f_upd2, text=f"Installierte Version: {APP_VERSION}", width=220, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#64748B", "#94A3B8")).pack(side="left")
+        ctk.CTkLabel(f_upd2, text=f"Installed Version: {APP_VERSION}", width=220, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=("#64748B", "#94A3B8")).pack(side="left")
         btn_manual_upd = ctk.CTkButton(
             f_upd2,
-            text="🔍 Jetzt nach Updates suchen",
+            text="🔍 Check for Updates Now",
             width=220,
             height=30,
             fg_color=THEME_BTN_SEC_BG,
@@ -5186,7 +5186,7 @@ class MammouthControlCenter(ctk.CTk):
                 self.var_admin_shell.set(False)
         if hasattr(self, "sw_admin_shell"):
             self.sw_admin_shell.configure(
-                text="⚡ Admin / Modifizierend (Vollzugriff)" if self.var_admin_shell.get() else "🔒 Nur Diagnose & Read-Only"
+                text="⚡ Admin / Modifying (Full Access)" if self.var_admin_shell.get() else "🔒 Diagnostics & Read-Only"
             )
 
     def _on_settings_mode_changed(self, choice: str):
@@ -5727,7 +5727,7 @@ class MammouthControlCenter(ctk.CTk):
         traceback.print_exception(exc, val, tb)
         if hasattr(self, "_log"):
             try:
-                self._log(f"[ERROR] UI Callback Fehler: {val}")
+                self._log(f"[ERROR] UI callback error: {val}")
             except Exception:
                 pass
 
@@ -5741,7 +5741,7 @@ def main():
         traceback.print_exc()
         try:
             from tkinter import messagebox
-            messagebox.showerror("Mammouth Defroster Fehler", f"Ein unerwarteter Fehler ist aufgetreten:\n{e}\n\nDetails im Konsolen-Log.")
+            messagebox.showerror("Mammouth Defroster Error", f"An unexpected error occurred:\n{e}\n\nCheck console log for details.")
         except Exception:
             pass
     finally:

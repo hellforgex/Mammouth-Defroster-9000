@@ -167,7 +167,7 @@ from modules.google_drive import (
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.5.1): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
+    Mammouth Defroster 9000 (v0.5.2): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, Google Drive cloud integration, and Mammouth Code CLI agent automation exclusively for Mammouth.ai.
     Always prioritize safety, sandboxing, and precision.
     """
@@ -314,8 +314,8 @@ def task_schedule_create(
     """Schedule an automated recurring task to be triggered in the Defroster GUI.
     
     Args:
-        name: Short title (e.g. '⚽ Livebericht Fußballspiel: FC Bayern vs. BVB')
-        prompt: Action prompt to trigger (e.g. 'Suche nach aktuellem Spielstand, Toren und erstelle Livebericht')
+        name: Short title (e.g. '⚽ Live Match Report: Football')
+        prompt: Action prompt to trigger (e.g. 'Search web for live match score, goals, and produce a live report')
         interval_minutes: Interval in minutes between triggers (default 5.0 min, min 0.2)
         repeat_count: Number of executions (0 = continuous/unlimited, e.g. 18 for a 90min game)
         target: 'mammouth_web' (sends prompt to Mammouth chat), 'mammouth_code' (runs CLI agent), or 'powershell'
@@ -1055,11 +1055,11 @@ def _render_consent_page(request: Request, client_name: str, params: Dict[str, s
     csrf_token = _create_oauth_csrf_token(dict(params))
     error_html = f'<div class="error-box">{html.escape(error_msg)}</div>' if error_msg else ""
     page = f"""<!DOCTYPE html>
-    <html lang="de">
+    <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Mammouth Defroster 9000 — Autorisierung</title>
+        <title>Mammouth Defroster 9000 — Authorization</title>
         <style>
             body {{
                 background-color: #0B0D13;
@@ -1181,11 +1181,11 @@ def _render_consent_page(request: Request, client_name: str, params: Dict[str, s
         <div class="card">
             <div class="logo">🦣 ⚡</div>
             <h2>Mammouth Defroster 9000</h2>
-            <div class="subtitle">MCP Verbindungsanfrage</div>
-            <div class="badge">● Sicherer MCP OAuth 2.0 Flow</div>
+            <div class="subtitle">MCP Connection Request</div>
+            <div class="badge">● Secure MCP OAuth 2.0 Flow</div>
             <div class="info-box">
-                <strong>{html.escape(client_name)}</strong> möchte sich mit deinem lokalen Defroster 9000 verbinden.<br><br>
-                Dies gewährt Zugriff auf sandboxed MCP-Tools (Dateien, Desktop, Google Drive, Aufgaben & Automatisierung) auf diesem Host.
+                <strong>{html.escape(client_name)}</strong> wants to connect to your local Defroster 9000.<br><br>
+                This grants access to sandboxed MCP tools (files, desktop, Google Drive, tasks & automation) on this host.
             </div>
             {error_html}
             <form method="POST" action="{html.escape(request.url.path or '/oauth/authorize')}">
@@ -1196,11 +1196,11 @@ def _render_consent_page(request: Request, client_name: str, params: Dict[str, s
                 <input type="hidden" name="code_challenge" value="{html.escape(params.get("code_challenge", ""))}">
                 <input type="hidden" name="code_challenge_method" value="{html.escape(params.get("code_challenge_method", ""))}">
                 <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}">
-                <label class="owner-label" for="owner_token">API-Token des Defrosters (aus dem Cockpit kopieren)</label>
+                <label class="owner-label" for="owner_token">Defroster API Token (copy from the Cockpit)</label>
                 <input class="owner-input" type="password" id="owner_token" name="owner_token" autocomplete="off" placeholder="mc_..." autofocus>
                 <div class="buttons">
-                    <button type="submit" name="action" value="deny" class="btn-deny">Ablehnen</button>
-                    <button type="submit" name="action" value="allow" class="btn-allow">Zugriff erlauben</button>
+                    <button type="submit" name="action" value="deny" class="btn-deny">Deny</button>
+                    <button type="submit" name="action" value="allow" class="btn-allow">Allow Access</button>
                 </div>
             </form>
         </div>
@@ -1294,13 +1294,13 @@ async def oauth_authorize(request: Request):
             client_name = (_get_oauth_client(client_id) or {}).get("client_name", "Mammouth AI") if client_id else "Mammouth AI"
             if is_locked:
                 return _render_consent_page(request, client_name, csrf_params,
-                                            f"Zu viele Fehlversuche. Bitte in {int(remaining) + 1}s erneut versuchen.")
+                                            f"Too many failed attempts. Please try again in {int(remaining) + 1}s.")
             owner_token = str(form.get("owner_token", "") or "").strip()
             expected_token = str(load_config().get("server", {}).get("api_token", "") or "")
             if not owner_token or not expected_token or not secrets.compare_digest(owner_token, expected_token):
                 _record_failed_auth(client_ip, now)
                 return _render_consent_page(request, client_name, csrf_params,
-                                            "Falsches oder fehlendes API-Token. Das Token findest du im Defroster-Cockpit.")
+                                            "Incorrect or missing API token. You can find the token in the Defroster Cockpit.")
             _record_successful_auth(client_ip)
             code = f"mc_{secrets.token_urlsafe(32)}"
             _save_oauth_code(code, client_id, redirect_uri, code_challenge, code_challenge_method, time.time() + 600)

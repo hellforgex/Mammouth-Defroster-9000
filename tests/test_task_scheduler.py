@@ -130,7 +130,7 @@ class TestTaskScheduler(unittest.TestCase):
         football = next(p for p in presets if p["id"] == "football_live")
         self.assertEqual(football["interval_seconds"], 300)
         self.assertEqual(football["target"], "mammouth_web")
-        self.assertIn("Fußball", football["name"])
+        self.assertIn("Football", football["name"])
 
     def test_engine_execution_and_repeat_limit(self):
         """Test TaskSchedulerEngine execution, repeat limits, and handler invocation."""

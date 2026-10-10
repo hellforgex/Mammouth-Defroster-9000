@@ -187,7 +187,7 @@ class TestGuiV040Logic(unittest.TestCase):
             with patch("tkinter.messagebox.askyesno", return_value=True):
                 self.app._on_admin_shell_toggle()
                 self.app.sw_admin_shell.configure.assert_called_with(
-                    text="⚡ Admin / Modifizierend (Vollzugriff)"
+                    text="⚡ Admin / Modifying (Full Access)"
                 )
 
     def test_save_settings_persists_browser_and_updater(self):
@@ -421,16 +421,16 @@ class TestEmbeddedBrowserFeatures(unittest.TestCase):
         frame.lbl_download_status = MagicMock()
         frame.after = MagicMock()
 
-        frame._show_download_notification("✓ Fertig heruntergeladen", success=True)
+        frame._show_download_notification("✓ Download completed", success=True)
         frame.lbl_download_status.configure.assert_called_with(
-            text="✓ Fertig heruntergeladen",
+            text="✓ Download completed",
             text_color="#10B981"
         )
         frame.after.assert_called_with(6000, unittest.mock.ANY)
 
-        frame._show_download_notification("⚠ Fehler aufgetreten", success=False)
+        frame._show_download_notification("⚠ An error occurred", success=False)
         frame.lbl_download_status.configure.assert_called_with(
-            text="⚠ Fehler aufgetreten",
+            text="⚠ An error occurred",
             text_color="#EF4444"
         )
 

@@ -102,7 +102,7 @@ class TestMammouthQuotaParser(unittest.TestCase):
         res_error = parse_mammouth_quota_data({"ok": False, "error": "Not logged in"})
         self.assertFalse(res_error["is_logged_in"])
         self.assertEqual(res_error["total_percent"], 0.0)
-        self.assertEqual(res_error["plan_label"], "Nicht eingeloggt")
+        self.assertEqual(res_error["plan_label"], "Not logged in")
         self.assertEqual(len(res_error["brands"]), 0)
 
         res_none = parse_mammouth_quota_data(None)
@@ -255,12 +255,12 @@ class TestCTkMammouthQuotaCard(unittest.TestCase):
 
         card = CTkMammouthQuotaCard(self.root)
         self.assertIsNotNone(card)
-        self.assertEqual(card.lbl_plan.cget("text"), "Wird geladen...")
+        self.assertEqual(card.lbl_plan.cget("text"), "Loading...")
 
         # Update with unauthenticated data
         unauth_parsed = parse_mammouth_quota_data({"ok": False})
         card.update_quota(unauth_parsed)
-        self.assertEqual(card.lbl_plan.cget("text"), "Nicht eingeloggt")
+        self.assertEqual(card.lbl_plan.cget("text"), "Not logged in")
         self.assertEqual(card.lbl_percent.cget("text"), "-- %")
 
         # Update with screenshot quota data
