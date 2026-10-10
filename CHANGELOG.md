@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.6.0] - 2026-10-10
+
+### 📸 Feature 1: Multimodal Screen & Window Copilot
+- **Active Window Capture (`modules/screen_capture.py`):** Added `screen_capture_active_window` FastMCP tool (consent-gated) and `screen_capture_active_window_local` with active foreground window inspection (title, process, bounds via `DwmGetWindowAttribute`).
+- **Global Hotkey Bridge (`modules/global_hotkey.py`):** Added multi-hotkey manager supporting composite shortcuts (`Ctrl+Shift+Space`) on dedicated STA message pump threads.
+- **In-App Toast Banner & Chat Focus:** Added `show_toast` non-blocking visual feedback and automated clipboard paste bridge to Mammouth AI Web tab.
+
+### 🧠 Feature 2: Sovereign Workspace Memory & Semantic Code Search (Local RAG)
+- **Local SQLite FTS5 Search Engine (`modules/workspace_indexer.py`):** Zero-external-dependency local code search engine with bm25 ranking, snippet generation, and exact prefix matching.
+- **AST & Regex Symbol Indexer:** Extracted functions, async functions, classes with inheritance bases, and methods from Python via AST, and multi-language declarations via regex.
+- **Incremental mtime Tracking & Safety Filtering:** Incremental indexing with mtime cache, automatic deletion pruning, 0-byte file cleanup, and safety caps.
+- **FastMCP Tools:** Added `workspace_index_directory`, `workspace_search`, `workspace_find_symbols`, and `workspace_get_stats`.
+
+### 📋 Feature 3: Smart Clipboard AI & Quick-Actions
+- **Native Win32 64-bit Unicode Clipboard (`modules/smart_clipboard.py`):** Direct Win32 clipboard API access for UTF-16 Unicode reading and writing.
+- **Quick-Actions & Deterministic Transformers:** FastMCP tool `clipboard_transform` supporting `explain`, `fix_bug`, `translate`, `format_data` (deterministic JSON and Markdown table formatter with escaped pipe syntax), `git_commit`, `summarize`, and `custom`.
+- **Global Quick-Action Shortcut (`Ctrl+Shift+K`):** Summon Cockpit and focus chat with clipboard content.
+- **FastMCP Tools:** Added `clipboard_get_text`, `clipboard_set_text`, and `clipboard_transform`.
+
+### ⚙️ Configurable Keyboard Shortcuts & Settings UI
+- Added dedicated Settings UI card with customizable keybind entry fields and toggles for all global shortcuts with live re-binding.
+
 ## [0.5.2] - 2026-10-10
 
 ### 🌐 Complete English Localization

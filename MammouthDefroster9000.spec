@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('assets', 'assets'), ('modules', 'modules'), ('config.example.json', '.'), ('hosts.example.json', '.')]
 binaries = []
-hiddenimports = ['server', 'config', 'pystray', 'clr', 'pyperclip', 'modules.desktop_input', 'modules.google_drive', 'modules.embedded_browser', 'modules.updater', 'modules.mammouth_code', 'modules.task_scheduler', 'modules.browser_agent']
+hiddenimports = ['server', 'config', 'pystray', 'clr', 'pyperclip', 'modules.desktop_input', 'modules.google_drive', 'modules.embedded_browser', 'modules.updater', 'modules.mammouth_code', 'modules.task_scheduler', 'modules.browser_agent', 'modules.workspace_indexer', 'modules.smart_clipboard']
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('PIL')

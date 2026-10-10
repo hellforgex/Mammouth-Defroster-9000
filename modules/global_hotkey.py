@@ -1,8 +1,9 @@
 """
 Mammouth Defroster 9000 - Global Hotkey Module
-Provides system-wide keyboard shortcuts (e.g. Ctrl+Shift+M) using native Win32 RegisterHotKey.
-Runs on a dedicated STA background thread with a standard Windows message pump.
-Enables instant summon / toggle of the Mammouth Defroster Cockpit and Chat interface from anywhere in Windows.
+Provides system-wide keyboard shortcuts (e.g. Ctrl+Shift+M, Ctrl+Shift+Space, Ctrl+Shift+K)
+using native Win32 RegisterHotKey.
+Runs on dedicated STA background threads with standard Windows message pumps.
+Enables instant summon / toggle of the Cockpit, Multimodal Screen Copilot, and Smart Clipboard from anywhere in Windows.
 """
 
 import sys
@@ -10,7 +11,7 @@ import ctypes
 import ctypes.wintypes
 import threading
 import logging
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict, Any, List
 
 logger = logging.getLogger("global_hotkey")
 
@@ -27,11 +28,30 @@ WM_QUIT = 0x0012
 # Virtual Key Mapping
 VK_MAPPING = {
     "M": 0x4D,
+    "K": 0x4B,
+    "C": 0x43,
+    "V": 0x56,
     "SPACE": 0x20,
+    " ": 0x20,
     "RETURN": 0x0D,
     "ENTER": 0x0D,
     "TAB": 0x09,
     "ESCAPE": 0x1B,
+    "ESC": 0x1B,
+    "BACKSPACE": 0x08,
+    "DELETE": 0x2E,
+    "DEL": 0x2E,
+    "INSERT": 0x2D,
+    "HOME": 0x24,
+    "END": 0x23,
+    "PRIOR": 0x21,
+    "PAGEUP": 0x21,
+    "NEXT": 0x22,
+    "PAGEDOWN": 0x22,
+    "UP": 0x26,
+    "DOWN": 0x28,
+    "LEFT": 0x25,
+    "RIGHT": 0x27,
     "F1": 0x70,
     "F2": 0x71,
     "F3": 0x72,
@@ -44,19 +64,37 @@ VK_MAPPING = {
     "F10": 0x79,
     "F11": 0x7A,
     "F12": 0x7B,
+    "PLUS": 0xBB,
+    "+": 0xBB,
+    "MINUS": 0xBD,
+    "-": 0xBD,
 }
+
+
+class _HotkeyEntry:
+    def __init__(
+        self,
+        hotkey_id: int,
+        callback: Callable[[], None],
+        key: str,
+        modifiers: str,
+        thread: threading.Thread,
+        thread_id: Optional[int]
+    ):
+        self.hotkey_id = hotkey_id
+        self.callback = callback
+        self.key = key
+        self.modifiers = modifiers
+        self.thread = thread
+        self.thread_id = thread_id
 
 
 class GlobalHotkeyManager:
     """Manages background registration and message loop for Win32 global hotkeys."""
 
     def __init__(self):
-        self._thread: Optional[threading.Thread] = None
-        self._thread_id: Optional[int] = None
-        self._hotkey_id = 2001
-        self._is_registered = False
-        self._callback: Optional[Callable[[], None]] = None
-        self._lock = threading.RLock()  # re-entrant: register() calls unregister() while holding it
+        self._hotkeys: Dict[int, _HotkeyEntry] = {}
+        self._lock = threading.RLock()
 
     def register(
         self,
@@ -70,12 +108,17 @@ class GlobalHotkeyManager:
             logger.info("Global hotkey is only supported on Windows.")
             return False
 
-        with self._lock:
-            if self._is_registered:
-                self.unregister()
+        # Support composite keys such as "Ctrl+Shift+Space" in a single key argument
+        if "+" in key:
+            parts = [p.strip() for p in key.split("+")]
+            if len(parts) > 1 and parts[-1]:
+                key = parts[-1]
+                modifiers = "+".join(parts[:-1])
 
-            self._callback = callback
-            self._hotkey_id = hotkey_id
+        with self._lock:
+            # Unregister any existing binding for this hotkey_id
+            if hotkey_id in self._hotkeys:
+                self.unregister(hotkey_id=hotkey_id)
 
             # Parse modifiers
             fs_modifiers = MOD_NOREPEAT
@@ -93,35 +136,32 @@ class GlobalHotkeyManager:
             key_upper = key.strip().upper()
             vk_code = VK_MAPPING.get(key_upper)
             if vk_code is None:
-                if len(key_upper) == 1 and "A" <= key_upper <= "Z":
-                    vk_code = ord(key_upper)
-                elif len(key_upper) == 1 and "0" <= key_upper <= "9":
+                if len(key_upper) == 1 and ("A" <= key_upper <= "Z" or "0" <= key_upper <= "9"):
                     vk_code = ord(key_upper)
                 else:
                     vk_code = 0x4D  # Default to 'M'
 
             ready_event = threading.Event()
             success_flag = [False]
+            thread_id_box: List[Optional[int]] = [None]
 
             def _listener_loop():
                 try:
                     user32 = ctypes.windll.user32
                     kernel32 = ctypes.windll.kernel32
-                    self._thread_id = kernel32.GetCurrentThreadId()
+                    tid = kernel32.GetCurrentThreadId()
+                    thread_id_box[0] = tid
 
-                    res = user32.RegisterHotKey(0, self._hotkey_id, fs_modifiers, vk_code)
+                    res = user32.RegisterHotKey(0, hotkey_id, fs_modifiers, vk_code)
                     if res:
-                        self._is_registered = True
                         success_flag[0] = True
-                        logger.info(f"Registered global hotkey {modifiers}+{key} (ID: {self._hotkey_id})")
+                        logger.info(f"Registered global hotkey {modifiers}+{key} (ID: {hotkey_id})")
                     else:
                         err = ctypes.GetLastError()
                         logger.warning(f"Could not register global hotkey {modifiers}+{key} (Win32 error: {err})")
-                        self._is_registered = False
                         success_flag[0] = False
                 except Exception as e:
                     logger.error(f"Error initializing hotkey: {e}")
-                    self._is_registered = False
                     success_flag[0] = False
                 finally:
                     ready_event.set()
@@ -135,53 +175,90 @@ class GlobalHotkeyManager:
                         r = user32.GetMessageW(ctypes.byref(msg), 0, 0, 0)
                         if r <= 0:
                             break
-                        if msg.message == WM_HOTKEY and msg.wParam == self._hotkey_id:
-                            if self._callback:
-                                try:
-                                    self._callback()
-                                except Exception as cb_err:
-                                    logger.error(f"Error in hotkey callback: {cb_err}")
+                        if msg.message == WM_HOTKEY and msg.wParam == hotkey_id:
+                            try:
+                                callback()
+                            except Exception as cb_err:
+                                logger.error(f"Error in hotkey callback {hotkey_id}: {cb_err}")
                         user32.TranslateMessage(ctypes.byref(msg))
                         user32.DispatchMessageW(ctypes.byref(msg))
                 except Exception as loop_err:
-                    logger.warning(f"Hotkey message loop terminated: {loop_err}")
+                    logger.warning(f"Hotkey message loop {hotkey_id} terminated: {loop_err}")
                 finally:
                     try:
-                        user32.UnregisterHotKey(0, self._hotkey_id)
+                        user32.UnregisterHotKey(0, hotkey_id)
                     except Exception:
                         pass
-                    self._is_registered = False
-                    self._thread_id = None
-                    logger.info("Global hotkey unregistration complete.")
+                    logger.info(f"Global hotkey unregistration complete for ID {hotkey_id}.")
 
-            self._thread = threading.Thread(target=_listener_loop, name="GlobalHotkeyListener", daemon=True)
-            self._thread.start()
+            thread = threading.Thread(
+                target=_listener_loop,
+                name=f"GlobalHotkeyListener-{hotkey_id}",
+                daemon=True
+            )
+            thread.start()
             ready_event.wait(timeout=2.0)
-            return success_flag[0]
 
-    def unregister(self) -> None:
-        """Unregister active global hotkey and terminate message loop thread cleanly."""
+            if success_flag[0]:
+                self._hotkeys[hotkey_id] = _HotkeyEntry(
+                    hotkey_id=hotkey_id,
+                    callback=callback,
+                    key=key,
+                    modifiers=modifiers,
+                    thread=thread,
+                    thread_id=thread_id_box[0]
+                )
+                return True
+            return False
+
+    def unregister(self, hotkey_id: Optional[int] = None) -> None:
+        """Unregister active global hotkey(s) and terminate message loop thread cleanly."""
         with self._lock:
-            if not self._is_registered and not self._thread_id:
-                return
+            if hotkey_id is not None:
+                targets = [hotkey_id] if hotkey_id in self._hotkeys else []
+            else:
+                targets = list(self._hotkeys.keys())
 
-            if sys.platform == "win32" and self._thread_id:
-                try:
-                    user32 = ctypes.windll.user32
-                    user32.PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
-                except Exception as e:
-                    logger.debug(f"Failed to post WM_QUIT: {e}")
+            for hid in targets:
+                entry = self._hotkeys.pop(hid, None)
+                if not entry:
+                    continue
 
-            if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=1.0)
+                if sys.platform == "win32" and entry.thread_id:
+                    try:
+                        user32 = ctypes.windll.user32
+                        user32.PostThreadMessageW(entry.thread_id, WM_QUIT, 0, 0)
+                    except Exception as e:
+                        logger.debug(f"Failed to post WM_QUIT for hotkey {hid}: {e}")
 
-            self._thread = None
-            self._thread_id = None
-            self._is_registered = False
+                if entry.thread and entry.thread.is_alive():
+                    entry.thread.join(timeout=1.0)
 
     @property
     def is_registered(self) -> bool:
-        return self._is_registered
+        """Check if any global hotkey is currently registered and active."""
+        with self._lock:
+            return len(self._hotkeys) > 0
+
+    def is_hotkey_registered(self, hotkey_id: Optional[int] = None) -> bool:
+        """Check if a specific hotkey_id (or any hotkey if None) is registered."""
+        with self._lock:
+            if hotkey_id is None:
+                return len(self._hotkeys) > 0
+            return hotkey_id in self._hotkeys
+
+    def list_hotkeys(self) -> List[Dict[str, Any]]:
+        """List all currently registered hotkeys and their specs."""
+        with self._lock:
+            return [
+                {
+                    "hotkey_id": hid,
+                    "key": entry.key,
+                    "modifiers": entry.modifiers,
+                    "active": entry.thread.is_alive() if entry.thread else False
+                }
+                for hid, entry in self._hotkeys.items()
+            ]
 
 
 # Global singleton instance
@@ -198,11 +275,16 @@ def register_global_hotkey(
     return _manager.register(callback, key=key, modifiers=modifiers, hotkey_id=hotkey_id)
 
 
-def unregister_global_hotkey() -> None:
-    """Convenience function to unregister global hotkey."""
-    _manager.unregister()
+def unregister_global_hotkey(hotkey_id: Optional[int] = None) -> None:
+    """Convenience function to unregister global hotkey (or all if hotkey_id is None)."""
+    _manager.unregister(hotkey_id=hotkey_id)
 
 
-def is_global_hotkey_registered() -> bool:
+def is_global_hotkey_registered(hotkey_id: Optional[int] = None) -> bool:
     """Check if global hotkey is currently registered and active."""
-    return _manager.is_registered
+    return _manager.is_hotkey_registered(hotkey_id=hotkey_id)
+
+
+def list_registered_hotkeys() -> List[Dict[str, Any]]:
+    """List all registered hotkeys."""
+    return _manager.list_hotkeys()

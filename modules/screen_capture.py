@@ -382,3 +382,311 @@ def save_clipboard_image(dest_path: Optional[str] = None) -> Optional[str]:
         return None
 
 
+def get_foreground_window_info() -> Dict[str, Any]:
+    """Inspect the active foreground window on Windows using Win32 API.
+    
+    Returns:
+        dict: {
+            "hwnd": int,
+            "title": str,
+            "process_id": int,
+            "process_name": str,
+            "rect": {"left": int, "top": int, "right": int, "bottom": int, "width": int, "height": int}
+        }
+    """
+    if sys.platform != "win32":
+        return {
+            "hwnd": 0,
+            "title": "Desktop / Display",
+            "process_id": 0,
+            "process_name": "",
+            "rect": {"left": 0, "top": 0, "right": 1920, "bottom": 1080, "width": 1920, "height": 1080}
+        }
+
+    try:
+        import ctypes
+        import ctypes.wintypes
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return {
+                "hwnd": 0,
+                "title": "Desktop / Full Screen",
+                "process_id": 0,
+                "process_name": "explorer.exe",
+                "rect": {"left": 0, "top": 0, "right": 0, "bottom": 0, "width": 0, "height": 0}
+            }
+
+        # Window title
+        length = user32.GetWindowTextLengthW(hwnd)
+        title = ""
+        if length > 0:
+            title_buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, title_buf, length + 1)
+            title = title_buf.value
+
+        # Process ID & Name
+        pid = ctypes.wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        proc_id = pid.value
+        proc_name = ""
+        if proc_id:
+            try:
+                import psutil
+                proc = psutil.Process(proc_id)
+                proc_name = proc.name()
+            except Exception:
+                proc_name = ""
+
+        # Window Rect (Try DwmGetWindowAttribute with DWMWA_EXTENDED_FRAME_BOUNDS = 9 for clean borderless rect)
+        class RECT(ctypes.Structure):
+            _fields_ = [
+                ("left", ctypes.c_long),
+                ("top", ctypes.c_long),
+                ("right", ctypes.c_long),
+                ("bottom", ctypes.c_long),
+            ]
+
+        rect = RECT()
+        rect_found = False
+        try:
+            dwmapi = ctypes.windll.dwmapi
+            hr = dwmapi.DwmGetWindowAttribute(hwnd, 9, ctypes.byref(rect), ctypes.sizeof(rect))
+            if hr == 0:
+                rect_found = True
+        except Exception:
+            pass
+
+        if not rect_found:
+            user32.GetWindowRect(hwnd, ctypes.byref(rect))
+
+        is_minimized = bool(user32.IsIconic(hwnd)) or (rect.left <= -10000)
+        width = 0 if is_minimized else max(0, rect.right - rect.left)
+        height = 0 if is_minimized else max(0, rect.bottom - rect.top)
+
+        return {
+            "hwnd": int(hwnd),
+            "title": title or "Untitled Window",
+            "process_id": int(proc_id),
+            "process_name": proc_name,
+            "is_minimized": is_minimized,
+            "rect": {
+                "left": int(rect.left),
+                "top": int(rect.top),
+                "right": int(rect.right),
+                "bottom": int(rect.bottom),
+                "width": int(width),
+                "height": int(height)
+            }
+        }
+    except Exception as e:
+        return {
+            "hwnd": 0,
+            "title": f"Unknown (Error: {e})",
+            "process_id": 0,
+            "process_name": "",
+            "rect": {"left": 0, "top": 0, "right": 0, "bottom": 0, "width": 0, "height": 0}
+        }
+
+
+def screen_capture_active_window(
+    save_to_workspace: bool = True,
+    include_metadata: bool = True,
+    max_width: Optional[int] = 1920,
+    quality: int = 85
+) -> Any:
+    """Capture a screenshot of the currently active foreground window on Windows with metadata.
+
+    Args:
+        save_to_workspace: Whether to save PNG copy in ./workspace/screenshots/ (default True).
+        include_metadata: Whether to return window title, process name, and geometry metadata (default True).
+        max_width: Scale down image width to conserve vision LLM tokens (default 1920).
+        quality: Image compression quality (1-100, default 85).
+    """
+    return _screen_capture_active_window_impl(
+        save_to_workspace=save_to_workspace,
+        include_metadata=include_metadata,
+        max_width=max_width,
+        quality=quality,
+        local_ui=False
+    )
+
+
+def screen_capture_active_window_local(
+    save_to_workspace: bool = True,
+    include_metadata: bool = True,
+    max_width: Optional[int] = 1920,
+    quality: int = 85
+) -> Any:
+    """Active window capture initiated locally from desktop GUI / hotkey (bypasses MCP consent gate)."""
+    return _screen_capture_active_window_impl(
+        save_to_workspace=save_to_workspace,
+        include_metadata=include_metadata,
+        max_width=max_width,
+        quality=quality,
+        local_ui=True
+    )
+
+
+def _screen_capture_active_window_impl(
+    save_to_workspace: bool,
+    include_metadata: bool,
+    max_width: Optional[int],
+    quality: int,
+    local_ui: bool
+) -> Any:
+    global _user_consent_granted, _consent_mode
+
+    # M-07: Consent-Gate Check (skipped only for captures triggered in local GUI / hotkey)
+    if not local_ui and _is_consent_required() and not _user_consent_granted:
+        if _consent_prompt_callback is not None:
+            try:
+                prompt_res = _consent_prompt_callback()
+                if prompt_res in ("always", "once"):
+                    _user_consent_granted = True
+                    _consent_mode = prompt_res
+                elif prompt_res == "denied":
+                    return {
+                        "status": "denied",
+                        "message": "Desktop screen capture was explicitly denied by the user."
+                    }
+            except Exception:
+                pass
+
+        if not _user_consent_granted:
+            return {
+                "status": "consent_required",
+                "message": "Desktop screen capture requires explicit user consent. Please ask the user to allow it in the Defroster desktop UI."
+            }
+
+    # Consume single-use consent
+    if not local_ui and _consent_mode == "once":
+        _user_consent_granted = False
+        _consent_mode = "none"
+
+    _check_screen_capture_rate_limit()
+
+    if PILImage is None and mss is None:
+        return {
+            "error": "Pillow and MSS packages are required for Desktop Vision. Install with: pip install mss pillow"
+        }
+
+    # Get active foreground window info
+    win_info = get_foreground_window_info()
+    rect = win_info.get("rect", {})
+    w = rect.get("width", 0)
+    h = rect.get("height", 0)
+
+    pil_image = None
+
+    # Attempt capturing window bounding box if dimensions valid and window is on-screen
+    if w > 10 and h > 10 and rect.get("left", 0) > -10000 and rect.get("top", 0) > -10000 and not win_info.get("is_minimized", False):
+        # Method 1: MSS
+        if mss is not None:
+            try:
+                with mss.mss() as sct:
+                    monitor_bbox = {
+                        "left": rect["left"],
+                        "top": rect["top"],
+                        "width": rect["width"],
+                        "height": rect["height"]
+                    }
+                    sct_img = sct.grab(monitor_bbox)
+                    pil_image = PILImage.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+            except Exception:
+                pil_image = None
+
+        # Method 2: PIL ImageGrab
+        if pil_image is None and ImageGrab is not None:
+            try:
+                bbox = (rect["left"], rect["top"], rect["right"], rect["bottom"])
+                pil_image = ImageGrab.grab(bbox=bbox, all_screens=True)
+            except Exception:
+                pil_image = None
+
+    # Fallback if window capture was unavailable: capture primary screen
+    if pil_image is None:
+        if mss is not None:
+            try:
+                with mss.mss() as sct:
+                    target_mon = sct.monitors[min(1, len(sct.monitors) - 1)]
+                    sct_img = sct.grab(target_mon)
+                    pil_image = PILImage.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+            except Exception:
+                pil_image = None
+
+        if pil_image is None and ImageGrab is not None:
+            try:
+                pil_image = ImageGrab.grab(all_screens=False)
+            except Exception:
+                pil_image = None
+
+    if pil_image is None:
+        return {
+            "error": "Failed to capture window or screen. Ensure display permissions and dependencies."
+        }
+
+    original_size = pil_image.size
+
+    # Optional downscaling
+    if max_width is not None:
+        effective_max_w = max(320, min(int(max_width), 7680))
+        if pil_image.width > effective_max_w:
+            ratio = effective_max_w / float(pil_image.width)
+            new_height = int(float(pil_image.height) * ratio)
+            resample_filter = getattr(PILImage, "Resampling", getattr(PILImage, "ANTIALIAS", None))
+            resample_mode = getattr(resample_filter, "LANCZOS", PILImage.LANCZOS if hasattr(PILImage, "LANCZOS") else 1)
+            pil_image = pil_image.resize((effective_max_w, new_height), resample_mode)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    clean_proc = "".join(c for c in win_info.get("process_name", "app") if c.isalnum() or c in ("-", "_")) or "window"
+    filename = f"window_{clean_proc}_{timestamp}.png"
+    filepath = WORKSPACE_DIR / filename
+
+    saved_path_str = ""
+    if save_to_workspace:
+        try:
+            pil_image.save(str(filepath), format="PNG", optimize=True)
+            saved_path_str = str(filepath)
+            _cleanup_old_screenshots(max_keep=25)
+        except Exception as e:
+            saved_path_str = f"Error saving to disk: {e}"
+
+    # Convert to bytes
+    img_byte_arr = io.BytesIO()
+    if quality < 100:
+        pil_image.save(img_byte_arr, format="JPEG", quality=quality, optimize=True)
+        mime_type = "image/jpeg"
+        img_format = "jpeg"
+    else:
+        pil_image.save(img_byte_arr, format="PNG", optimize=True)
+        mime_type = "image/png"
+        img_format = "png"
+
+    img_bytes = img_byte_arr.getvalue()
+
+    if not include_metadata and FastMCPImage is not None:
+        try:
+            return FastMCPImage(data=img_bytes, format=img_format)
+        except Exception:
+            pass
+
+    import base64
+    b64_str = base64.b64encode(img_bytes).decode("utf-8")
+    return {
+        "status": "success",
+        "window_title": win_info.get("title", ""),
+        "process_name": win_info.get("process_name", ""),
+        "process_id": win_info.get("process_id", 0),
+        "hwnd": win_info.get("hwnd", 0),
+        "window_rect": win_info.get("rect", {}),
+        "original_resolution": f"{original_size[0]}x{original_size[1]}",
+        "current_resolution": f"{pil_image.width}x{pil_image.height}",
+        "saved_path": saved_path_str,
+        "format": img_format,
+        "mime_type": mime_type,
+        "base64_preview": f"data:{mime_type};base64,{b64_str[:100]}... [total {len(b64_str)} chars]"
+    }
+
+
+

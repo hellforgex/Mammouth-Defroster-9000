@@ -2,7 +2,42 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.5.2**
+> **Current Version:** **v0.6.0**
+
+---
+
+## 🚀 What's New in v0.6.0 — `v0.6.0 - Mammouth Defroster 9000`
+
+### 📸 Feature 1: Multimodal Screen & Window Copilot
+* **Targeted Foreground Window Vision:** Captures the active application window using Win32 API (`GetForegroundWindow`, `DwmGetWindowAttribute`), extracting window title, process ID, executable name, and borderless frame bounds.
+* **Consent-Gated MCP Tool:** Added `screen_capture_active_window(save_to_workspace=True, include_metadata=True, max_width=1920, quality=85)` tool, protected by user consent and token authentication.
+* **Global Win32 Copilot Shortcut (`Ctrl+Shift+Space`):** Dedicated background STA message pump thread instantly captures the active application window before bringing the Defroster Cockpit to the foreground, copies the image to the clipboard, shows in-app toast feedback, switches to the Mammouth AI chat, and focuses the prompt.
+* **In-App Toast Banner Feedback:** Modern non-blocking feedback toast inside the Cockpit with click-to-dismiss and automatic timeout.
+
+### 🧠 Feature 2: Sovereign Workspace Memory & Semantic Code Search (Local RAG)
+* **High-Performance Offline SQLite FTS5 Indexer (`modules/workspace_indexer.py`):** Lightning-fast full-text search across codebase files with snippet generation and bm25 ranking.
+* **AST & Multi-Language Symbol Extraction:** Automatically extracts function definitions, async functions, classes with inheritance bases, and methods from Python via AST, plus regex extraction for TypeScript/JavaScript/Go/Rust.
+* **Incremental mtime Tracking & Safety Filtering:** Avoids re-indexing unchanged files; automatically skips ignored folders (`.git`, `node_modules`, `.venv`, `dist`, `build`, etc.), binary files, and files > 2 MB. Emptied or deleted files are immediately pruned.
+* **FastMCP Tools:** Added `workspace_index_directory`, `workspace_search`, `workspace_find_symbols`, and `workspace_get_stats` tools, gated by the `workspace_memory` module switch.
+
+### 📋 Feature 3: Smart Clipboard AI & Quick-Actions
+* **Native 64-bit Win32 Unicode Clipboard (`modules/smart_clipboard.py`):** Low-level Win32 clipboard API access supporting international characters, emojis, and multiline text.
+* **Deterministic Transformers & AI Quick-Actions:**
+  - `format_data`: Deterministically parses and pretty-prints JSON or converts CSV/TSV into clean Markdown tables with escaped pipe syntax.
+  - `git_commit`: Conventional commit message proposals (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`) from diffs or descriptions.
+  - `explain`, `fix_bug`, `translate`, `summarize`, and `custom` prompt generation.
+* **Global Quick-Action Shortcut (`Ctrl+Shift+K`):** Summon Cockpit and focus chat with current clipboard content.
+* **FastMCP Tools:** Added `clipboard_get_text`, `clipboard_set_text`, and `clipboard_transform` tools, gated by the `smart_clipboard` module switch.
+
+### ⌨️ Fully Configurable Global Hotkeys & Cockpit Settings
+* Dedicated settings section with editable key combinations and enable toggles for Cockpit Summon, Screen Copilot, and Smart Clipboard. Live re-binding without requiring application restarts.
+
+### 📦 Release Verification & Checksums
+* **Archive:** `MammouthDefroster9000-v0.6.0-windows-x64.zip`
+* **SHA-256 Checksum:**
+  ```text
+  194fa565ace5be2fca4e3541c89366403d07841cb829f088d6bd365417c91c12
+  ```
 
 ---
 

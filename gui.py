@@ -252,7 +252,7 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.5.2"
+APP_VERSION = "v0.6.0"
 
 
 
@@ -1283,7 +1283,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self.tab_dashboard = self.tabview.add("📊 Dashboard & Live Console")
         self.tab_mammouth_code = self.tabview.add("💻 Mammouth Code CLI")
-        self.tab_skills = self.tabview.add("⚡ Modular Capabilities (12 Modules)")
+        self.tab_skills = self.tabview.add("⚡ Modular Capabilities (15 Modules)")
         self.tab_prompts = self.tabview.add("📖 Prompt Catalog")
         self.tab_tasks = self.tabview.add("⏱️ Tasks & Automation")
         self.tab_hosts = self.tabview.add("🔑 SSH Fleet & PuTTY Manager")
@@ -1334,7 +1334,7 @@ class MammouthControlCenter(ctk.CTk):
         nav_items = [
             ("📊 Dashboard & Live Console", "⚡ Dashboard & Status"),
             ("💻 Mammouth Code CLI", "💻 Mammouth Code"),
-            ("⚡ Modular Capabilities (12 Modules)", "🛠️ Tools (12)"),
+            ("⚡ Modular Capabilities (15 Modules)", "🛠️ Tools (15)"),
             ("📖 Prompt Catalog", "📖 Prompt Catalog"),
             ("⏱️ Tasks & Automation", "⏱️ Scheduled Tasks"),
             ("🔑 SSH Fleet & PuTTY Manager", "🔑 SSH & PuTTY Fleet"),
@@ -1529,25 +1529,189 @@ class MammouthControlCenter(ctk.CTk):
             self._log("[ZEN MODE] Deactivated Zen Mode (Standard Cockpit layout restored).")
 
     def _init_global_hotkey(self):
-        """Initialize global summon hotkey (default: Ctrl+Shift+M) using Win32 RegisterHotKey."""
-        if not self.config_data.get("server", {}).get("global_hotkey_enabled", True):
-            return
-        hotkey_spec = self.config_data.get("server", {}).get("global_hotkey", "Ctrl+Shift+M")
+        """Initialize global hotkeys (Cockpit summon, Screen Copilot, Smart Clipboard) using Win32 RegisterHotKey."""
+        srv_cfg = self.config_data.get("server", {})
+
+        # 1. Cockpit summon hotkey (default: Ctrl+Shift+M, ID: 2001)
+        if srv_cfg.get("global_hotkey_enabled", True):
+            hotkey_spec = srv_cfg.get("global_hotkey", "Ctrl+Shift+M")
+            try:
+                parts = [p.strip() for p in hotkey_spec.split("+")]
+                key = parts[-1] if parts else "M"
+                mods = "+".join(parts[:-1]) if len(parts) > 1 else "Ctrl+Shift"
+                ok = register_global_hotkey(
+                    lambda: self.after(0, self._on_global_hotkey_summon),
+                    key=key,
+                    modifiers=mods,
+                    hotkey_id=2001
+                )
+                if ok:
+                    self._log(f"[QUICK-LAUNCHER] Global summon hotkey active: {hotkey_spec} (ID: 2001)")
+                else:
+                    self._log(f"[QUICK-LAUNCHER] Global hotkey {hotkey_spec} not bound (may conflict or non-Windows).")
+            except Exception as e:
+                self._log(f"[QUICK-LAUNCHER] Hotkey registration error: {e}")
+
+        # 2. Multimodal Screen & Window Copilot hotkey (default: Ctrl+Shift+Space, ID: 2002)
+        if srv_cfg.get("screen_copilot_hotkey_enabled", True):
+            copilot_spec = srv_cfg.get("screen_copilot_hotkey", "Ctrl+Shift+Space")
+            try:
+                parts = [p.strip() for p in copilot_spec.split("+")]
+                key = parts[-1] if parts else "SPACE"
+                mods = "+".join(parts[:-1]) if len(parts) > 1 else "Ctrl+Shift"
+                ok = register_global_hotkey(
+                    self._on_screen_copilot_hotkey,
+                    key=key,
+                    modifiers=mods,
+                    hotkey_id=2002
+                )
+                if ok:
+                    self._log(f"[COPILOT] Screen Copilot global hotkey active: {copilot_spec} (ID: 2002)")
+            except Exception as e:
+                self._log(f"[COPILOT] Copilot hotkey registration error: {e}")
+
+        # 3. Smart Clipboard AI hotkey (default: Ctrl+Shift+K, ID: 2003)
+        if srv_cfg.get("smart_clipboard_hotkey_enabled", True):
+            clip_spec = srv_cfg.get("smart_clipboard_hotkey", "Ctrl+Shift+K")
+            try:
+                parts = [p.strip() for p in clip_spec.split("+")]
+                key = parts[-1] if parts else "K"
+                mods = "+".join(parts[:-1]) if len(parts) > 1 else "Ctrl+Shift"
+                ok = register_global_hotkey(
+                    lambda: self.after(0, self._on_smart_clipboard_hotkey),
+                    key=key,
+                    modifiers=mods,
+                    hotkey_id=2003
+                )
+                if ok:
+                    self._log(f"[SMART CLIPBOARD] Global hotkey active: {clip_spec} (ID: 2003)")
+            except Exception as e:
+                self._log(f"[SMART CLIPBOARD] Hotkey registration error: {e}")
+
+    def _summon_cockpit_to_foreground(self):
+        """Summon and activate the Defroster Cockpit window to the foreground."""
         try:
-            parts = [p.strip() for p in hotkey_spec.split("+")]
-            key = parts[-1] if parts else "M"
-            mods = "+".join(parts[:-1]) if len(parts) > 1 else "Ctrl+Shift"
-            ok = register_global_hotkey(
-                lambda: self.after(0, self._on_global_hotkey_summon),
-                key=key,
-                modifiers=mods
-            )
-            if ok:
-                self._log(f"[QUICK-LAUNCHER] Global summon hotkey active: {hotkey_spec}")
-            else:
-                self._log(f"[QUICK-LAUNCHER] Global hotkey {hotkey_spec} not bound (may conflict or non-Windows).")
+            import ctypes
+            user32 = ctypes.windll.user32
+            hwnd = self.winfo_id()
+            top_hwnd = user32.GetParent(hwnd) or hwnd
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+            user32.ShowWindow(top_hwnd, 9)  # SW_RESTORE
+            user32.SetForegroundWindow(top_hwnd)
+            self._select_nav_tab("💬 Mammouth AI Web")
         except Exception as e:
-            self._log(f"[QUICK-LAUNCHER] Hotkey registration error: {e}")
+            self._log(f"[SUMMON] Error bringing window to front: {e}")
+
+    def show_toast(self, title: str, message: str, duration_ms: int = 3500):
+        """Display an elegant non-blocking toast banner inside the cockpit."""
+        try:
+            if hasattr(self, "_active_toast") and self._active_toast:
+                try:
+                    self._active_toast.destroy()
+                except Exception:
+                    pass
+                self._active_toast = None
+
+            toast = ctk.CTkFrame(
+                self,
+                fg_color=("#1E293B", "#0F172A"),
+                border_width=1,
+                border_color=THEME_ACCENT,
+                corner_radius=8
+            )
+            self._active_toast = toast
+            toast.place(relx=0.98, rely=0.07, anchor="ne")
+            toast.lift()
+
+            content = ctk.CTkFrame(toast, fg_color="transparent")
+            content.pack(padx=14, pady=8)
+
+            lbl_t = ctk.CTkLabel(
+                content,
+                text=title,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=THEME_ACCENT
+            )
+            lbl_t.pack(anchor="w")
+
+            lbl_m = ctk.CTkLabel(
+                content,
+                text=message[:120],
+                font=ctk.CTkFont(size=11),
+                text_color="#F8FAFC"
+            )
+            lbl_m.pack(anchor="w")
+
+            def _dismiss(*args):
+                if hasattr(self, "_active_toast") and self._active_toast == toast:
+                    try:
+                        toast.destroy()
+                    except Exception:
+                        pass
+                    self._active_toast = None
+
+            toast.bind("<Button-1>", _dismiss)
+            content.bind("<Button-1>", _dismiss)
+            lbl_t.bind("<Button-1>", _dismiss)
+            lbl_m.bind("<Button-1>", _dismiss)
+            self.after(duration_ms, _dismiss)
+        except Exception as e:
+            self._log(f"[TOAST] Notification display error: {e}")
+
+    def _on_screen_copilot_hotkey(self):
+        """Handle Multimodal Screen Copilot hotkey (Ctrl+Shift+Space).
+        Captures the active foreground window BEFORE summoning Defroster,
+        copies image to clipboard, and bridges to Mammouth AI chat."""
+        threading.Thread(target=self._capture_active_window_copilot_async, daemon=True, name="ScreenCopilotWorker").start()
+
+    def _capture_active_window_copilot_async(self):
+        try:
+            from modules.screen_capture import screen_capture_active_window_local, copy_image_to_clipboard
+            res = screen_capture_active_window_local(save_to_workspace=True, include_metadata=True)
+            saved_p = res.get("saved_path") if isinstance(res, dict) else None
+            win_title = res.get("window_title", "Active Window") if isinstance(res, dict) else "Active Window"
+            proc_name = res.get("process_name", "") if isinstance(res, dict) else ""
+
+            if saved_p and os.path.exists(saved_p):
+                copy_image_to_clipboard(saved_p)
+                self.after(0, lambda: self._on_screen_copilot_completed(win_title, proc_name, saved_p))
+            else:
+                self.after(0, lambda: self._log(f"[COPILOT ERROR] Window capture returned: {res}"))
+        except Exception as ex:
+            self.after(0, lambda: self._log(f"[COPILOT ERROR] Screen copilot error: {ex}"))
+
+    def _on_screen_copilot_completed(self, win_title: str, proc_name: str, saved_path: str):
+        disp_proc = f" ({proc_name})" if proc_name else ""
+        self._log(f"[COPILOT] Captured active window '{win_title}'{disp_proc} -> {saved_path}")
+        self.show_toast("📸 Screen Copilot", f"Captured '{win_title[:35]}'{disp_proc} — In clipboard & Chat ready!")
+
+        # Summon window to front and focus Mammouth chat
+        self._summon_cockpit_to_foreground()
+        if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
+            self.mammouth_browser.focus_and_paste(delay_ms=100)
+
+    def _on_smart_clipboard_hotkey(self):
+        """Handle Smart Clipboard hotkey (Ctrl+Shift+K).
+        Reads Unicode clipboard text, shows toast feedback, summons Cockpit, and focuses chat."""
+        try:
+            from modules.smart_clipboard import get_clipboard_text
+            clip_text = get_clipboard_text()
+            char_count = len(clip_text)
+            self._log(f"[SMART CLIPBOARD] Quick-Action summon via Ctrl+Shift+K ({char_count} chars).")
+            if char_count > 0:
+                snippet = (clip_text[:50] + "...") if len(clip_text) > 50 else clip_text
+                snippet = snippet.replace("\n", " ").replace("\r", "")
+                self.show_toast("📋 Smart Clipboard", f"Loaded {char_count} chars: '{snippet}'")
+            else:
+                self.show_toast("📋 Smart Clipboard", "Clipboard is currently empty.")
+
+            self._summon_cockpit_to_foreground()
+            if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
+                self.mammouth_browser.focus_and_paste(delay_ms=100)
+        except Exception as ex:
+            self._log(f"[SMART CLIPBOARD ERROR] Hotkey execution error: {ex}")
 
     def _on_global_hotkey_summon(self):
         """Handle global hotkey trigger: summon Cockpit to front and focus Mammouth chat prompt."""
@@ -1565,16 +1729,7 @@ class MammouthControlCenter(ctk.CTk):
                 return
 
             # Otherwise, summon window to front
-            self.deiconify()
-            self.lift()
-            self.focus_force()
-            user32.ShowWindow(top_hwnd, 9)  # SW_RESTORE
-            user32.SetForegroundWindow(top_hwnd)
-
-            # Auto switch to Mammouth AI tab
-            self._select_nav_tab("💬 Mammouth AI Web")
-
-            # Focus chat input
+            self._summon_cockpit_to_foreground()
             if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
                 self.mammouth_browser.focus_and_paste(delay_ms=100)
         except Exception as ex:
@@ -3980,7 +4135,9 @@ class MammouthControlCenter(ctk.CTk):
             "mammouth_code": "💻",
             "desktop_input": "🖱️",
             "google_drive": "☁️",
-            "browser_agent": "🌐"
+            "browser_agent": "🌐",
+            "workspace_memory": "💾",
+            "smart_clipboard": "📑"
         }
 
         tool_counts = {
@@ -3992,11 +4149,13 @@ class MammouthControlCenter(ctk.CTk):
             "putty_ssh": "6 Tools",
             "system_monitor": "4 Tools",
             "web_tools": "2 Tools (SSRF Shield)",
-            "screen_capture": "4 Tools (Vision Gate)",
+            "screen_capture": "5 Tools (Vision Gate)",
             "mammouth_code": "5 Tools (Agent Bridge)",
             "desktop_input": "9 Tools",
             "google_drive": "11 Tools (Cloud & Docs)",
-            "browser_agent": "12 Tools (Edge / Playwright)"
+            "browser_agent": "12 Tools (Edge / Playwright)",
+            "workspace_memory": "4 Tools (Local RAG)",
+            "smart_clipboard": "3 Tools (AI Bridge)"
         }
 
         for key, mod in modules.items():
@@ -5059,19 +5218,6 @@ class MammouthControlCenter(ctk.CTk):
         )
         sw_start_in_web.pack(side="left")
 
-        f_br_hk = ctk.CTkFrame(browser_group, fg_color="transparent")
-        f_br_hk.pack(fill="x", padx=15, pady=5)
-        self.var_global_hotkey = ctk.BooleanVar(value=self.config_data.get("server", {}).get("global_hotkey_enabled", True))
-        sw_global_hk = ctk.CTkSwitch(
-            f_br_hk,
-            text="Global Windows shortcut (Ctrl+Shift+M toggles Cockpit & focuses chat)",
-            variable=self.var_global_hotkey,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=THEME_TEXT_PRIMARY,
-            progress_color="#10B981"
-        )
-        sw_global_hk.pack(side="left")
-
         f_br2 = ctk.CTkFrame(browser_group, fg_color="transparent")
         f_br2.pack(fill="x", padx=15, pady=(5, 15))
         ctk.CTkLabel(f_br2, text="Startup URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
@@ -5085,6 +5231,82 @@ class MammouthControlCenter(ctk.CTk):
         start_page_val = self.config_data.get("embedded_browser", {}).get("start_page", "https://mammouth.ai")
         self.entry_browser_start_url.insert(0, start_page_val)
         self.entry_browser_start_url.pack(side="left", padx=(0, 8))
+
+        # 8b. Global Keyboard Shortcuts & Copilot Hotkeys
+        hk_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
+        hk_group.pack(fill="x", pady=6)
+
+        ctk.CTkLabel(hk_group, text="⌨️ Global Keyboard Shortcuts & Copilot Hotkeys", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 6))
+        ctk.CTkLabel(hk_group, text="Fully configurable system-wide hotkeys. Supported modifiers: Ctrl, Shift, Alt, Win. Keys: A-Z, 0-9, Space, Enter, Tab, Esc, F1-F12.", font=ctk.CTkFont(size=12), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=15, pady=(0, 10))
+
+        # Cockpit summon hotkey
+        f_hk1 = ctk.CTkFrame(hk_group, fg_color="transparent")
+        f_hk1.pack(fill="x", padx=15, pady=4)
+        self.var_global_hotkey = ctk.BooleanVar(value=self.config_data.get("server", {}).get("global_hotkey_enabled", True))
+        ctk.CTkSwitch(
+            f_hk1,
+            text="Cockpit Summon / Toggle:",
+            variable=self.var_global_hotkey,
+            width=250,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#10B981"
+        ).pack(side="left")
+        self.entry_global_hotkey = ctk.CTkEntry(
+            f_hk1,
+            width=180,
+            fg_color=THEME_INPUT_BG,
+            border_color=THEME_CARD_BORDER,
+            text_color=THEME_TEXT_PRIMARY
+        )
+        self.entry_global_hotkey.insert(0, self.config_data.get("server", {}).get("global_hotkey", "Ctrl+Shift+M"))
+        self.entry_global_hotkey.pack(side="left", padx=10)
+
+        # Screen Copilot hotkey
+        f_hk2 = ctk.CTkFrame(hk_group, fg_color="transparent")
+        f_hk2.pack(fill="x", padx=15, pady=4)
+        self.var_screen_copilot_hotkey = ctk.BooleanVar(value=self.config_data.get("server", {}).get("screen_copilot_hotkey_enabled", True))
+        ctk.CTkSwitch(
+            f_hk2,
+            text="Screen & Window Copilot:",
+            variable=self.var_screen_copilot_hotkey,
+            width=250,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#10B981"
+        ).pack(side="left")
+        self.entry_screen_copilot_hotkey = ctk.CTkEntry(
+            f_hk2,
+            width=180,
+            fg_color=THEME_INPUT_BG,
+            border_color=THEME_CARD_BORDER,
+            text_color=THEME_TEXT_PRIMARY
+        )
+        self.entry_screen_copilot_hotkey.insert(0, self.config_data.get("server", {}).get("screen_copilot_hotkey", "Ctrl+Shift+Space"))
+        self.entry_screen_copilot_hotkey.pack(side="left", padx=10)
+
+        # Smart Clipboard hotkey
+        f_hk3 = ctk.CTkFrame(hk_group, fg_color="transparent")
+        f_hk3.pack(fill="x", padx=15, pady=(4, 15))
+        self.var_smart_clipboard_hotkey = ctk.BooleanVar(value=self.config_data.get("server", {}).get("smart_clipboard_hotkey_enabled", True))
+        ctk.CTkSwitch(
+            f_hk3,
+            text="Smart Clipboard AI Quick-Action:",
+            variable=self.var_smart_clipboard_hotkey,
+            width=250,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#10B981"
+        ).pack(side="left")
+        self.entry_smart_clipboard_hotkey = ctk.CTkEntry(
+            f_hk3,
+            width=180,
+            fg_color=THEME_INPUT_BG,
+            border_color=THEME_CARD_BORDER,
+            text_color=THEME_TEXT_PRIMARY
+        )
+        self.entry_smart_clipboard_hotkey.insert(0, self.config_data.get("server", {}).get("smart_clipboard_hotkey", "Ctrl+Shift+K"))
+        self.entry_smart_clipboard_hotkey.pack(side="left", padx=10)
 
         # 9. Software Updates
         upd_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
@@ -5263,6 +5485,18 @@ class MammouthControlCenter(ctk.CTk):
 
         if hasattr(self, "var_global_hotkey"):
             self.config_data.setdefault("server", {})["global_hotkey_enabled"] = self.var_global_hotkey.get()
+        if hasattr(self, "entry_global_hotkey"):
+            self.config_data.setdefault("server", {})["global_hotkey"] = self.entry_global_hotkey.get().strip() or "Ctrl+Shift+M"
+
+        if hasattr(self, "var_screen_copilot_hotkey"):
+            self.config_data.setdefault("server", {})["screen_copilot_hotkey_enabled"] = self.var_screen_copilot_hotkey.get()
+        if hasattr(self, "entry_screen_copilot_hotkey"):
+            self.config_data.setdefault("server", {})["screen_copilot_hotkey"] = self.entry_screen_copilot_hotkey.get().strip() or "Ctrl+Shift+Space"
+
+        if hasattr(self, "var_smart_clipboard_hotkey"):
+            self.config_data.setdefault("server", {})["smart_clipboard_hotkey_enabled"] = self.var_smart_clipboard_hotkey.get()
+        if hasattr(self, "entry_smart_clipboard_hotkey"):
+            self.config_data.setdefault("server", {})["smart_clipboard_hotkey"] = self.entry_smart_clipboard_hotkey.get().strip() or "Ctrl+Shift+K"
 
         if hasattr(self, "var_browser_agent_headless"):
             self.config_data.setdefault("browser_agent", {})["headless"] = self.var_browser_agent_headless.get()
@@ -5271,8 +5505,19 @@ class MammouthControlCenter(ctk.CTk):
         self.dash_mode_menu.set(self.opt_tunnel_mode.get())
         self.dash_path_menu.set(self.opt_endpoint_path.get())
         self._refresh_all_endpoint_labels()
+        self._reinit_global_hotkeys()
         self._log("Updated settings in config.json.")
         messagebox.showinfo("Saved", "Settings saved successfully!", parent=self)
+
+    def _reinit_global_hotkeys(self):
+        """Unregister active hotkeys and re-register based on current configuration."""
+        try:
+            from modules.global_hotkey import unregister_global_hotkey
+            unregister_global_hotkey()
+            self._init_global_hotkey()
+            self._log("[HOTKEYS] Hotkeys refreshed and rebound successfully.")
+        except Exception as e:
+            self._log(f"[HOTKEYS ERROR] Error refreshing hotkeys: {e}")
 
     # ---------------------------------------------------------
     # IN-PROCESS SERVER LIFECYCLE (THREAD-BASED)

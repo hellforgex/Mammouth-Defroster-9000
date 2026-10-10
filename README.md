@@ -34,7 +34,7 @@ You do **not** need Python, Git, or terminal knowledge. Everything is bundled in
 ```
 
 1. **Download the Release Package**:  
-   👉 **[Download MammouthDefroster9000-v0.5.1-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~90.2 MB)
+   👉 **[Download MammouthDefroster9000-v0.6.0-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~90.2 MB)
 2. **Extract the ZIP**:  
    Extract the archive to any convenient folder on your Windows PC (e.g. `C:\MammouthDefroster9000` or your Desktop).
 3. **Launch the Cockpit**:  
@@ -99,7 +99,7 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
 
 ---
 
-## 🛠️ 13 Defrosted Modules (81 Tools Total)
+## 🛠️ 15 Defrosted Modules (89 Tools Total)
 
 <table align="center" width="100%">
   <thead>
@@ -120,11 +120,11 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
       <td><code>browser_navigate</code>, <code>browser_snapshot</code>, <code>browser_screenshot</code>, <code>browser_click</code>, <code>browser_fill</code>, <code>browser_get_content</code>, <code>browser_evaluate</code>, <code>browser_tabs</code> <i>(12 tools)</i></td>
     </tr>
     <tr>
-      <td><b>👁️ Desktop Vision</b></td>
+      <td><b>👁️ Desktop Vision & Copilot</b></td>
       <td align="center">Enabled</td>
       <td align="center">🔒 Consent Gate</td>
-      <td>Multi-monitor screenshot capture with on-screen confirmation popup and LLM downscaling.</td>
-      <td><code>screen_capture</code>, <code>screen_list_monitors</code>, <code>screen_grant_consent</code>, <code>screen_revoke_consent</code></td>
+      <td>Multi-monitor screenshot capture and active foreground window capture (Ctrl+Shift+Space) with on-screen confirmation popup and LLM downscaling.</td>
+      <td><code>screen_capture</code>, <code>screen_list_monitors</code>, <code>screen_capture_active_window</code></td>
     </tr>
     <tr>
       <td><b>🖱️ Mouse & Keyboard</b></td>
@@ -146,6 +146,20 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
       <td align="center">🔒 OAuth / Sandboxed</td>
       <td>Browse, search, read, write, upload, and download Google Drive files with OAuth2 or Service Account authentication.</td>
       <td><code>gdrive_status</code>, <code>gdrive_list_files</code>, <code>gdrive_read_file</code>, <code>gdrive_download_to_workspace</code>, <code>gdrive_upload_from_workspace</code> <i>(11 tools)</i></td>
+    </tr>
+    <tr>
+      <td><b>💾 Sovereign Workspace Memory (Local RAG)</b></td>
+      <td align="center">Enabled</td>
+      <td align="center">🟢 Safe / Local</td>
+      <td>Lightning-fast SQLite FTS5 full-text code search, AST/regex symbol extraction, and incremental mtime indexing without external APIs.</td>
+      <td><code>workspace_index_directory</code>, <code>workspace_search</code>, <code>workspace_find_symbols</code>, <code>workspace_get_stats</code> <i>(4 tools)</i></td>
+    </tr>
+    <tr>
+      <td><b>📑 Smart Clipboard AI & Quick-Actions</b></td>
+      <td align="center">Enabled</td>
+      <td align="center">🟢 Safe / Local</td>
+      <td>Native 64-bit Win32 Unicode clipboard bridge, global hotkey (Ctrl+Shift+K), and AI quick-actions (explain, fix bug, translate, format data, commit, summarize).</td>
+      <td><code>clipboard_get_text</code>, <code>clipboard_set_text</code>, <code>clipboard_transform</code> <i>(3 tools)</i></td>
     </tr>
     <tr>
       <td><b>🧠 Long-Term Memory</b></td>
@@ -212,7 +226,7 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
 
 <details>
 <summary><b>1. Do I need Python installed on my computer?</b></summary>
-<p><b>No!</b> If you download the pre-built release ZIP (<code>MammouthDefroster9000-v0.5.1-windows-x64.zip</code>), everything is self-contained. It includes all necessary runtimes, libraries, and executables. Just unzip and run!</p>
+<p><b>No!</b> If you download the pre-built release ZIP (<code>MammouthDefroster9000-v0.6.0-windows-x64.zip</code>), everything is self-contained. It includes all necessary runtimes, libraries, and executables. Just unzip and run!</p>
 </details>
 
 <details>

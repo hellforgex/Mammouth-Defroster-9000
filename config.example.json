@@ -26,6 +26,10 @@
     "start_in_web_tab": false,
     "global_hotkey_enabled": true,
     "global_hotkey": "Ctrl+Shift+M",
+    "screen_copilot_hotkey_enabled": true,
+    "screen_copilot_hotkey": "Ctrl+Shift+Space",
+    "smart_clipboard_hotkey_enabled": true,
+    "smart_clipboard_hotkey": "Ctrl+Shift+K",
     "allowed_origins": [
       "https://mammouth.ai",
       "https://app.mammouth.ai",
@@ -74,6 +78,12 @@
       "enabled": true
     },
     "browser_agent": {
+      "enabled": true
+    },
+    "workspace_memory": {
+      "enabled": true
+    },
+    "smart_clipboard": {
       "enabled": true
     }
   },

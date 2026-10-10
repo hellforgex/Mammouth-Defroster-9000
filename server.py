@@ -97,6 +97,18 @@ from modules.system_monitor import (
 from modules.screen_capture import (
     screen_capture,
     screen_list_monitors,
+    screen_capture_active_window,
+)
+from modules.workspace_indexer import (
+    workspace_index_directory,
+    workspace_search,
+    workspace_find_symbols,
+    workspace_get_stats,
+)
+from modules.smart_clipboard import (
+    clipboard_get_text,
+    clipboard_set_text,
+    clipboard_transform,
 )
 from modules.web_tools import (
     web_fetch_url,
@@ -167,7 +179,7 @@ from modules.google_drive import (
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.5.2): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
+    Mammouth Defroster 9000 (v0.6.0): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, Google Drive cloud integration, and Mammouth Code CLI agent automation exclusively for Mammouth.ai.
     Always prioritize safety, sandboxing, and precision.
     """
@@ -429,6 +441,7 @@ def register_active_tools():
     if mods.get("screen_capture", {}).get("enabled", True):
         mcp.tool()(require_module("screen_capture")(screen_capture))
         mcp.tool()(require_module("screen_capture")(screen_list_monitors))
+        mcp.tool()(require_module("screen_capture")(screen_capture_active_window))
         # screen_grant_consent / screen_revoke_consent are intentionally NOT exposed as MCP tools:
         # consent must come from the human via the GUI, never from the model itself.
 
@@ -481,6 +494,17 @@ def register_active_tools():
         mcp.tool()(require_module("browser_agent")(browser_tabs))
         mcp.tool()(require_module("browser_agent")(browser_status))
         mcp.tool()(require_module("browser_agent")(browser_close))
+
+    if mods.get("workspace_memory", {}).get("enabled", True):
+        mcp.tool()(require_module("workspace_memory")(workspace_index_directory))
+        mcp.tool()(require_module("workspace_memory")(workspace_search))
+        mcp.tool()(require_module("workspace_memory")(workspace_find_symbols))
+        mcp.tool()(require_module("workspace_memory")(workspace_get_stats))
+
+    if mods.get("smart_clipboard", {}).get("enabled", True):
+        mcp.tool()(require_module("smart_clipboard")(clipboard_get_text))
+        mcp.tool()(require_module("smart_clipboard")(clipboard_set_text))
+        mcp.tool()(require_module("smart_clipboard")(clipboard_transform))
 
 
 register_active_tools()

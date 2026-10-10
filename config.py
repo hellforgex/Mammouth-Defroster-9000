@@ -53,7 +53,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "auto_check_updates": True,        # Automatically check for updates on startup
         "start_in_web_tab": False,         # Chat-First Mode: Auto switch to Mammouth AI tab on startup
         "global_hotkey_enabled": True,     # Global hotkey (Ctrl+Shift+M) to summon/toggle Mammouth Defroster
-        "global_hotkey": "Ctrl+Shift+M"
+        "global_hotkey": "Ctrl+Shift+M",
+        "screen_copilot_hotkey_enabled": True, # Global hotkey (Ctrl+Shift+Space) for active window multimodal capture
+        "screen_copilot_hotkey": "Ctrl+Shift+Space",
+        "smart_clipboard_hotkey_enabled": True, # Global hotkey (Ctrl+Shift+K) for smart clipboard quick actions
+        "smart_clipboard_hotkey": "Ctrl+Shift+K"
     },
     "modules": {
 
@@ -122,6 +126,16 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "enabled": True,
             "name": "Playwright Browser Automation Agent",
             "description": "Full automated browser control via Playwright (Edge/Chrome): navigate, click, fill, snapshots, tabs, and JS execution."
+        },
+        "workspace_memory": {
+            "enabled": True,
+            "name": "Sovereign Workspace Memory & Code Search (FTS5 RAG)",
+            "description": "Fast SQLite FTS5 code search, AST symbol indexer (functions, classes), and local codebase RAG without external API dependencies."
+        },
+        "smart_clipboard": {
+            "enabled": True,
+            "name": "Smart Clipboard AI & Quick-Actions",
+            "description": "Unicode clipboard bridge, global hotkey (Ctrl+Shift+K), and AI quick-actions (explain, fix bug, translate, git commit, summarize)."
         },
     },
     "browser_agent": {
