@@ -26,8 +26,16 @@ from modules.global_hotkey import (
 )
 from modules.screen_capture import (
     get_foreground_window_info,
+    get_window_info,
+    get_target_window_info,
+    get_topmost_external_window,
+    is_defroster_window,
+    screen_list_windows,
     screen_capture_active_window,
     screen_capture_active_window_local,
+    screen_capture_window,
+    screen_set_tracked_window,
+    screen_get_tracked_window,
     screen_grant_consent,
     screen_revoke_consent
 )
@@ -169,6 +177,180 @@ class TestV060ScreenCopilot(unittest.TestCase):
             res = screen_capture_active_window(save_to_workspace=False, include_metadata=True)
             self.assertEqual(res.get("status"), "success")
             self.assertEqual(res.get("current_resolution"), "1920x1080")
+
+    def test_screen_list_windows_structure(self):
+        """Test screen_list_windows returns properly structured window list."""
+        windows = screen_list_windows()
+        self.assertIsInstance(windows, list)
+        for w in windows:
+            self.assertIn("hwnd", w)
+            self.assertIn("title", w)
+            self.assertIn("process_name", w)
+            self.assertIn("process_id", w)
+            self.assertIn("is_foreground", w)
+            self.assertIn("is_minimized", w)
+            self.assertIn("rect", w)
+
+    def test_screen_list_windows_non_windows(self):
+        """Test screen_list_windows gracefully returns empty list on non-Windows platform."""
+        with patch("modules.screen_capture.sys.platform", "linux"):
+            windows = screen_list_windows()
+            self.assertEqual(windows, [])
+
+    def test_screen_capture_with_target_hwnd(self):
+        """Test capturing a specific window via target_hwnd."""
+        screen_grant_consent("once")
+        mock_target_info = {
+            "hwnd": 98765,
+            "title": "Target Document - Editor",
+            "process_id": 4321,
+            "process_name": "editor.exe",
+            "is_minimized": False,
+            "rect": {"left": 100, "top": 100, "right": 900, "bottom": 700, "width": 800, "height": 600}
+        }
+        mock_img = RealPILImage.new("RGB", (800, 600), color=(30, 40, 50))
+        with patch("modules.screen_capture.get_window_info", return_value=mock_target_info), \
+             patch("modules.screen_capture.ImageGrab") as mock_grab, \
+             patch("modules.screen_capture.mss", None):
+            mock_grab.grab.return_value = mock_img
+            res = screen_capture_active_window(target_hwnd=98765, save_to_workspace=False, include_metadata=True)
+            self.assertEqual(res.get("status"), "success")
+            self.assertEqual(res.get("hwnd"), 98765)
+            self.assertEqual(res.get("window_title"), "Target Document - Editor")
+
+    def test_screen_capture_window_alias(self):
+        """Test screen_capture_window alias invokes screen_capture_active_window."""
+        screen_grant_consent("once")
+        mock_target_info = {
+            "hwnd": 55555,
+            "title": "Browser Tab",
+            "process_id": 1111,
+            "process_name": "browser.exe",
+            "is_minimized": False,
+            "rect": {"left": 0, "top": 0, "right": 1024, "bottom": 768, "width": 1024, "height": 768}
+        }
+        mock_img = RealPILImage.new("RGB", (1024, 768), color=(20, 20, 20))
+        with patch("modules.screen_capture.get_window_info", return_value=mock_target_info), \
+             patch("modules.screen_capture.ImageGrab") as mock_grab, \
+             patch("modules.screen_capture.mss", None):
+            mock_grab.grab.return_value = mock_img
+            res = screen_capture_window(target_hwnd=55555, save_to_workspace=False, include_metadata=True)
+            self.assertEqual(res.get("status"), "success")
+            self.assertEqual(res.get("hwnd"), 55555)
+
+    def test_screen_capture_saves_to_custom_active_workspace(self):
+        """Test screen capture saves into active workspace screenshots folder."""
+        screen_grant_consent("once")
+        temp_ws = tempfile.mkdtemp(prefix="test_copilot_ws_")
+        try:
+            mock_target_info = {
+                "hwnd": 12345,
+                "title": "Custom WS App",
+                "process_id": 9999,
+                "process_name": "app.exe",
+                "is_minimized": False,
+                "rect": {"left": 0, "top": 0, "right": 800, "bottom": 600, "width": 800, "height": 600}
+            }
+            mock_img = RealPILImage.new("RGB", (800, 600), color=(10, 20, 30))
+            with patch("modules.screen_capture.get_window_info", return_value=mock_target_info), \
+                 patch("modules.screen_capture.ImageGrab") as mock_grab, \
+                 patch("modules.screen_capture.mss", None), \
+                 patch("config.load_config", return_value={"server": {"workspace_root": temp_ws}}):
+                mock_grab.grab.return_value = mock_img
+                res = screen_capture_active_window(target_hwnd=12345, save_to_workspace=True, include_metadata=True)
+                self.assertEqual(res.get("status"), "success")
+                saved_path = res.get("saved_path")
+                self.assertTrue(saved_path and os.path.exists(saved_path))
+                self.assertTrue(str(Path(temp_ws).resolve()) in str(Path(saved_path).resolve()))
+        finally:
+            shutil.rmtree(temp_ws, ignore_errors=True)
+
+    def test_is_defroster_window_detection(self):
+        """Test is_defroster_window detects current Defroster process."""
+        self.assertFalse(is_defroster_window(0))
+        # Non-Windows test gracefully returns False
+        with patch("modules.screen_capture.sys.platform", "linux"):
+            self.assertFalse(is_defroster_window(12345))
+
+    def test_screen_set_and_get_tracked_window_modes(self):
+        """Test switching tracking modes between auto, monitor, snip, and explicit window."""
+        res_auto = screen_set_tracked_window("auto")
+        self.assertEqual(res_auto.get("status"), "success")
+        self.assertEqual(screen_get_tracked_window().get("mode"), "auto")
+
+        res_mon = screen_set_tracked_window("monitor")
+        self.assertEqual(res_mon.get("status"), "success")
+        self.assertEqual(screen_get_tracked_window().get("mode"), "monitor")
+
+        res_snip = screen_set_tracked_window("snip")
+        self.assertEqual(res_snip.get("status"), "success")
+        self.assertEqual(screen_get_tracked_window().get("mode"), "snip")
+
+        # Set specific window via mock list
+        mock_wins = [
+            {"hwnd": 77777, "title": "My Editor - Project", "process_name": "code.exe"}
+        ]
+        with patch("modules.screen_capture.screen_list_windows", return_value=mock_wins), \
+             patch("modules.screen_capture.get_window_info", return_value={"title": "My Editor - Project", "process_name": "code.exe", "is_minimized": False}):
+            res_win = screen_set_tracked_window("code.exe")
+            self.assertEqual(res_win.get("status"), "success")
+            self.assertEqual(res_win.get("hwnd"), 77777)
+            tracked = screen_get_tracked_window()
+            self.assertEqual(tracked.get("mode"), "window")
+            self.assertEqual(tracked.get("hwnd"), 77777)
+
+        # Reset to auto
+        screen_set_tracked_window("auto")
+
+    def test_get_target_window_info_auto_excludes_defroster(self):
+        """Test get_target_window_info falls back to top external window when Defroster is foreground."""
+        defroster_fg = {
+            "hwnd": 11111,
+            "title": "Mammouth Defroster 9000 - Cockpit",
+            "process_id": os.getpid(),
+            "process_name": "MammouthDefroster9000.exe",
+            "is_minimized": False,
+            "rect": {"left": 0, "top": 0, "right": 1200, "bottom": 800, "width": 1200, "height": 800}
+        }
+        external_win = {
+            "hwnd": 22222,
+            "title": "User Active Code Editor",
+            "process_id": 9876,
+            "process_name": "editor.exe",
+            "is_minimized": False,
+            "rect": {"left": 50, "top": 50, "right": 1050, "bottom": 750, "width": 1000, "height": 700}
+        }
+
+        with patch("modules.screen_capture.get_foreground_window_info", return_value=defroster_fg), \
+             patch("modules.screen_capture.is_defroster_window", side_effect=lambda h: h == 11111), \
+             patch("modules.screen_capture.get_topmost_external_window", return_value=external_win):
+            target = get_target_window_info(hwnd=None, exclude_defroster=True)
+            self.assertEqual(target.get("hwnd"), 22222)
+            self.assertEqual(target.get("title"), "User Active Code Editor")
+
+    def test_screen_list_windows_exclude_self(self):
+        """Test screen_list_windows exclude_self flag filters out Defroster windows."""
+        wins_all = screen_list_windows(exclude_self=False)
+        wins_ext = screen_list_windows(exclude_self=True)
+        self.assertIsInstance(wins_all, list)
+        self.assertIsInstance(wins_ext, list)
+        for w in wins_ext:
+            self.assertFalse(w.get("is_self", False))
+
+    def test_gui_update_screen_target_button_label(self):
+        """Test GUI button label updates properly according to tracking mode."""
+        from gui import MammouthControlCenter
+        app = MagicMock(spec=MammouthControlCenter)
+        app.btn_screen_target = MagicMock()
+
+        with patch("modules.screen_capture.screen_get_tracked_window", return_value={"mode": "auto", "is_valid": False}):
+            MammouthControlCenter._update_screen_target_button_label(app)
+            app.btn_screen_target.configure.assert_called_with(text="🎯 Target: Auto ▾")
+
+        with patch("modules.screen_capture.screen_get_tracked_window", return_value={"mode": "window", "is_valid": True, "process_name": "notepad.exe", "title": "Notes"}):
+            MammouthControlCenter._update_screen_target_button_label(app)
+            app.btn_screen_target.configure.assert_called_with(text="🎯 Notepad ▾")
+
 
 
 class TestV060WorkspaceIndexer(unittest.TestCase):
@@ -469,6 +651,117 @@ class TestV060ServerGateIntegration(unittest.TestCase):
         with patch("server.load_config", return_value={"modules": {"smart_clipboard": {"enabled": True}}}):
             res = dummy_clip()
             self.assertEqual(res, {"clip": True})
+
+
+class TestV060ActiveWorkspaceChoice(unittest.TestCase):
+    def setUp(self):
+        self.custom_ws = tempfile.mkdtemp(prefix="defroster_custom_ws_")
+
+    def tearDown(self):
+        shutil.rmtree(self.custom_ws, ignore_errors=True)
+
+    def test_gui_get_active_workspace_defaults(self):
+        """Test gui._get_active_workspace resolves relative ./workspace properly."""
+        from gui import MammouthControlCenter
+        app = MagicMock(spec=MammouthControlCenter)
+        app.config_data = {"server": {"workspace_root": "./workspace"}}
+        ws_path = MammouthControlCenter._get_active_workspace(app)
+        self.assertTrue(ws_path.is_absolute())
+        self.assertTrue(ws_path.exists())
+
+    def test_gui_get_active_workspace_custom(self):
+        """Test gui._get_active_workspace resolves custom directory."""
+        from gui import MammouthControlCenter
+        app = MagicMock(spec=MammouthControlCenter)
+        app.config_data = {"server": {"workspace_root": self.custom_ws}}
+        ws_path = MammouthControlCenter._get_active_workspace(app)
+        self.assertEqual(str(ws_path).casefold(), str(Path(self.custom_ws).resolve()).casefold())
+
+    def test_gui_choose_active_workspace_selection(self):
+        """Test choosing active workspace updates config_data, saves, and updates UI."""
+        from gui import MammouthControlCenter
+        app = MagicMock(spec=MammouthControlCenter)
+        app.config_data = {"server": {"workspace_root": "./workspace"}}
+        app.entry_workspace = MagicMock()
+        app.ent_mc_ws = MagicMock()
+        app._log = MagicMock()
+
+        with patch("gui.filedialog.askdirectory", return_value=self.custom_ws), \
+             patch("gui.save_config") as mock_save, \
+             patch("gui.messagebox.showinfo") as mock_info:
+            MammouthControlCenter._choose_active_workspace(app)
+            self.assertEqual(app.config_data["server"]["workspace_root"], str(Path(self.custom_ws).resolve()))
+            mock_save.assert_called_once()
+            app.entry_workspace.delete.assert_called_with(0, "end")
+            app.entry_workspace.insert.assert_called_with(0, str(Path(self.custom_ws).resolve()))
+            app.ent_mc_ws.delete.assert_called_with(0, "end")
+            app.ent_mc_ws.insert.assert_called_with(0, str(Path(self.custom_ws).resolve()))
+            mock_info.assert_called_once()
+
+    def test_gui_choose_active_workspace_cancel(self):
+        """Test cancelling folder picker does not alter active workspace."""
+        from gui import MammouthControlCenter
+        app = MagicMock(spec=MammouthControlCenter)
+        app.config_data = {"server": {"workspace_root": "./workspace"}}
+
+        with patch("gui.filedialog.askdirectory", return_value=""), \
+             patch("gui.save_config") as mock_save:
+            MammouthControlCenter._choose_active_workspace(app)
+            self.assertEqual(app.config_data["server"]["workspace_root"], "./workspace")
+            mock_save.assert_not_called()
+
+    def test_gui_open_workspace_folder_invokes_os_startfile(self):
+        """Test opening workspace folder uses resolved active workspace."""
+        from gui import MammouthControlCenter
+        app = MagicMock(spec=MammouthControlCenter)
+        app._get_active_workspace.return_value = Path(self.custom_ws).resolve()
+        app._log = MagicMock()
+
+        with patch("os.startfile", create=True) as mock_startfile:
+            MammouthControlCenter._open_workspace_folder(app)
+            mock_startfile.assert_called_once_with(str(Path(self.custom_ws).resolve()))
+
+    def test_gui_update_workspace_button_labels(self):
+        """Test _update_workspace_button_labels sets display names on buttons."""
+        from gui import MammouthControlCenter
+        app = MagicMock(spec=MammouthControlCenter)
+        app._get_active_workspace.return_value = Path(self.custom_ws).resolve()
+        app.btn_quick_ws = MagicMock()
+        app.btn_ws = MagicMock()
+        MammouthControlCenter._update_workspace_button_labels(app)
+        app.btn_quick_ws.configure.assert_called_once()
+        app.btn_ws.configure.assert_called_once()
+
+    def test_gui_copy_workspace_path_to_clipboard(self):
+        """Test _copy_workspace_path_to_clipboard updates clipboard and flushes."""
+        from gui import MammouthControlCenter
+        app = MagicMock(spec=MammouthControlCenter)
+        app.clipboard_clear = MagicMock()
+        app.clipboard_append = MagicMock()
+        app.update = MagicMock()
+        app._log = MagicMock()
+        MammouthControlCenter._copy_workspace_path_to_clipboard(app, "D:/Custom/Path")
+        app.clipboard_clear.assert_called_once()
+        app.clipboard_append.assert_called_once_with("D:/Custom/Path")
+        app.update.assert_called_once()
+
+    def test_tray_manager_on_open_workspace_resolves_active_ws(self):
+        """Test tray_manager on_open_workspace uses active workspace root."""
+        from tray_manager import DefrosterTrayApp
+        tray = MagicMock(spec=DefrosterTrayApp)
+        with patch("modules.shell_processes.resolve_workspace_root", return_value=self.custom_ws), \
+             patch("os.startfile", create=True) as mock_startfile:
+            DefrosterTrayApp.on_open_workspace(tray)
+            mock_startfile.assert_called_once_with(str(Path(self.custom_ws).resolve()))
+
+    def test_screen_list_windows_filters_system_helpers(self):
+        """Test screen_list_windows filters system processes when include_system is False."""
+        from modules.screen_capture import screen_list_windows
+        wins = screen_list_windows(include_system=False)
+        self.assertIsInstance(wins, list)
+        for w in wins:
+            self.assertNotIn(w["title"], ("WDADesktopService", "TextInputHost", "Program Manager"))
+            self.assertNotIn(w["process_name"].lower(), ("wdadesktopservice.exe", "textinputhost.exe"))
 
 
 if __name__ == "__main__":

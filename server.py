@@ -92,12 +92,17 @@ from modules.system_monitor import (
     system_get_specs,
     system_get_processes,
     system_get_gpu_info,
-    system_get_event_logs
+    system_get_event_logs,
+    system_list_event_channels
 )
 from modules.screen_capture import (
     screen_capture,
     screen_list_monitors,
+    screen_list_windows,
     screen_capture_active_window,
+    screen_capture_window,
+    screen_set_tracked_window,
+    screen_get_tracked_window,
 )
 from modules.workspace_indexer import (
     workspace_index_directory,
@@ -437,11 +442,16 @@ def register_active_tools():
         mcp.tool()(require_module("system_monitor")(system_get_processes))
         mcp.tool()(require_module("system_monitor")(system_get_gpu_info))
         mcp.tool()(require_module("system_monitor")(system_get_event_logs))
+        mcp.tool()(require_module("system_monitor")(system_list_event_channels))
 
     if mods.get("screen_capture", {}).get("enabled", True):
         mcp.tool()(require_module("screen_capture")(screen_capture))
         mcp.tool()(require_module("screen_capture")(screen_list_monitors))
+        mcp.tool()(require_module("screen_capture")(screen_list_windows))
         mcp.tool()(require_module("screen_capture")(screen_capture_active_window))
+        mcp.tool()(require_module("screen_capture")(screen_capture_window))
+        mcp.tool()(require_module("screen_capture")(screen_set_tracked_window))
+        mcp.tool()(require_module("screen_capture")(screen_get_tracked_window))
         # screen_grant_consent / screen_revoke_consent are intentionally NOT exposed as MCP tools:
         # consent must come from the human via the GUI, never from the model itself.
 

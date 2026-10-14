@@ -186,7 +186,8 @@ def _secure_temp_pwfile(temp_pw_path: str) -> None:
             creationflags=flags
         )
         if proc.returncode != 0:
-            raise PermissionError(f"Failed to set secure owner ACL on password file: {proc.stderr.strip()}")
+            err_msg = (proc.stderr or "").strip()
+            raise PermissionError(f"Failed to set secure owner ACL on password file: {err_msg}")
 
 
 def ssh_exec_command(

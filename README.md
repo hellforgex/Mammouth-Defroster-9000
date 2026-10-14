@@ -34,7 +34,7 @@ You do **not** need Python, Git, or terminal knowledge. Everything is bundled in
 ```
 
 1. **Download the Release Package**:  
-   👉 **[Download MammouthDefroster9000-v0.6.0-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~90.2 MB)
+   👉 **[Download MammouthDefroster9000-v0.6.0-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~125 MB)
 2. **Extract the ZIP**:  
    Extract the archive to any convenient folder on your Windows PC (e.g. `C:\MammouthDefroster9000` or your Desktop).
 3. **Launch the Cockpit**:  
@@ -162,12 +162,13 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
       <td><code>clipboard_get_text</code>, <code>clipboard_set_text</code>, <code>clipboard_transform</code> <i>(3 tools)</i></td>
     </tr>
     <tr>
-      <td><b>🧠 Long-Term Memory</b></td>
+      <td><b>🧠 Long-Term Memory & Knowledge Vault</b></td>
       <td align="center">Enabled</td>
       <td align="center">🟢 Safe</td>
-      <td>Persistent SQLite memory storage. Saves notes, context, and project info across separate chat sessions.</td>
+      <td>Persistent SQLite memory storage with dedicated GUI Knowledge Vault tab (search, category filter, 1-click copy, live stats), automatic legacy release migration, and LLM parameter aliases. Saves notes, context, and project info across separate chat sessions.</td>
       <td><code>memory_save</code>, <code>memory_recall</code>, <code>memory_list</code>, <code>memory_get</code>, <code>memory_delete</code></td>
     </tr>
+
     <tr>
       <td><b>📋 Tasks & Kanban</b></td>
       <td align="center">Enabled</td>
@@ -208,7 +209,7 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
       <td align="center">Enabled</td>
       <td align="center">🟢 Safe</td>
       <td>Real-time hardware inspection: CPU, RAM, disk partitions, GPU info, top processes, and Windows Event Logs.</td>
-      <td><code>system_get_specs</code>, <code>system_get_processes</code>, <code>system_get_gpu_info</code>, <code>system_get_event_logs</code></td>
+      <td><code>system_get_specs</code>, <code>system_get_processes</code>, <code>system_get_gpu_info</code>, <code>system_get_event_logs</code>, <code>system_list_event_channels</code></td>
     </tr>
     <tr>
       <td><b>🌐 Web Scraper & Tools</b></td>

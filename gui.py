@@ -83,6 +83,16 @@ from modules.task_scheduler import (
     scheduler_get_presets,
     TaskSchedulerEngine
 )
+from modules.memory import (
+    memory_save,
+    memory_recall,
+    memory_get,
+    memory_delete,
+    memory_list,
+    memory_get_all,
+    memory_get_categories,
+    memory_get_stats
+)
 
 
 def generate_self_signed_cert(cert_path: str, key_path: str, hostname: str = "localhost") -> bool:
@@ -585,6 +595,116 @@ class HostDialog(ctk.CTkToplevel):
         self.destroy()
 
 
+class MemoryDialog(ctk.CTkToplevel):
+    """Modern modal dialog for adding or editing a persistent memory entry."""
+    def __init__(self, parent, memory_data: Optional[Dict[str, Any]] = None, key: str = ""):
+        super().__init__(parent)
+        self.title("Edit Memory" if key else "Add New Memory")
+        self.geometry("600x560")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+
+        self.result = None
+        self.original_key = key
+
+        # Header card
+        header_card = ctk.CTkFrame(self, fg_color=THEME_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=8)
+        header_card.pack(fill="x", padx=20, pady=(15, 10))
+
+        title_label = ctk.CTkLabel(
+            header_card,
+            text="🧠 " + ("Edit Knowledge Memory" if key else "Create New Memory"),
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY
+        )
+        title_label.pack(anchor="w", padx=15, pady=(10, 2))
+
+        lbl_desc = ctk.CTkLabel(
+            header_card,
+            text="Saved memories persist across sessions and are accessible to Mammouth.ai via memory_recall.",
+            font=ctk.CTkFont(size=11),
+            text_color=THEME_TEXT_MUTED
+        )
+        lbl_desc.pack(anchor="w", padx=15, pady=(0, 10))
+
+        form_frame = ctk.CTkFrame(self, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=8)
+        form_frame.pack(padx=20, pady=5, fill="both", expand=True)
+
+        # Key
+        ctk.CTkLabel(form_frame, text="Memory Key:", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).grid(row=0, column=0, padx=15, pady=(12, 6), sticky="w")
+        self.entry_key = ctk.CTkEntry(form_frame, placeholder_text="e.g. user_project_goals, preferred_tools, server_topology", width=380, fg_color=THEME_INPUT_BG, border_color=THEME_CARD_BORDER, text_color=THEME_TEXT_PRIMARY)
+        self.entry_key.grid(row=0, column=1, padx=15, pady=(12, 6), sticky="ew")
+        if key:
+            self.entry_key.insert(0, key)
+            self.entry_key.configure(state="disabled")
+
+        # Category
+        ctk.CTkLabel(form_frame, text="Category:", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).grid(row=1, column=0, padx=15, pady=6, sticky="w")
+        self.entry_category = ctk.CTkEntry(form_frame, placeholder_text="e.g. general, coding, infrastructure, architecture", width=380, fg_color=THEME_INPUT_BG, border_color=THEME_CARD_BORDER, text_color=THEME_TEXT_PRIMARY)
+        self.entry_category.grid(row=1, column=1, padx=15, pady=6, sticky="ew")
+        initial_cat = memory_data.get("category", "general") if memory_data else "general"
+        self.entry_category.insert(0, initial_cat)
+
+        # Content
+        ctk.CTkLabel(form_frame, text="Content / Note:", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).grid(row=2, column=0, padx=15, pady=(6, 6), sticky="nw")
+        self.text_content = ctk.CTkTextbox(form_frame, height=220, fg_color=THEME_INPUT_BG, border_width=1, border_color=THEME_CARD_BORDER, text_color=THEME_TEXT_PRIMARY, wrap="word")
+        self.text_content.grid(row=2, column=1, padx=15, pady=(6, 12), sticky="nsew")
+        if memory_data and memory_data.get("content"):
+            self.text_content.insert("1.0", memory_data.get("content", ""))
+
+        form_frame.grid_columnconfigure(1, weight=1)
+        form_frame.grid_rowconfigure(2, weight=1)
+
+        # Button row
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(padx=20, pady=(12, 16), fill="x")
+
+        btn_cancel = ctk.CTkButton(
+            btn_frame,
+            text="Cancel",
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            width=100,
+            command=self.destroy
+        )
+        btn_cancel.pack(side="right", padx=(10, 0))
+
+        btn_save = ctk.CTkButton(
+            btn_frame,
+            text="💾 Save Memory",
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            width=135,
+            command=self._on_save
+        )
+        btn_save.pack(side="right")
+
+    def _on_save(self):
+        k = self.entry_key.get().strip() if self.entry_key.cget("state") != "disabled" else self.original_key
+        cat = self.entry_category.get().strip() or "general"
+        content = self.text_content.get("1.0", "end-1c").strip()
+
+        if not k:
+            messagebox.showwarning("Validation Error", "Memory key cannot be empty.", parent=self)
+            return
+        if not content:
+            messagebox.showwarning("Validation Error", "Memory content cannot be empty.", parent=self)
+            return
+
+        self.result = {
+            "key": k,
+            "category": cat,
+            "content": content
+        }
+        self.destroy()
+
+
 class SplashScreen(ctk.CTkToplevel):
     """Modern dark-themed loading screen with progress feedback displayed during application startup."""
     def __init__(self, parent):
@@ -1035,6 +1155,8 @@ class MammouthControlCenter(ctk.CTk):
             splash.set_progress(0.75, "Building desktop cockpit user interface...")
 
         self._build_ui()
+        self._update_workspace_button_labels()
+        self._update_screen_target_button_label()
         self._start_stats_timer()
         self._init_task_scheduler()
         self._init_global_hotkey()
@@ -1194,7 +1316,25 @@ class MammouthControlCenter(ctk.CTk):
             border_color=THEME_BTN_SEC_BORDER,
             command=self._take_and_copy_screenshot_ui
         )
-        self.btn_header_screen.pack(side="left", padx=(0, 8))
+        self.btn_header_screen.pack(side="left", padx=(0, 6))
+        self.btn_header_screen.bind("<Button-3>", self._show_screen_target_menu)
+
+        # Target Window / App Selector button
+        self.btn_screen_target = ctk.CTkButton(
+            right_box,
+            text="🎯 Target: Auto ▾",
+            width=145,
+            height=32,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            command=self._show_screen_target_menu
+        )
+        self.btn_screen_target.pack(side="left", padx=(0, 8))
+        self.btn_screen_target.bind("<Button-3>", self._show_screen_target_menu)
 
         # Retain self.btn_open_mammouth for API/test compatibility without redundant packing in top bar
         self.btn_open_mammouth = ctk.CTkButton(
@@ -1284,6 +1424,7 @@ class MammouthControlCenter(ctk.CTk):
         self.tab_dashboard = self.tabview.add("📊 Dashboard & Live Console")
         self.tab_mammouth_code = self.tabview.add("💻 Mammouth Code CLI")
         self.tab_skills = self.tabview.add("⚡ Modular Capabilities (15 Modules)")
+        self.tab_memory = self.tabview.add("🧠 Memory Vault")
         self.tab_prompts = self.tabview.add("📖 Prompt Catalog")
         self.tab_tasks = self.tabview.add("⏱️ Tasks & Automation")
         self.tab_hosts = self.tabview.add("🔑 SSH Fleet & PuTTY Manager")
@@ -1300,6 +1441,7 @@ class MammouthControlCenter(ctk.CTk):
         self._setup_dashboard_tab()
         self._setup_mammouth_code_tab()
         self._setup_skills_tab()
+        self._setup_memory_tab()
         self._setup_prompts_tab()
         self._setup_tasks_tab()
         self._setup_hosts_tab()
@@ -1335,12 +1477,14 @@ class MammouthControlCenter(ctk.CTk):
             ("📊 Dashboard & Live Console", "⚡ Dashboard & Status"),
             ("💻 Mammouth Code CLI", "💻 Mammouth Code"),
             ("⚡ Modular Capabilities (15 Modules)", "🛠️ Tools (15)"),
+            ("🧠 Memory Vault", "🧠 Memory Vault"),
             ("📖 Prompt Catalog", "📖 Prompt Catalog"),
             ("⏱️ Tasks & Automation", "⏱️ Scheduled Tasks"),
             ("🔑 SSH Fleet & PuTTY Manager", "🔑 SSH & PuTTY Fleet"),
             ("⚙️ Security & Settings", "⚙️ Settings"),
             ("💬 Mammouth AI Web", "💬 Mammouth WebApp"),
         ]
+
 
         for tab_key, label in nav_items:
             btn = ctk.CTkButton(
@@ -1405,9 +1549,12 @@ class MammouthControlCenter(ctk.CTk):
         self.bar_nav_ram.set(0.0)
         self.bar_nav_ram.pack(fill="x", pady=(1, 2))
 
-        btn_quick_ws = ctk.CTkButton(
-            bottom_box,
-            text="📂 Workspace Folder",
+        f_quick_ws = ctk.CTkFrame(bottom_box, fg_color="transparent")
+        f_quick_ws.pack(fill="x")
+
+        self.btn_quick_ws = ctk.CTkButton(
+            f_quick_ws,
+            text="📂 Workspace",
             anchor="center",
             height=32,
             corner_radius=6,
@@ -1419,7 +1566,25 @@ class MammouthControlCenter(ctk.CTk):
             border_color=THEME_BTN_SEC_BORDER,
             command=self._open_workspace_folder
         )
-        btn_quick_ws.pack(fill="x")
+        self.btn_quick_ws.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        self.btn_quick_ws.bind("<Button-3>", self._show_workspace_context_menu)
+
+        self.btn_quick_ws_choose = ctk.CTkButton(
+            f_quick_ws,
+            text="📁 Choose",
+            width=68,
+            height=32,
+            corner_radius=6,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            command=self._choose_active_workspace
+        )
+        self.btn_quick_ws_choose.pack(side="right")
+        self.btn_quick_ws_choose.bind("<Button-3>", self._show_workspace_context_menu)
 
     def toggle_sidebar(self):
         """Toggles sidebar visibility for a full-bleed seamless workspace."""
@@ -1761,33 +1926,193 @@ class MammouthControlCenter(ctk.CTk):
             self._log(f"[VISION ERROR] Screenshot error: {e}")
             return None
 
+    def _update_screen_target_button_label(self):
+        try:
+            from modules.screen_capture import screen_get_tracked_window
+            info = screen_get_tracked_window()
+            mode = info.get("mode", "auto")
+            if mode == "window" and info.get("is_valid"):
+                proc = info.get("process_name") or ""
+                title = info.get("title") or ""
+                clean_name = proc.replace(".exe", "").capitalize() if proc else title[:12]
+                disp = (clean_name[:11] + "…") if len(clean_name) > 12 else clean_name
+                label_text = f"🎯 {disp} ▾"
+            elif mode == "monitor":
+                label_text = "🖥️ Screen ▾"
+            elif mode == "snip":
+                label_text = "✂️ Snip ▾"
+            else:
+                label_text = "🎯 Target: Auto ▾"
+
+            if hasattr(self, "btn_screen_target") and self.btn_screen_target:
+                self.btn_screen_target.configure(text=label_text)
+        except Exception:
+            pass
+
+    def _set_screen_target(self, target_spec: Any):
+        try:
+            from modules.screen_capture import screen_set_tracked_window
+            res = screen_set_tracked_window(target_spec)
+            self._update_screen_target_button_label()
+            msg = res.get("message", "Target updated.")
+            self._log(f"[VISION] {msg}")
+            self.show_toast("🎯 Screen Target", msg)
+        except Exception as e:
+            self._log(f"[VISION ERROR] Error setting target window: {e}")
+
+    def _show_screen_target_menu(self, event=None):
+        try:
+            from modules.screen_capture import screen_list_windows, screen_get_tracked_window
+            cur_info = screen_get_tracked_window()
+            cur_mode = cur_info.get("mode", "auto")
+            cur_hwnd = cur_info.get("hwnd")
+
+            menu = tk.Menu(self, tearoff=0, bg="#1E293B", fg="#F8FAFC", activebackground="#38BDF8", activeforeground="#0F172A", font=("Segoe UI", 9))
+
+            # Preset targets
+            chk_auto = "✓ " if cur_mode == "auto" else "   "
+            chk_snip = "✓ " if cur_mode == "snip" else "   "
+            chk_screen = "✓ " if cur_mode == "monitor" else "   "
+
+            menu.add_command(
+                label=f"{chk_auto}⚡ Auto (Smart Active App - excludes Defroster)",
+                command=lambda: self._set_screen_target("auto")
+            )
+            menu.add_command(
+                label=f"{chk_snip}✂️ Snipping Tool (Interactive Area Snip)",
+                command=lambda: self._set_screen_target("snip")
+            )
+            menu.add_command(
+                label=f"{chk_screen}🖥️ Entire Screen / Monitor 1",
+                command=lambda: self._set_screen_target("monitor")
+            )
+            menu.add_separator()
+
+            # Active Windows list
+            open_wins = screen_list_windows(include_minimized=False, include_system=False, exclude_self=True)
+            if open_wins:
+                menu.add_command(label="--- Select Application to Track ---", state="disabled")
+                for w in open_wins[:15]:
+                    h = w["hwnd"]
+                    proc = w.get("process_name", "")
+                    title = w.get("title", "Window")
+                    clean_title = (title[:38] + "…") if len(title) > 40 else title
+                    is_this_tracked = (cur_mode == "window" and cur_hwnd == h)
+                    chk = "✓ " if is_this_tracked else "   "
+                    lbl = f"{chk}💻 {proc} — {clean_title}"
+                    menu.add_command(label=lbl, command=lambda hwnd_val=h: self._set_screen_target(hwnd_val))
+            else:
+                menu.add_command(label="(No other open desktop applications detected)", state="disabled")
+
+            menu.add_separator()
+            menu.add_command(
+                label="🔄 Refresh Open Windows",
+                command=lambda: self.after(50, self._show_screen_target_menu)
+            )
+
+            self._screen_target_menu = menu
+            if event and hasattr(event, "x_root") and hasattr(event, "y_root"):
+                menu.tk_popup(event.x_root, event.y_root)
+            elif hasattr(self, "btn_screen_target"):
+                x = self.btn_screen_target.winfo_rootx()
+                y = self.btn_screen_target.winfo_rooty() + self.btn_screen_target.winfo_height()
+                menu.tk_popup(x, y)
+            else:
+                menu.tk_popup(self.winfo_pointerx(), self.winfo_pointery())
+        except Exception as e:
+            self._log(f"[ERROR] Could not display screen target menu: {e}")
+
     def _take_and_copy_screenshot_ui(self):
+        """Take screenshot based on selected tracking target (window, monitor, or snipping tool),
+        copies image to clipboard, and automatically pastes it into Mammouth AI Web chat."""
+        from modules.screen_capture import screen_get_tracked_window
+        target_info = screen_get_tracked_window()
+        mode = target_info.get("mode", "auto")
+
+        # If interactive snipping tool is selected
+        if mode == "snip":
+            self._run_snipping_tool_flow()
+            return
+
+        # If full monitor is selected
+        if mode == "monitor":
+            if hasattr(self, "btn_header_screen"):
+                self.btn_header_screen.configure(text="📸 Capturing screen...", fg_color="#0284C7")
+            saved = self._take_and_copy_screenshot()
+            if saved and hasattr(self, "btn_header_screen"):
+                self.btn_header_screen.configure(text="✓ In Clipboard & Chat!", fg_color="#10B981")
+                self.after(3000, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG))
+                self._switch_to_mammouth_tab()
+                if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
+                    self.mammouth_browser.focus_and_paste(delay_ms=300)
+            else:
+                if hasattr(self, "btn_header_screen"):
+                    self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG)
+            return
+
+        # Otherwise (window or auto mode): capture the target window directly!
+        if hasattr(self, "btn_header_screen"):
+            self.btn_header_screen.configure(text="📸 Capturing window...", fg_color="#0284C7")
+
+        def _capture_worker():
+            try:
+                from modules.screen_capture import screen_capture_active_window_local, copy_image_to_clipboard
+                res = screen_capture_active_window_local(save_to_workspace=True, include_metadata=True)
+                saved_p = res.get("saved_path") if isinstance(res, dict) else None
+                win_title = res.get("window_title", "Active Window") if isinstance(res, dict) else "Active Window"
+                proc_name = res.get("process_name", "") if isinstance(res, dict) else ""
+
+                if saved_p and os.path.exists(saved_p):
+                    copy_image_to_clipboard(saved_p)
+                    self.after(0, lambda: self._on_window_capture_ui_completed(win_title, proc_name, saved_p))
+                else:
+                    self.after(0, lambda: self._on_window_capture_ui_failed(str(res)))
+            except Exception as e:
+                self.after(0, lambda err=e: self._on_window_capture_ui_failed(str(err)))
+
+        threading.Thread(target=_capture_worker, daemon=True).start()
+
+    def _on_window_capture_ui_completed(self, win_title: str, proc_name: str, saved_path: str):
+        disp_proc = f" ({proc_name})" if proc_name else ""
+        self._log(f"[VISION] Window captured: '{win_title}'{disp_proc} -> {saved_path} (In Clipboard & Pasting)")
+        self.show_toast("📸 Screen Copilot", f"Captured '{win_title[:32]}'{disp_proc} — In Clipboard & Chat ready!")
+        if hasattr(self, "btn_header_screen"):
+            self.btn_header_screen.configure(text="✓ In Clipboard & Chat!", fg_color="#10B981")
+            self.after(3000, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG))
+
+        self._switch_to_mammouth_tab()
+        if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
+            self.mammouth_browser.focus_and_paste(delay_ms=250)
+
+    def _on_window_capture_ui_failed(self, err_msg: str):
+        self._log(f"[VISION ERROR] Capture failed: {err_msg}")
+        if hasattr(self, "btn_header_screen"):
+            self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG)
+        self.show_toast("⚠️ Capture Failed", "Could not capture target window. Check display permissions.")
+
+    def _run_snipping_tool_flow(self):
         """Interactively launches Windows Snipping Tool (ms-screenclip:), intercepts clipboard capture,
         switches to Mammouth WebApp, and automatically pastes the image into the chat field."""
         if hasattr(self, "btn_header_screen"):
             self.btn_header_screen.configure(text="✂️ Select area...", fg_color="#0284C7")
 
-        from modules.screen_capture import launch_windows_snipping_tool, copy_image_to_clipboard, WORKSPACE_DIR, _cleanup_old_screenshots
+        from modules.screen_capture import launch_windows_snipping_tool, copy_image_to_clipboard, get_workspace_screenshots_dir, _cleanup_old_screenshots
         from PIL import ImageGrab, Image as PILImage
         from datetime import datetime
 
         if sys.platform != "win32":
-            # Fallback for non-Windows platforms
             saved = self._take_and_copy_screenshot()
             if saved and hasattr(self, "btn_header_screen"):
                 self.btn_header_screen.configure(text="✓ In Clipboard!", fg_color="#10B981")
                 self.after(2500, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG))
             return
 
-        # Remember the clipboard sequence number; it changes whenever anything new is copied,
-        # so the watcher only has to decode the clipboard once something actually changed.
         import ctypes
         _get_clip_seq = ctypes.windll.user32.GetClipboardSequenceNumber
         initial_seq = _get_clip_seq()
 
         launched = launch_windows_snipping_tool()
         if not launched:
-            # Fallback to standard fullscreen capture
             saved = self._take_and_copy_screenshot()
             if saved and hasattr(self, "btn_header_screen"):
                 self.btn_header_screen.configure(text="✓ In Clipboard!", fg_color="#10B981")
@@ -1796,9 +2121,8 @@ class MammouthControlCenter(ctk.CTk):
 
         def _snip_watcher():
             start_t = time.time()
-            max_wait = 30.0  # Wait up to 30s for user to snip
+            max_wait = 30.0
             new_image = None
-
             last_seq = initial_seq
             while time.time() - start_t < max_wait:
                 time.sleep(0.35)
@@ -1817,13 +2141,13 @@ class MammouthControlCenter(ctk.CTk):
             saved_ok = False
             dest_path = None
             if new_image is not None:
-                # Save new snip to workspace
                 filename = f"snip_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]}.png"
-                dest_path = WORKSPACE_DIR / filename
+                target_dir = get_workspace_screenshots_dir()
+                dest_path = target_dir / filename
                 try:
                     new_image.save(str(dest_path), format="PNG", optimize=True)
                     saved_ok = True
-                    _cleanup_old_screenshots(max_keep=25)
+                    _cleanup_old_screenshots(target_dir=target_dir, max_keep=25)
                     copy_image_to_clipboard(str(dest_path))
                 except Exception as e:
                     if not saved_ok:
@@ -1876,6 +2200,8 @@ class MammouthControlCenter(ctk.CTk):
         self._update_nav_highlight(current)
         if current == "⏱️ Tasks & Automation" and hasattr(self, "_refresh_task_cards"):
             self._refresh_task_cards()
+        elif current == "🧠 Memory Vault" and hasattr(self, "_refresh_memory_list"):
+            self._refresh_memory_list()
         if hasattr(self, "mammouth_browser"):
             if current == "💬 Mammouth AI Web":
                 self.mammouth_browser.ensure_initialized()
@@ -2343,10 +2669,10 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_tasks.pack(side="left", padx=(0, 8))
 
-        btn_ws = ctk.CTkButton(
+        self.btn_ws = ctk.CTkButton(
             actions_bar,
             text="📂 Open Workspace",
-            width=140,
+            width=135,
             height=30,
             fg_color=THEME_BTN_SEC_BG,
             hover_color=THEME_BTN_SEC_HOVER,
@@ -2356,7 +2682,39 @@ class MammouthControlCenter(ctk.CTk):
             border_color=THEME_BTN_SEC_BORDER,
             command=self._open_workspace_folder
         )
-        btn_ws.pack(side="left", padx=(0, 8))
+        self.btn_ws.pack(side="left", padx=(0, 6))
+        self.btn_ws.bind("<Button-3>", self._show_workspace_context_menu)
+
+        self.btn_choose_ws = ctk.CTkButton(
+            actions_bar,
+            text="📁 Choose Workspace",
+            width=145,
+            height=30,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            font=ctk.CTkFont(weight="bold"),
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            command=self._choose_active_workspace
+        )
+        self.btn_choose_ws.pack(side="left", padx=(0, 4))
+        self.btn_choose_ws.bind("<Button-3>", self._show_workspace_context_menu)
+
+        self.btn_ws_menu = ctk.CTkButton(
+            actions_bar,
+            text="▾",
+            width=28,
+            height=30,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            command=self._show_workspace_context_menu
+        )
+        self.btn_ws_menu.pack(side="left", padx=(0, 8))
 
         btn_export = ctk.CTkButton(
             actions_bar,
@@ -2399,6 +2757,346 @@ class MammouthControlCenter(ctk.CTk):
         )
         self.log_textbox.pack(fill="both", expand=True, padx=15, pady=(0, 15))
         self._log(f"Mammouth Defroster 9000 {APP_VERSION} initialized. Sovereign Cockpit Ready.")
+
+    def _setup_memory_tab(self):
+        self._all_memories = []
+
+        top_bar = ctk.CTkFrame(self.tab_memory, fg_color="transparent")
+        top_bar.pack(fill="x", padx=15, pady=(12, 8))
+
+        title_box = ctk.CTkFrame(top_bar, fg_color="transparent")
+        title_box.pack(side="left")
+        ctk.CTkLabel(
+            title_box,
+            text="🧠 Persistent Memory & Knowledge Vault",
+            font=ctk.CTkFont(size=17, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            title_box,
+            text="Cross-session long-term memory for Mammouth.ai. Persistent SQLite backend with real-time indexing.",
+            font=ctk.CTkFont(size=12),
+            text_color=THEME_TEXT_MUTED
+        ).pack(anchor="w")
+
+        right_btns = ctk.CTkFrame(top_bar, fg_color="transparent")
+        right_btns.pack(side="right")
+
+        btn_refresh = ctk.CTkButton(
+            right_btns,
+            text="🔄 Refresh",
+            width=90,
+            height=32,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            font=ctk.CTkFont(weight="bold"),
+            command=self._refresh_memory_list
+        )
+        btn_refresh.pack(side="left", padx=(0, 8))
+
+        btn_add = ctk.CTkButton(
+            right_btns,
+            text="➕ Add Memory",
+            width=130,
+            height=32,
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._add_memory
+        )
+        btn_add.pack(side="left")
+
+        # Filter & Search Bar
+        filter_bar = ctk.CTkFrame(self.tab_memory, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=8)
+        filter_bar.pack(fill="x", padx=15, pady=(0, 10))
+
+        filter_inner = ctk.CTkFrame(filter_bar, fg_color="transparent")
+        filter_inner.pack(fill="x", padx=12, pady=8)
+
+        # Search box
+        self.entry_memory_search = ctk.CTkEntry(
+            filter_inner,
+            placeholder_text="🔍 Search memories by key, content, or category...",
+            width=340,
+            fg_color=THEME_INPUT_BG,
+            border_color=THEME_CARD_BORDER,
+            text_color=THEME_TEXT_PRIMARY
+        )
+        self.entry_memory_search.pack(side="left", padx=(0, 12))
+        self.entry_memory_search.bind("<KeyRelease>", lambda e: self._on_memory_filter_change())
+
+        # Category Filter Dropdown
+        ctk.CTkLabel(filter_inner, text="Category:", font=ctk.CTkFont(size=12, weight="bold"), text_color=THEME_TEXT_MUTED).pack(side="left", padx=(0, 6))
+        self.opt_memory_category = ctk.CTkOptionMenu(
+            filter_inner,
+            values=["All Categories"],
+            command=lambda v: self._on_memory_filter_change(),
+            fg_color=THEME_INPUT_BG,
+            text_color=THEME_TEXT_PRIMARY,
+            button_color=THEME_ACCENT,
+            button_hover_color=THEME_ACCENT_HOVER,
+            dropdown_fg_color=THEME_CARD_BG,
+            dropdown_text_color=THEME_TEXT_PRIMARY,
+            width=160
+        )
+        self.opt_memory_category.pack(side="left", padx=(0, 15))
+
+        # Stats Telemetry Label
+        self.lbl_memory_stats = ctk.CTkLabel(
+            filter_inner,
+            text="0 Memories | 0 Categories",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=THEME_ACCENT
+        )
+        self.lbl_memory_stats.pack(side="right")
+
+        # Scrollable list for memory cards
+        self.memory_scroll = ctk.CTkScrollableFrame(self.tab_memory, fg_color="transparent")
+        self.memory_scroll.pack(fill="both", expand=True, padx=15, pady=(0, 12))
+
+        self._refresh_memory_list()
+
+    def _refresh_memory_list(self):
+        try:
+            self._all_memories = memory_get_all(limit=500)
+            cats = memory_get_categories()
+            menu_cats = ["All Categories"] + sorted(list(set(cats)))
+            if hasattr(self, "opt_memory_category"):
+                current_selected = self.opt_memory_category.get()
+                self.opt_memory_category.configure(values=menu_cats)
+                if current_selected in menu_cats:
+                    self.opt_memory_category.set(current_selected)
+                else:
+                    self.opt_memory_category.set("All Categories")
+
+            stats = memory_get_stats()
+            if hasattr(self, "lbl_memory_stats"):
+                total_cnt = stats.get("total", 0)
+                cat_cnt = stats.get("categories", 0)
+                tot_chars = stats.get("total_chars", 0)
+                size_str = f"{tot_chars} chars" if tot_chars < 1024 else f"{tot_chars / 1024:.1f} KB"
+                self.lbl_memory_stats.configure(
+                    text=f"📚 {total_cnt} Memories  |  🏷️ {cat_cnt} Categories  |  💾 {size_str}"
+                )
+        except Exception as e:
+            self._all_memories = []
+            self._log(f"[MEMORY] Error refreshing memory list: {e}")
+
+        self._render_memory_cards()
+
+    def _on_memory_filter_change(self):
+        self._render_memory_cards()
+
+    def _render_memory_cards(self):
+        if not hasattr(self, "memory_scroll"):
+            return
+
+        for w in self.memory_scroll.winfo_children():
+            w.destroy()
+
+        search_q = self.entry_memory_search.get().strip().lower() if hasattr(self, "entry_memory_search") else ""
+        selected_cat = self.opt_memory_category.get() if hasattr(self, "opt_memory_category") else "All Categories"
+
+        filtered = []
+        for m in getattr(self, "_all_memories", []):
+            if selected_cat != "All Categories" and m.get("category", "") != selected_cat:
+                continue
+            if search_q:
+                k_match = search_q in m.get("key", "").lower()
+                c_match = search_q in m.get("content", "").lower()
+                cat_match = search_q in m.get("category", "").lower()
+                if not (k_match or c_match or cat_match):
+                    continue
+            filtered.append(m)
+
+        if not filtered:
+            empty_card = ctk.CTkFrame(
+                self.memory_scroll,
+                fg_color=THEME_CARD_BG,
+                border_width=1,
+                border_color=THEME_CARD_BORDER,
+                corner_radius=10
+            )
+            empty_card.pack(fill="x", pady=20, padx=10)
+            msg = "No memories found matching your search." if (search_q or selected_cat != "All Categories") else (
+                "No persistent memories stored yet.\n\nClick '➕ Add Memory' above to add sovereign notes, preferences, or instructions,\n"
+                "or let Mammouth.ai save memories automatically using the memory_save tool!"
+            )
+            ctk.CTkLabel(
+                empty_card,
+                text=msg,
+                font=ctk.CTkFont(size=13),
+                text_color=THEME_TEXT_MUTED
+            ).pack(padx=20, pady=30)
+            return
+
+        for item in filtered:
+            card = ctk.CTkFrame(
+                self.memory_scroll,
+                fg_color=THEME_CARD_BG,
+                border_width=1,
+                border_color=THEME_CARD_BORDER,
+                corner_radius=10
+            )
+            card.pack(fill="x", pady=6)
+
+            # Card Header (Key, Category Pill, Timestamp, Action Buttons)
+            header_row = ctk.CTkFrame(card, fg_color="transparent")
+            header_row.pack(fill="x", padx=15, pady=(12, 6))
+
+            left_header = ctk.CTkFrame(header_row, fg_color="transparent")
+            left_header.pack(side="left", fill="x", expand=True)
+
+            key_lbl = ctk.CTkLabel(
+                left_header,
+                text=f"🧠 {item.get('key', '')}",
+                font=ctk.CTkFont(size=14, weight="bold"),
+                text_color=THEME_TEXT_PRIMARY
+            )
+            key_lbl.pack(side="left")
+
+            # Category pill badge
+            cat_name = item.get("category", "general")
+            cat_badge = ctk.CTkFrame(
+                left_header,
+                fg_color=("#E0E7FF", "#2E3654") if cat_name != "general" else ("#F1F5F9", "#334155"),
+                border_width=1,
+                border_color=("#C7D2FE", "#434D77") if cat_name != "general" else ("#CBD5E1", "#475569"),
+                corner_radius=5
+            )
+            cat_badge.pack(side="left", padx=10)
+            ctk.CTkLabel(
+                cat_badge,
+                text=f"🏷️ {cat_name}",
+                font=ctk.CTkFont(size=10, weight="bold"),
+                text_color=("#4338CA", "#A5B4FC") if cat_name != "general" else THEME_TEXT_MUTED
+            ).pack(padx=5, pady=1)
+
+            # Updated timestamp & length
+            upd = item.get("updated_at", "")[:19].replace("T", " ")
+            chars = len(item.get("content", ""))
+            chars_str = f"{chars} chars" if chars < 1024 else f"{chars / 1024:.1f} KB"
+            ctk.CTkLabel(
+                left_header,
+                text=f"•  Updated: {upd}  ({chars_str})",
+                font=ctk.CTkFont(size=11),
+                text_color=THEME_TEXT_MUTED
+            ).pack(side="left", padx=5)
+
+            # Action Buttons Box
+            btn_box = ctk.CTkFrame(header_row, fg_color="transparent")
+            btn_box.pack(side="right")
+
+            btn_copy = ctk.CTkButton(
+                btn_box,
+                text="📋 Copy",
+                width=75,
+                height=28,
+                fg_color=THEME_BTN_SEC_BG,
+                hover_color=THEME_BTN_SEC_HOVER,
+                text_color=THEME_TEXT_PRIMARY,
+                border_width=1,
+                border_color=THEME_BTN_SEC_BORDER,
+                font=ctk.CTkFont(size=11, weight="bold"),
+            )
+            btn_copy.configure(command=lambda c=item.get("content", ""), b=btn_copy: self._copy_memory_content(c, b))
+            btn_copy.pack(side="left", padx=3)
+
+            btn_edit = ctk.CTkButton(
+                btn_box,
+                text="✏️ Edit",
+                width=70,
+                height=28,
+                fg_color=THEME_BTN_SEC_BG,
+                hover_color=THEME_BTN_SEC_HOVER,
+                text_color=THEME_TEXT_PRIMARY,
+                border_width=1,
+                border_color=THEME_BTN_SEC_BORDER,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                command=lambda m=item: self._edit_memory(m)
+            )
+            btn_edit.pack(side="left", padx=3)
+
+            btn_del = ctk.CTkButton(
+                btn_box,
+                text="🗑️ Delete",
+                width=75,
+                height=28,
+                fg_color=("#FEF2F2", "#3B1D22"),
+                hover_color=("#FEE2E2", "#4C242B"),
+                text_color=("#DC2626", "#F87171"),
+                border_width=1,
+                border_color=("#FECACA", "#5C2B34"),
+                font=ctk.CTkFont(size=11, weight="bold"),
+                command=lambda k=item.get("key", ""): self._delete_memory(k)
+            )
+            btn_del.pack(side="left", padx=3)
+
+            # Content preview textbox
+            content_text = item.get("content", "")
+            lines_cnt = min(8, max(2, len(content_text.splitlines())))
+            tb_height = min(150, max(50, lines_cnt * 20))
+            tb = ctk.CTkTextbox(
+                card,
+                height=tb_height,
+                fg_color=THEME_INPUT_BG,
+                border_width=1,
+                border_color=THEME_CARD_BORDER,
+                text_color=THEME_TEXT_PRIMARY,
+                wrap="word",
+                font=ctk.CTkFont(family="Consolas" if os.name == "nt" else "Monospace", size=11)
+            )
+            tb.pack(fill="x", padx=15, pady=(2, 12))
+            tb.insert("1.0", content_text)
+            tb.configure(state="disabled")
+
+    def _add_memory(self):
+        dlg = MemoryDialog(self)
+        self.wait_window(dlg)
+        if dlg.result:
+            k = dlg.result["key"]
+            cat = dlg.result["category"]
+            cnt = dlg.result["content"]
+            res = memory_save(key=k, content=cnt, category=cat)
+            self._log(f"[MEMORY] 💾 Saved memory '{k}' in category '{cat}': {res}")
+            self.show_toast("Memory Saved", f"Successfully saved memory '{k}'.")
+            self._refresh_memory_list()
+
+    def _edit_memory(self, item: Dict[str, Any]):
+        dlg = MemoryDialog(self, memory_data=item, key=item.get("key", ""))
+        self.wait_window(dlg)
+        if dlg.result:
+            k = dlg.result["key"]
+            cat = dlg.result["category"]
+            cnt = dlg.result["content"]
+            res = memory_save(key=k, content=cnt, category=cat)
+            self._log(f"[MEMORY] ✏️ Updated memory '{k}': {res}")
+            self.show_toast("Memory Updated", f"Successfully updated memory '{k}'.")
+            self._refresh_memory_list()
+
+    def _delete_memory(self, key: str):
+        if not key:
+            return
+        if not messagebox.askyesno("Confirm Deletion", f"Are you sure you want to delete memory '{key}'?\n\nThis cannot be undone.", parent=self):
+            return
+        res = memory_delete(key=key)
+        self._log(f"[MEMORY] 🗑️ Deleted memory '{key}': {res}")
+        self.show_toast("Memory Deleted", f"Deleted memory '{key}'.")
+        self._refresh_memory_list()
+
+    def _copy_memory_content(self, text: str, btn: ctk.CTkButton):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            orig_text = btn.cget("text")
+            btn.configure(text="✓ Copied!", text_color=THEME_SUCCESS)
+            self.after(1600, lambda: btn.configure(text=orig_text, text_color=THEME_TEXT_PRIMARY))
+        except Exception as e:
+            self._log(f"[MEMORY] Error copying to clipboard: {e}")
 
     def _setup_prompts_tab(self):
         top_bar = ctk.CTkFrame(self.tab_prompts, fg_color="transparent")
@@ -3352,14 +4050,107 @@ class MammouthControlCenter(ctk.CTk):
             self._log(f"[LOG] Exported console logs to: {f}")
             messagebox.showinfo("Log Saved", f"Successfully exported logs to:\n\n{f}", parent=self)
 
-    def _open_workspace_folder(self):
-        ws = (BASE_DIR / "workspace").resolve()
-        ws.mkdir(parents=True, exist_ok=True)
+    def _get_active_workspace(self) -> Path:
+        raw = self.config_data.get("server", {}).get("workspace_root", "./workspace")
+        raw = os.path.expandvars(os.path.expanduser(str(raw)))
+        if not os.path.isabs(raw):
+            raw = str((BASE_DIR / raw).resolve())
+        p = Path(raw).resolve()
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    def _update_workspace_button_labels(self):
+        """Update workspace buttons across sidebar and cockpit to display active directory name."""
         try:
-            os.startfile(str(ws))
-            self._log(f"[EXPLORER] Opened workspace directory: {ws}")
+            ws = self._get_active_workspace()
+            name = ws.name or str(ws)
+            disp_sidebar = (name[:11] + "…") if len(name) > 12 else name
+            disp_cockpit = (name[:14] + "…") if len(name) > 15 else name
+            if hasattr(self, "btn_quick_ws") and self.btn_quick_ws:
+                self.btn_quick_ws.configure(text=f"📂 {disp_sidebar}")
+            if hasattr(self, "btn_ws") and self.btn_ws:
+                self.btn_ws.configure(text=f"📂 Open ({disp_cockpit})")
+        except Exception:
+            pass
+
+    def _open_workspace_folder(self):
+        ws = self._get_active_workspace()
+        try:
+            if hasattr(os, "startfile"):
+                os.startfile(str(ws))
+            else:
+                webbrowser.open(ws.as_uri())
+            self._log(f"[EXPLORER] Opened active workspace directory: {ws} (Right-click or 'Choose' to change)")
         except Exception as e:
             self._log(f"[ERROR] Could not open workspace: {e}")
+
+    def _choose_active_workspace(self):
+        cur_ws = str(self._get_active_workspace())
+        folder = filedialog.askdirectory(title="Choose Active Workspace Folder", initialdir=cur_ws, parent=self)
+        if folder:
+            norm_folder = str(Path(folder).resolve())
+            self.config_data.setdefault("server", {})["workspace_root"] = norm_folder
+            save_config(self.config_data)
+
+            if hasattr(self, "entry_workspace"):
+                try:
+                    self.entry_workspace.delete(0, "end")
+                    self.entry_workspace.insert(0, norm_folder)
+                except Exception:
+                    pass
+
+            if hasattr(self, "ent_mc_ws"):
+                try:
+                    self.ent_mc_ws.delete(0, "end")
+                    self.ent_mc_ws.insert(0, norm_folder)
+                except Exception:
+                    pass
+
+            self._update_workspace_button_labels()
+            self._log(f"[WORKSPACE] 📁 Active workspace updated to: {norm_folder}")
+
+            try:
+                from modules.workspace_indexer import workspace_index_directory
+                threading.Thread(
+                    target=lambda: workspace_index_directory(directory_path=norm_folder),
+                    daemon=True
+                ).start()
+                self._log(f"[WORKSPACE] 🧠 Sovereign memory indexing triggered for: {norm_folder}")
+            except Exception:
+                pass
+
+            messagebox.showinfo(
+                "Active Workspace Changed",
+                f"Active workspace successfully set to:\n\n{norm_folder}\n\nAll tools, sandboxing, and terminal environments are now anchored here.",
+                parent=self
+            )
+
+    def _show_workspace_context_menu(self, event=None):
+        try:
+            active_ws = str(self._get_active_workspace())
+            short_name = os.path.basename(active_ws) or active_ws
+            menu = tk.Menu(self, tearoff=0, bg="#1E293B", fg="#F8FAFC", activebackground="#38BDF8", activeforeground="#0F172A", font=("Segoe UI", 9))
+            menu.add_command(label=f"📂 Open Folder in Explorer ({short_name})", command=self._open_workspace_folder)
+            menu.add_command(label="📁 Choose Active Workspace Directory...", command=self._choose_active_workspace)
+            menu.add_separator()
+            menu.add_command(label=f"📋 Copy Workspace Path ({short_name})", command=lambda: self._copy_workspace_path_to_clipboard(active_ws))
+
+            self._ws_context_menu = menu
+            if event and hasattr(event, "x_root") and hasattr(event, "y_root"):
+                menu.tk_popup(event.x_root, event.y_root)
+            else:
+                menu.tk_popup(self.winfo_pointerx(), self.winfo_pointery())
+        except Exception as e:
+            self._log(f"[ERROR] Could not display workspace options menu: {e}")
+
+    def _copy_workspace_path_to_clipboard(self, path_str: str):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(path_str)
+            self.update()
+            self._log(f"[WORKSPACE] Copied workspace path to clipboard: {path_str}")
+        except Exception as e:
+            self._log(f"[ERROR] Could not copy path to clipboard: {e}")
 
     def _start_stats_timer(self):
         def update_stats():
@@ -5078,7 +5869,22 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(weight="bold"),
             command=self._on_ui_grant_session_consent
         )
-        btn_grant_session.pack(side="left")
+        btn_grant_session.pack(side="left", padx=(0, 12))
+
+        btn_pick_target = ctk.CTkButton(
+            f_vis2,
+            text="🎯 Select Target App / Window...",
+            width=250,
+            height=30,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            font=ctk.CTkFont(weight="bold"),
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            command=self._show_screen_target_menu
+        )
+        btn_pick_target.pack(side="left")
 
         # 7. Google Drive Cloud Integration & Browser Login
         gdrive_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)

@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.6.0] - 2026-10-10
+## [0.6.0] - 2026-10-12
 
 ### 📸 Feature 1: Multimodal Screen & Window Copilot
 - **Active Window Capture (`modules/screen_capture.py`):** Added `screen_capture_active_window` FastMCP tool (consent-gated) and `screen_capture_active_window_local` with active foreground window inspection (title, process, bounds via `DwmGetWindowAttribute`).
@@ -22,7 +22,29 @@
 ### ⚙️ Configurable Keyboard Shortcuts & Settings UI
 - Added dedicated Settings UI card with customizable keybind entry fields and toggles for all global shortcuts with live re-binding.
 
+### 🎯 Screen Capture Target Selector & Self-Capture Prevention
+- **Target Tracking & Selection (`modules/screen_capture.py` & `gui.py`):** Added interactive application target selector (`Auto`, `Snipping Tool`, `Full Desktop`, or specific running application window).
+- **Self-Capture Prevention:** Intelligently ignores Defroster and WebView2 windows in `auto` mode, resolving the user's active external target application via Z-order hierarchy.
+- **Direct Background Capture:** Added `PrintWindow` with `PW_RENDERFULLCONTENT` fallback for non-intrusive capture.
+
+### 🔍 Feature 4: Advanced Windows Event Log Diagnostics (Get-WinEvent)
+- **Deep Event Log Channel Support (`modules/system_monitor.py`):** Upgraded `system_get_event_logs` from legacy `Get-EventLog` to modern `Get-WinEvent`, unlocking all Applications and Services channels (e.g. `Microsoft-Windows-Kernel-PnP/Device Management`, `Kernel-Power`, `USB-USBXHCI`).
+- **Targeted Event ID & Level Filtering:** Direct filtering by `event_id` (e.g. Event ID 1010 for USB/device surprise removal diagnostics) and flexible level resolution (`Critical`, `Error`, `Warning`, `Information`, `Verbose`, or `All`/None).
+- **Channel Discovery Tool (`system_list_event_channels`):** Added FastMCP tool to discover, search, and inspect available event log channels on the system with record counts and enabled status.
+- **Strict Parameter Sanitization & Aliases:** Parameter aliases (`channel`, `level`, `id`, `limit`) and regex-based input validation preventing command injection.
+
+### 🛠️ Feature 5: Mammouth Code CLI Bridge Hardening & Resilient Streams
+- **Safe Stream Handling (`modules/mammouth_code.py`):** Guarded `proc.stdout` and `proc.stderr` against `NoneType` values in `run_mammouth_task`, `install_or_update_mammouth_code`, and `get_mammouth_code_status`, eliminating crashes on headless tasks.
+- **Subprocess Security Guard:** Reinforced stream handling in `modules/putty_ssh.py`.
+
+### 🧠 Feature 6: Persistent Memory & Knowledge Vault Tab + Seamless Upgrade Migration
+- **Interactive Knowledge Cockpit UI (`gui.py`):** Added dedicated "🧠 Memory Vault" navigation rail tab with live search, category filtering dropdown, and telemetry summary banner.
+- **Full CRUD Management:** Interactive cards displaying keys, category pill badges, timestamps, multi-line content views, modal `MemoryDialog`, 1-click clipboard copy, and delete confirmation dialogs.
+- **Seamless Upgrade Migration (`modules/memory.py`):** Automatic discovery and migration of `memory.db` from previous releases (`MammouthDefroster9000-v*`), ensuring no user knowledge is lost across upgrades.
+- **LLM Immunity & Parameter Aliases:** Flexible parameter aliases for `memory_save`, `memory_recall`, `memory_get`, and `memory_delete`.
+
 ## [0.5.2] - 2026-10-10
+
 
 ### 🌐 Complete English Localization
 - **Cockpit UI & Navigation:** Fully translated all GUI elements, sidebar navigation, metric tiles, scheduler modals, settings, tray menu, console, Mammouth Code CLI tab, and global exception handlers to English.

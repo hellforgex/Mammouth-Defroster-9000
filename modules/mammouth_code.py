@@ -176,7 +176,7 @@ def get_mammouth_code_status() -> Dict[str, Any]:
                 timeout=4,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             )
-            version = res.stdout.strip() or res.stderr.strip()
+            version = (res.stdout or "").strip() or (res.stderr or "").strip()
         except Exception as ex:
             logger.debug(f"Failed to query mammouth version: {ex}")
             version = "Installed (Version check timed out)"
@@ -191,7 +191,7 @@ def get_mammouth_code_status() -> Dict[str, Any]:
                 timeout=3,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             )
-            count_str = ps_res.stdout.strip()
+            count_str = (ps_res.stdout or "").strip()
             if count_str.isdigit():
                 active_processes = int(count_str)
         except Exception:
@@ -240,8 +240,8 @@ def install_or_update_mammouth_code() -> Dict[str, Any]:
             return {
                 "success": proc.returncode == 0,
                 "action": "upgrade",
-                "stdout": proc.stdout.strip(),
-                "stderr": proc.stderr.strip(),
+                "stdout": (proc.stdout or "").strip(),
+                "stderr": (proc.stderr or "").strip(),
                 "duration_seconds": duration,
                 "path": exe
             }
@@ -268,8 +268,8 @@ def install_or_update_mammouth_code() -> Dict[str, Any]:
         return {
             "success": proc.returncode == 0 and bool(new_exe),
             "action": "install",
-            "stdout": proc.stdout.strip(),
-            "stderr": proc.stderr.strip(),
+            "stdout": (proc.stdout or "").strip(),
+            "stderr": (proc.stderr or "").strip(),
             "duration_seconds": duration,
             "path": new_exe or ""
         }
@@ -477,8 +477,8 @@ def run_mammouth_task(
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         )
         duration = round(time.time() - start_time, 2)
-        out = proc.stdout.strip()
-        err = proc.stderr.strip()
+        out = (proc.stdout or "").strip()
+        err = (proc.stderr or "").strip()
         return {
             "success": proc.returncode == 0,
             "returncode": proc.returncode,

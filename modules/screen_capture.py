@@ -28,17 +28,33 @@ if getattr(sys, "frozen", False):
 else:
     BASE_DIR = Path(__file__).parent.parent.resolve()
 
-WORKSPACE_DIR = BASE_DIR / "workspace" / "screenshots"
-WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+def get_workspace_screenshots_dir() -> Path:
+    """Dynamically resolve screenshots directory inside the active workspace root."""
+    try:
+        from modules.shell_processes import resolve_workspace_root
+        ws = Path(resolve_workspace_root())
+    except Exception:
+        ws = BASE_DIR / "workspace"
+    out = ws / "screenshots"
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return out
 
-def _cleanup_old_screenshots(max_keep: int = 25, max_age_hours: int = 24):
+
+WORKSPACE_DIR = get_workspace_screenshots_dir()
+
+
+def _cleanup_old_screenshots(target_dir: Optional[Path] = None, max_keep: int = 25, max_age_hours: int = 24):
     """Keep only the most recent screenshots and clean up files older than max_age_hours."""
     try:
-        if not WORKSPACE_DIR.exists():
+        folder = target_dir or get_workspace_screenshots_dir()
+        if not folder.exists():
             return
         now_ts = time.time()
         files = sorted(
-            [f for f in WORKSPACE_DIR.glob("*.png") if f.is_file()],
+            [f for f in folder.glob("*.png") if f.is_file()],
             key=lambda x: x.stat().st_mtime,
             reverse=True
         )
@@ -51,7 +67,7 @@ def _cleanup_old_screenshots(max_keep: int = 25, max_age_hours: int = 24):
 
         # Newest first, so only the oldest files beyond max_keep are deleted
         remaining = sorted(
-            [f for f in WORKSPACE_DIR.glob("*.png") if f.is_file()],
+            [f for f in folder.glob("*.png") if f.is_file()],
             key=lambda x: x.stat().st_mtime,
             reverse=True
         )
@@ -99,6 +115,12 @@ _last_screen_capture_time = 0.0
 _user_consent_granted: bool = False
 _consent_mode: str = "none"  # "none", "once", "always"
 _consent_prompt_callback = None
+
+# Multimodal Screen Copilot tracking state
+_tracked_target_hwnd: Optional[int] = None
+_tracked_target_title: Optional[str] = None
+_tracked_target_process: Optional[str] = None
+_tracked_mode: str = "auto"  # "auto", "window", "monitor", "snip"
 
 
 def set_consent_prompt_callback(callback):
@@ -219,7 +241,8 @@ def _screen_capture_impl(monitor: int, max_width: Optional[int], quality: int, s
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"screenshot_mon{monitor}_{timestamp}.png"
-    filepath = WORKSPACE_DIR / filename
+    target_dir = get_workspace_screenshots_dir()
+    filepath = target_dir / filename
     
     pil_image = None
     
@@ -263,7 +286,7 @@ def _screen_capture_impl(monitor: int, max_width: Optional[int], quality: int, s
         try:
             pil_image.save(str(filepath), format="PNG", optimize=True)
             saved_path_str = str(filepath)
-            _cleanup_old_screenshots(max_keep=25)
+            _cleanup_old_screenshots(target_dir=target_dir, max_keep=25)
         except Exception as e:
             saved_path_str = f"Error saving to disk: {e}"
 
@@ -371,19 +394,21 @@ def save_clipboard_image(dest_path: Optional[str] = None) -> Optional[str]:
     try:
         if not dest_path:
             filename = f"snip_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-            dest_file = WORKSPACE_DIR / filename
+            target_dir = get_workspace_screenshots_dir()
+            dest_file = target_dir / filename
         else:
             dest_file = Path(dest_path)
             dest_file.parent.mkdir(parents=True, exist_ok=True)
+            target_dir = dest_file.parent
         img.save(str(dest_file), format="PNG", optimize=True)
-        _cleanup_old_screenshots(max_keep=25)
+        _cleanup_old_screenshots(target_dir=target_dir, max_keep=25)
         return str(dest_file)
     except Exception:
         return None
 
 
-def get_foreground_window_info() -> Dict[str, Any]:
-    """Inspect the active foreground window on Windows using Win32 API.
+def get_window_info(hwnd: Optional[int] = None) -> Dict[str, Any]:
+    """Inspect a window (or active foreground window if hwnd is None) on Windows using Win32 API.
     
     Returns:
         dict: {
@@ -391,15 +416,17 @@ def get_foreground_window_info() -> Dict[str, Any]:
             "title": str,
             "process_id": int,
             "process_name": str,
+            "is_minimized": bool,
             "rect": {"left": int, "top": int, "right": int, "bottom": int, "width": int, "height": int}
         }
     """
     if sys.platform != "win32":
         return {
-            "hwnd": 0,
+            "hwnd": hwnd or 0,
             "title": "Desktop / Display",
             "process_id": 0,
             "process_name": "",
+            "is_minimized": False,
             "rect": {"left": 0, "top": 0, "right": 1920, "bottom": 1080, "width": 1920, "height": 1080}
         }
 
@@ -407,27 +434,28 @@ def get_foreground_window_info() -> Dict[str, Any]:
         import ctypes
         import ctypes.wintypes
         user32 = ctypes.windll.user32
-        hwnd = user32.GetForegroundWindow()
-        if not hwnd:
+        target_hwnd = hwnd if hwnd is not None else user32.GetForegroundWindow()
+        if not target_hwnd:
             return {
                 "hwnd": 0,
                 "title": "Desktop / Full Screen",
                 "process_id": 0,
                 "process_name": "explorer.exe",
+                "is_minimized": False,
                 "rect": {"left": 0, "top": 0, "right": 0, "bottom": 0, "width": 0, "height": 0}
             }
 
         # Window title
-        length = user32.GetWindowTextLengthW(hwnd)
+        length = user32.GetWindowTextLengthW(target_hwnd)
         title = ""
         if length > 0:
             title_buf = ctypes.create_unicode_buffer(length + 1)
-            user32.GetWindowTextW(hwnd, title_buf, length + 1)
+            user32.GetWindowTextW(target_hwnd, title_buf, length + 1)
             title = title_buf.value
 
         # Process ID & Name
         pid = ctypes.wintypes.DWORD()
-        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        user32.GetWindowThreadProcessId(target_hwnd, ctypes.byref(pid))
         proc_id = pid.value
         proc_name = ""
         if proc_id:
@@ -451,21 +479,21 @@ def get_foreground_window_info() -> Dict[str, Any]:
         rect_found = False
         try:
             dwmapi = ctypes.windll.dwmapi
-            hr = dwmapi.DwmGetWindowAttribute(hwnd, 9, ctypes.byref(rect), ctypes.sizeof(rect))
+            hr = dwmapi.DwmGetWindowAttribute(target_hwnd, 9, ctypes.byref(rect), ctypes.sizeof(rect))
             if hr == 0:
                 rect_found = True
         except Exception:
             pass
 
         if not rect_found:
-            user32.GetWindowRect(hwnd, ctypes.byref(rect))
+            user32.GetWindowRect(target_hwnd, ctypes.byref(rect))
 
-        is_minimized = bool(user32.IsIconic(hwnd)) or (rect.left <= -10000)
+        is_minimized = bool(user32.IsIconic(target_hwnd)) or (rect.left <= -10000)
         width = 0 if is_minimized else max(0, rect.right - rect.left)
         height = 0 if is_minimized else max(0, rect.bottom - rect.top)
 
         return {
-            "hwnd": int(hwnd),
+            "hwnd": int(target_hwnd),
             "title": title or "Untitled Window",
             "process_id": int(proc_id),
             "process_name": proc_name,
@@ -481,23 +509,466 @@ def get_foreground_window_info() -> Dict[str, Any]:
         }
     except Exception as e:
         return {
-            "hwnd": 0,
+            "hwnd": int(hwnd or 0),
             "title": f"Unknown (Error: {e})",
             "process_id": 0,
             "process_name": "",
+            "is_minimized": False,
             "rect": {"left": 0, "top": 0, "right": 0, "bottom": 0, "width": 0, "height": 0}
         }
 
 
+def _ensure_dpi_awareness():
+    """Ensure process is Per-Monitor DPI aware so window bounding boxes match physical screen pixels."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+    except Exception:
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            try:
+                ctypes.windll.user32.SetProcessDPIAware()
+            except Exception:
+                pass
+
+
+def is_defroster_window(hwnd: int) -> bool:
+    """Check if the given HWND belongs to Mammouth Defroster 9000 or its children (WebView2)."""
+    if sys.platform != "win32" or not hwnd:
+        return False
+    try:
+        import ctypes
+        import ctypes.wintypes
+        user32 = ctypes.windll.user32
+        pid = ctypes.wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        cur_pid = os.getpid()
+        if pid.value == cur_pid:
+            return True
+        try:
+            import psutil
+            proc = psutil.Process(pid.value)
+            proc_name = proc.name().lower()
+            if proc_name in ("mammouthdefroster9000.exe", "mammouthdefroster9000-server.exe"):
+                return True
+            parent = proc.parent()
+            if parent and parent.pid == cur_pid:
+                return True
+        except Exception:
+            pass
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length > 0:
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buf, length + 1)
+            if "mammouth defroster" in buf.value.lower():
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def get_topmost_external_window() -> Optional[Dict[str, Any]]:
+    """Find the top-most visible, non-minimized window in Z-order that is NOT Defroster."""
+    wins = screen_list_windows(include_minimized=False, include_system=False, exclude_self=True)
+    return wins[0] if wins else None
+
+
+def get_target_window_info(hwnd: Optional[int] = None, exclude_defroster: bool = True) -> Dict[str, Any]:
+    """Resolve target window to capture: explicit target_hwnd -> tracked window -> top external window -> foreground window."""
+    global _tracked_target_hwnd
+    _ensure_dpi_awareness()
+    if hwnd is not None:
+        return get_window_info(hwnd)
+
+    # 1. Explicit tracked window
+    if _tracked_target_hwnd:
+        try:
+            import ctypes
+            if ctypes.windll.user32.IsWindow(_tracked_target_hwnd):
+                info = get_window_info(_tracked_target_hwnd)
+                if not info.get("is_minimized") and info.get("rect", {}).get("width", 0) > 10:
+                    return info
+        except Exception:
+            pass
+
+    # 2. Inspect active foreground window
+    fg_info = get_foreground_window_info()
+    fg_hwnd = fg_info.get("hwnd", 0)
+    if exclude_defroster and is_defroster_window(fg_hwnd):
+        top_ext = get_topmost_external_window()
+        if top_ext:
+            return top_ext
+
+    return fg_info
+
+
+def capture_window_via_printwindow(hwnd: int) -> Optional[Any]:
+    """Capture a window directly via Win32 PrintWindow (PW_RENDERFULLCONTENT).
+    Works cleanly even when the target window is partially or completely obscured by other windows.
+    """
+    if sys.platform != "win32" or not hwnd or PILImage is None:
+        return None
+    try:
+        import ctypes
+        import ctypes.wintypes
+        user32 = ctypes.windll.user32
+        gdi32 = ctypes.windll.gdi32
+        dwmapi = ctypes.windll.dwmapi
+
+        if not user32.IsWindow(hwnd) or user32.IsIconic(hwnd):
+            return None
+
+        class RECT(ctypes.Structure):
+            _fields_ = [
+                ("left", ctypes.c_long),
+                ("top", ctypes.c_long),
+                ("right", ctypes.c_long),
+                ("bottom", ctypes.c_long),
+            ]
+        rect = RECT()
+        hr = dwmapi.DwmGetWindowAttribute(hwnd, 9, ctypes.byref(rect), ctypes.sizeof(rect))
+        if hr != 0:
+            user32.GetWindowRect(hwnd, ctypes.byref(rect))
+
+        w = max(0, rect.right - rect.left)
+        h = max(0, rect.bottom - rect.top)
+        if w < 10 or h < 10:
+            return None
+
+        hdc_win = user32.GetWindowDC(hwnd)
+        if not hdc_win:
+            return None
+        hdc_mem = gdi32.CreateCompatibleDC(hdc_win)
+        if not hdc_mem:
+            user32.ReleaseDC(hwnd, hdc_win)
+            return None
+
+        hbm = gdi32.CreateCompatibleBitmap(hdc_win, w, h)
+        if not hbm:
+            gdi32.DeleteDC(hdc_mem)
+            user32.ReleaseDC(hwnd, hdc_win)
+            return None
+
+        old_bm = gdi32.SelectObject(hdc_mem, hbm)
+
+        # 2 = PW_RENDERFULLCONTENT (Win8.1+)
+        res = user32.PrintWindow(hwnd, hdc_mem, 2)
+        if not res:
+            res = user32.PrintWindow(hwnd, hdc_mem, 0)
+
+        img = None
+        if res:
+            class BITMAPINFOHEADER(ctypes.Structure):
+                _fields_ = [
+                    ('biSize', ctypes.wintypes.DWORD),
+                    ('biWidth', ctypes.c_long),
+                    ('biHeight', ctypes.c_long),
+                    ('biPlanes', ctypes.wintypes.WORD),
+                    ('biBitCount', ctypes.wintypes.WORD),
+                    ('biCompression', ctypes.wintypes.DWORD),
+                    ('biSizeImage', ctypes.wintypes.DWORD),
+                    ('biXPelsPerMeter', ctypes.c_long),
+                    ('biYPelsPerMeter', ctypes.c_long),
+                    ('biClrUsed', ctypes.wintypes.DWORD),
+                    ('biClrImportant', ctypes.wintypes.DWORD),
+                ]
+            class BITMAPINFO(ctypes.Structure):
+                _fields_ = [
+                    ('bmiHeader', BITMAPINFOHEADER),
+                    ('bmiColors', ctypes.wintypes.DWORD * 3),
+                ]
+
+            bmi = BITMAPINFO()
+            bmi.bmiHeader.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+            bmi.bmiHeader.biWidth = w
+            bmi.bmiHeader.biHeight = -h  # top-down DIB
+            bmi.bmiHeader.biPlanes = 1
+            bmi.bmiHeader.biBitCount = 32
+            bmi.bmiHeader.biCompression = 0
+
+            buffer = ctypes.create_string_buffer(w * h * 4)
+            lines = gdi32.GetDIBits(hdc_mem, hbm, 0, h, buffer, ctypes.byref(bmi), 0)
+            if lines:
+                raw_img = PILImage.frombuffer('RGBA', (w, h), buffer, 'raw', 'BGRA', 0, 1).convert('RGB')
+                extrema = raw_img.getextrema()
+                if any(mx > mn for (mn, mx) in extrema):
+                    img = raw_img
+
+        gdi32.SelectObject(hdc_mem, old_bm)
+        gdi32.DeleteDC(hdc_mem)
+        user32.ReleaseDC(hwnd, hdc_win)
+        gdi32.DeleteObject(hbm)
+        return img
+    except Exception:
+        return None
+
+
+def screen_set_tracked_window(target: Any) -> Dict[str, Any]:
+    """Set the target application or window to track for screenshots.
+
+    Args:
+        target: HWND integer, or process/title search query (e.g. 'code.exe', 'Chrome', 'Notepad'),
+                or 'auto' to automatically track the most active external window,
+                or 'monitor' to capture the entire desktop display,
+                or 'snip' to use the interactive snipping tool.
+    """
+    global _tracked_target_hwnd, _tracked_target_title, _tracked_target_process, _tracked_mode
+    query_str = str(target).strip()
+    if query_str.lower() in ("auto", "none", "0"):
+        _tracked_target_hwnd = None
+        _tracked_target_title = None
+        _tracked_target_process = None
+        _tracked_mode = "auto"
+        return {"status": "success", "mode": "auto", "message": "Tracking set to Auto (Active non-Defroster window)."}
+
+    if query_str.lower() in ("monitor", "screen", "fullscreen", "1"):
+        _tracked_target_hwnd = None
+        _tracked_target_title = None
+        _tracked_target_process = None
+        _tracked_mode = "monitor"
+        return {"status": "success", "mode": "monitor", "message": "Tracking set to Full Desktop Monitor."}
+
+    if query_str.lower() in ("snip", "snipping", "clip"):
+        _tracked_target_hwnd = None
+        _tracked_target_title = None
+        _tracked_target_process = None
+        _tracked_mode = "snip"
+        return {"status": "success", "mode": "snip", "message": "Tracking set to Interactive Snipping Tool."}
+
+    target_hwnd = None
+    if isinstance(target, int):
+        target_hwnd = target
+    elif query_str.isdigit():
+        target_hwnd = int(query_str)
+    else:
+        wins = screen_list_windows(include_minimized=True, include_system=False, exclude_self=True)
+        q = query_str.lower()
+        matched = None
+        for w in wins:
+            if q in w.get("process_name", "").lower() or q in w.get("title", "").lower():
+                matched = w
+                break
+        if matched:
+            target_hwnd = matched["hwnd"]
+
+    if target_hwnd:
+        info = get_window_info(target_hwnd)
+        _tracked_target_hwnd = target_hwnd
+        _tracked_target_title = info.get("title", "")
+        _tracked_target_process = info.get("process_name", "")
+        _tracked_mode = "window"
+        return {
+            "status": "success",
+            "mode": "window",
+            "hwnd": target_hwnd,
+            "title": _tracked_target_title,
+            "process_name": _tracked_target_process,
+            "message": f"Now tracking '{_tracked_target_title}' ({_tracked_target_process})."
+        }
+
+    return {
+        "status": "error",
+        "message": f"Window '{target}' not found among open applications."
+    }
+
+
+def screen_get_tracked_window() -> Dict[str, Any]:
+    """Get the currently tracked target window or tracking mode."""
+    global _tracked_target_hwnd, _tracked_target_title, _tracked_target_process, _tracked_mode
+    if _tracked_target_hwnd:
+        is_valid = True
+        is_min = False
+        cur_title = _tracked_target_title
+        cur_proc = _tracked_target_process
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                is_valid = bool(ctypes.windll.user32.IsWindow(_tracked_target_hwnd))
+                if is_valid:
+                    cur = get_window_info(_tracked_target_hwnd)
+                    cur_title = cur.get("title", _tracked_target_title)
+                    cur_proc = cur.get("process_name", _tracked_target_process)
+                    is_min = cur.get("is_minimized", False)
+            except Exception:
+                pass
+        return {
+            "mode": "window",
+            "hwnd": _tracked_target_hwnd,
+            "title": cur_title,
+            "process_name": cur_proc,
+            "is_minimized": is_min,
+            "is_valid": is_valid
+        }
+    return {
+        "mode": _tracked_mode,
+        "hwnd": None,
+        "title": None,
+        "process_name": None,
+        "is_valid": False
+    }
+
+
+def get_foreground_window_info() -> Dict[str, Any]:
+    """Inspect the active foreground window on Windows using Win32 API."""
+    return get_window_info(None)
+
+
+def screen_list_windows(
+    include_minimized: bool = False,
+    include_system: bool = False,
+    exclude_self: bool = False
+) -> List[Dict[str, Any]]:
+    """List all currently visible, interactive desktop windows with title, process name, and HWND.
+
+    Filters out hidden, zero-sized, and background system windows so AI tools or users
+    can target specific applications by HWND.
+
+    Args:
+        include_minimized: If True, include minimized/iconic windows (default False).
+        include_system: If True, include system background shell windows like Program Manager (default False).
+        exclude_self: If True, exclude Mammouth Defroster 9000 windows (default False).
+
+    Returns:
+        List of window dictionaries containing hwnd, title, process_name, process_id,
+        is_foreground, is_minimized, is_self, is_tracked, and rect geometry.
+    """
+    if sys.platform != "win32":
+        return []
+
+    try:
+        import ctypes
+        import ctypes.wintypes
+        user32 = ctypes.windll.user32
+        dwmapi = ctypes.windll.dwmapi
+
+        class RECT(ctypes.Structure):
+            _fields_ = [
+                ("left", ctypes.c_long),
+                ("top", ctypes.c_long),
+                ("right", ctypes.c_long),
+                ("bottom", ctypes.c_long),
+            ]
+
+        windows = []
+        foreground_hwnd = int(user32.GetForegroundWindow() or 0)
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+
+        def enum_proc(hwnd, lparam):
+            try:
+                hwnd_int = int(hwnd)
+                if not user32.IsWindowVisible(hwnd_int):
+                    return 1
+
+                is_minimized = bool(user32.IsIconic(hwnd_int))
+                if is_minimized and not include_minimized:
+                    return 1
+
+                length = user32.GetWindowTextLengthW(hwnd_int)
+                if length <= 0:
+                    return 1
+                buf = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(hwnd_int, buf, length + 1)
+                title = buf.value.strip()
+                if not title:
+                    return 1
+
+                # Filter system windows
+                if not include_system and title in (
+                    "Program Manager", "Windows Shell Experience Host", "Default IME",
+                    "MSCTFIME UI", "TextInputHost", "WDADesktopService",
+                    "DesktopWindowXamlSource", "Windows Input Experience"
+                ):
+                    return 1
+
+                # Check cloaked attribute (DWMWA_CLOAKED = 14)
+                cloaked = ctypes.c_int(0)
+                hr = dwmapi.DwmGetWindowAttribute(hwnd_int, 14, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
+                if hr == 0 and cloaked.value != 0:
+                    return 1
+
+                # Check bounds
+                rect = RECT()
+                hr = dwmapi.DwmGetWindowAttribute(hwnd_int, 9, ctypes.byref(rect), ctypes.sizeof(rect))
+                if hr != 0:
+                    user32.GetWindowRect(hwnd_int, ctypes.byref(rect))
+
+                w = max(0, rect.right - rect.left)
+                h = max(0, rect.bottom - rect.top)
+                if (w < 10 or h < 10 or rect.left <= -10000 or rect.top <= -10000) and not is_minimized:
+                    return 1
+
+                pid = ctypes.wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd_int, ctypes.byref(pid))
+                proc_name = ""
+                if pid.value:
+                    try:
+                        import psutil
+                        proc_name = psutil.Process(pid.value).name()
+                    except Exception:
+                        pass
+
+                if not include_system and proc_name.lower() in ("wdadesktopservice.exe", "textinputhost.exe"):
+                    return 1
+
+                is_self = is_defroster_window(hwnd_int)
+                if exclude_self and is_self:
+                    return 1
+
+                windows.append({
+                    "hwnd": hwnd_int,
+                    "title": title,
+                    "process_name": proc_name,
+                    "process_id": int(pid.value),
+                    "is_foreground": (hwnd_int == foreground_hwnd),
+                    "is_minimized": is_minimized,
+                    "is_self": is_self,
+                    "is_tracked": (hwnd_int == _tracked_target_hwnd),
+                    "rect": {
+                        "left": int(rect.left),
+                        "top": int(rect.top),
+                        "right": int(rect.right),
+                        "bottom": int(rect.bottom),
+                        "width": int(w),
+                        "height": int(h)
+                    }
+                })
+            except Exception:
+                pass
+            return 1
+
+        proc = WNDENUMPROC(enum_proc)
+        h_desk = user32.OpenDesktopW("default", 0, False, 0x0100)
+        enumerated = False
+        if h_desk:
+            try:
+                user32.EnumDesktopWindows(h_desk, proc, 0)
+                enumerated = True
+            finally:
+                user32.CloseDesktop(h_desk)
+
+        if not enumerated or len(windows) == 0:
+            user32.EnumWindows(proc, 0)
+
+        return windows
+    except Exception:
+        return []
+
+
 def screen_capture_active_window(
+    target_hwnd: Optional[int] = None,
     save_to_workspace: bool = True,
     include_metadata: bool = True,
     max_width: Optional[int] = 1920,
     quality: int = 85
 ) -> Any:
-    """Capture a screenshot of the currently active foreground window on Windows with metadata.
+    """Capture a screenshot of the currently active foreground window or a specific window by target_hwnd.
 
     Args:
+        target_hwnd: Optional HWND handle from screen_list_windows to capture a specific window (default None for active foreground window).
         save_to_workspace: Whether to save PNG copy in ./workspace/screenshots/ (default True).
         include_metadata: Whether to return window title, process name, and geometry metadata (default True).
         max_width: Scale down image width to conserve vision LLM tokens (default 1920).
@@ -508,11 +979,13 @@ def screen_capture_active_window(
         include_metadata=include_metadata,
         max_width=max_width,
         quality=quality,
-        local_ui=False
+        local_ui=False,
+        target_hwnd=target_hwnd
     )
 
 
 def screen_capture_active_window_local(
+    target_hwnd: Optional[int] = None,
     save_to_workspace: bool = True,
     include_metadata: bool = True,
     max_width: Optional[int] = 1920,
@@ -524,7 +997,25 @@ def screen_capture_active_window_local(
         include_metadata=include_metadata,
         max_width=max_width,
         quality=quality,
-        local_ui=True
+        local_ui=True,
+        target_hwnd=target_hwnd
+    )
+
+
+def screen_capture_window(
+    target_hwnd: Optional[int] = None,
+    save_to_workspace: bool = True,
+    include_metadata: bool = True,
+    max_width: Optional[int] = 1920,
+    quality: int = 85
+) -> Any:
+    """Alias for screen_capture_active_window supporting specific target_hwnd targeting."""
+    return screen_capture_active_window(
+        target_hwnd=target_hwnd,
+        save_to_workspace=save_to_workspace,
+        include_metadata=include_metadata,
+        max_width=max_width,
+        quality=quality
     )
 
 
@@ -533,7 +1024,8 @@ def _screen_capture_active_window_impl(
     include_metadata: bool,
     max_width: Optional[int],
     quality: int,
-    local_ui: bool
+    local_ui: bool,
+    target_hwnd: Optional[int] = None
 ) -> Any:
     global _user_consent_granted, _consent_mode
 
@@ -571,16 +1063,53 @@ def _screen_capture_active_window_impl(
             "error": "Pillow and MSS packages are required for Desktop Vision. Install with: pip install mss pillow"
         }
 
-    # Get active foreground window info
-    win_info = get_foreground_window_info()
+    # Resolve target window (or tracked window / top external non-Defroster window)
+    win_info = get_target_window_info(target_hwnd, exclude_defroster=True)
     rect = win_info.get("rect", {})
     w = rect.get("width", 0)
     h = rect.get("height", 0)
+    resolved_hwnd = win_info.get("hwnd")
 
     pil_image = None
 
-    # Attempt capturing window bounding box if dimensions valid and window is on-screen
-    if w > 10 and h > 10 and rect.get("left", 0) > -10000 and rect.get("top", 0) > -10000 and not win_info.get("is_minimized", False):
+    # Step 1: Try PrintWindow directly on target HWND (clean, silent, background-capable)
+    if resolved_hwnd and not win_info.get("is_minimized", False):
+        try:
+            pil_image = capture_window_via_printwindow(resolved_hwnd)
+        except Exception:
+            pil_image = None
+
+    # Step 2: If PrintWindow did not produce an image, bring window to top and use MSS/ImageGrab
+    if pil_image is None and resolved_hwnd and sys.platform == "win32":
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            if user32.IsIconic(resolved_hwnd):
+                user32.ShowWindow(resolved_hwnd, 9)  # SW_RESTORE
+                time.sleep(0.08)
+            user32.BringWindowToTop(resolved_hwnd)
+            user32.SetWindowPos(resolved_hwnd, 0, 0, 0, 0, 0, 0x0043)
+            user32.SetForegroundWindow(resolved_hwnd)
+            fore_hwnd = user32.GetForegroundWindow()
+            if fore_hwnd != resolved_hwnd:
+                fore_thread = user32.GetWindowThreadProcessId(fore_hwnd, None)
+                cur_thread = user32.GetCurrentThreadId()
+                if fore_thread and cur_thread and fore_thread != cur_thread:
+                    user32.AttachThreadInput(cur_thread, fore_thread, True)
+                    user32.SetForegroundWindow(resolved_hwnd)
+                    user32.BringWindowToTop(resolved_hwnd)
+                    user32.AttachThreadInput(cur_thread, fore_thread, False)
+            time.sleep(0.12)
+            # Re-read geometry after activation
+            win_info = get_window_info(resolved_hwnd)
+            rect = win_info.get("rect", {})
+            w = rect.get("width", 0)
+            h = rect.get("height", 0)
+        except Exception:
+            pass
+
+    # Step 3: Attempt capturing window bounding box if dimensions valid and window is on-screen
+    if pil_image is None and w > 10 and h > 10 and rect.get("left", 0) > -10000 and rect.get("top", 0) > -10000 and not win_info.get("is_minimized", False):
         # Method 1: MSS
         if mss is not None:
             try:
@@ -641,14 +1170,15 @@ def _screen_capture_active_window_impl(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     clean_proc = "".join(c for c in win_info.get("process_name", "app") if c.isalnum() or c in ("-", "_")) or "window"
     filename = f"window_{clean_proc}_{timestamp}.png"
-    filepath = WORKSPACE_DIR / filename
+    target_dir = get_workspace_screenshots_dir()
+    filepath = target_dir / filename
 
     saved_path_str = ""
     if save_to_workspace:
         try:
             pil_image.save(str(filepath), format="PNG", optimize=True)
             saved_path_str = str(filepath)
-            _cleanup_old_screenshots(max_keep=25)
+            _cleanup_old_screenshots(target_dir=target_dir, max_keep=25)
         except Exception as e:
             saved_path_str = f"Error saving to disk: {e}"
 

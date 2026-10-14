@@ -10,9 +10,11 @@
 
 ### 📸 Feature 1: Multimodal Screen & Window Copilot
 * **Targeted Foreground Window Vision:** Captures the active application window using Win32 API (`GetForegroundWindow`, `DwmGetWindowAttribute`), extracting window title, process ID, executable name, and borderless frame bounds.
-* **Consent-Gated MCP Tool:** Added `screen_capture_active_window(save_to_workspace=True, include_metadata=True, max_width=1920, quality=85)` tool, protected by user consent and token authentication.
-* **Global Win32 Copilot Shortcut (`Ctrl+Shift+Space`):** Dedicated background STA message pump thread instantly captures the active application window before bringing the Defroster Cockpit to the foreground, copies the image to the clipboard, shows in-app toast feedback, switches to the Mammouth AI chat, and focuses the prompt.
-* **In-App Toast Banner Feedback:** Modern non-blocking feedback toast inside the Cockpit with click-to-dismiss and automatic timeout.
+* **Target Application Selector:** Interactive dropdown in the Cockpit header (`Auto`, `Snipping Tool`, `Full Desktop`, or any open desktop window) allowing precise window selection for multimodal tasks.
+* **Self-Capture Prevention:** Intelligently identifies Defroster and WebView2 processes; in `Auto` mode, walks top-level windows in Z-order hierarchy (`get_topmost_external_window`) to reliably capture the user's active application rather than Defroster itself.
+* **Direct Background Capture:** Implemented `PrintWindow` with `PW_RENDERFULLCONTENT` to capture obscured background windows directly from the compositor without focus stealing.
+* **Consent-Gated MCP Tool:** Added `screen_capture_active_window`, `screen_capture_window`, `screen_list_windows`, `screen_set_tracked_window`, and `screen_get_tracked_window` tools protected by user consent and token authentication.
+* **Global Win32 Copilot Shortcut (`Ctrl+Shift+Space`):** Dedicated background STA message pump thread instantly captures the selected target window, copies the image to clipboard, displays non-blocking in-app toast feedback, switches to Mammouth AI chat, and focuses the input prompt.
 
 ### 🧠 Feature 2: Sovereign Workspace Memory & Semantic Code Search (Local RAG)
 * **High-Performance Offline SQLite FTS5 Indexer (`modules/workspace_indexer.py`):** Lightning-fast full-text search across codebase files with snippet generation and bm25 ranking.
@@ -29,15 +31,35 @@
 * **Global Quick-Action Shortcut (`Ctrl+Shift+K`):** Summon Cockpit and focus chat with current clipboard content.
 * **FastMCP Tools:** Added `clipboard_get_text`, `clipboard_set_text`, and `clipboard_transform` tools, gated by the `smart_clipboard` module switch.
 
+### 🔍 Feature 4: Advanced Windows Event Log Diagnostics (Get-WinEvent)
+* **Deep Event Log Channel Support (`modules/system_monitor.py`):** Migrated `system_get_event_logs` from legacy `Get-EventLog` to modern `Get-WinEvent` with clean UTF-8 pipeline output. Unlocks full access to Applications and Services ETW logs (e.g. `Microsoft-Windows-Kernel-PnP/Device Management`, `Microsoft-Windows-Kernel-Power`, `Microsoft-Windows-USB-USBXHCI/Operational`).
+* **Targeted Event ID & Level Filtering:** Direct filtering by `event_id` (e.g. Event ID 1010 for USB/hardware surprise removal and freeze diagnostics) and flexible level resolution (`Critical`, `Error`, `Warning`, `Information`, `Verbose`, or `All`/None).
+* **Channel Discovery Tool (`system_list_event_channels`):** New FastMCP tool to discover, search, and inspect available event channels on the system via wildcard patterns (e.g. `Kernel-PnP`, `USB`), reporting record count, enabled status, mode, and file size.
+* **Strict Parameter Sanitization & Aliases:** Added convenient aliases (`channel`, `level`, `id`, `limit`) and regex-based validation blocking command injection, shell operators, and control characters.
+
+### 🛠️ Feature 5: Mammouth Code CLI Bridge Hardening & Resilient Streams
+* **Safe Stream Handling (`modules/mammouth_code.py`):** Guarded `proc.stdout` and `proc.stderr` against `NoneType` values in `run_mammouth_task`, `install_or_update_mammouth_code`, and `get_mammouth_code_status`. Headless tasks and detached process streams now complete smoothly without `AttributeError: 'NoneType' object has no attribute 'strip'`.
+* **Subprocess Security Guard:** Reinforced stream handling in `modules/putty_ssh.py`.
+
+### 🧠 Feature 6: Persistent Memory & Knowledge Vault Tab + Seamless Upgrade Migration
+* **Interactive Knowledge Cockpit UI (`gui.py`):** Added a dedicated "🧠 Memory Vault" page in the Defroster Cockpit with real-time search, category filtering dropdown, and live statistics banner (memories count, categories count, total storage size).
+* **Full CRUD Management:** Interactive cards displaying keys, category pill badges, formatted ISO timestamps, and full multi-line text views. Modal `MemoryDialog` for adding and editing memories; 1-click clipboard copy with visual feedback; delete with confirmation dialog.
+* **Seamless Upgrade Migration (`modules/memory.py`):** Automatic discovery and migration of `memory.db` from previous releases (`MammouthDefroster9000-v*`), ensuring no knowledge is lost when upgrading or unpacking new releases.
+* **LLM Immunity & Parameter Aliases:** Added flexible parameter aliases to `memory_save` (`value`, `text`, `note`, `data`, `name`), `memory_recall` (`query`, `search_query`, `q`, `search`, `keyword`), `memory_get` (`name`, `id`), and `memory_delete` (`name`), ensuring reliable tool execution even when LLMs vary their parameter naming.
+
 ### ⌨️ Fully Configurable Global Hotkeys & Cockpit Settings
-* Dedicated settings section with editable key combinations and enable toggles for Cockpit Summon, Screen Copilot, and Smart Clipboard. Live re-binding without requiring application restarts.
+* Dedicated Settings UI card with customizable keybind entry fields and toggles for Cockpit Summon (`Ctrl+Shift+M`), Screen Copilot (`Ctrl+Shift+Space`), and Smart Clipboard (`Ctrl+Shift+K`) with live re-binding.
 
 ### 📦 Release Verification & Checksums
 * **Archive:** `MammouthDefroster9000-v0.6.0-windows-x64.zip`
+* **Size:** `131,053,668 bytes` (~124.98 MB)
 * **SHA-256 Checksum:**
   ```text
-  194fa565ace5be2fca4e3541c89366403d07841cb829f088d6bd365417c91c12
+  dfd8c911d2518c1c516bf7858d0c1fd18dbc574810a58f5aa3cb40d2776162c4
   ```
+* **Test Suite:** 230 tests passing (100% clean, 0 failures, 0 errors).
+
+
 
 ---
 

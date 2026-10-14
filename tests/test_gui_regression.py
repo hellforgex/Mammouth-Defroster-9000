@@ -238,6 +238,24 @@ class TestTaskSchedulerGuiRegression(unittest.TestCase):
         self.assertEqual(THEME_ACCENT, ("#9F6C45", "#B88557"))
         self.assertEqual(THEME_SUCCESS, ("#2E7D32", "#10B981"))
 
+    def test_memory_vault_gui_methods(self):
+        """Verify MammouthControlCenter contains Memory Vault methods and handlers."""
+        from gui import MammouthControlCenter
+
+        app = MammouthControlCenter.__new__(MammouthControlCenter)
+        self.assertTrue(hasattr(app, "_setup_memory_tab"))
+        self.assertTrue(hasattr(app, "_refresh_memory_list"))
+        self.assertTrue(hasattr(app, "_render_memory_cards"))
+        self.assertTrue(hasattr(app, "_add_memory"))
+        self.assertTrue(hasattr(app, "_edit_memory"))
+        self.assertTrue(hasattr(app, "_delete_memory"))
+        self.assertTrue(hasattr(app, "_copy_memory_content"))
+
+    def test_memory_dialog_exists(self):
+        """Verify MemoryDialog class is defined."""
+        from gui import MemoryDialog
+        self.assertTrue(callable(MemoryDialog))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -136,6 +136,28 @@ class TestMammouthCodeModule(unittest.TestCase):
         self.assertEqual(kwargs["env"]["MAMMOUTH_API_KEY"], "mc_api_key_456")
 
     @patch("modules.mammouth_code.get_mammouth_executable", return_value="C:\\Tools\\mammouth.exe")
+    @patch("subprocess.run")
+    def test_run_mammouth_task_none_stdout_stderr(self, mock_run, mock_exe):
+        """Test run_mammouth_task handles None stdout and stderr without throwing AttributeError."""
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = None
+        mock_proc.stderr = None
+        mock_run.return_value = mock_proc
+
+        res = run_mammouth_task(
+            prompt="Build headless task",
+            workspace_path=str(self.ws_path),
+            timeout_seconds=60,
+            auto_approve=True
+        )
+
+        self.assertTrue(res["success"])
+        self.assertEqual(res["returncode"], 0)
+        self.assertEqual(res["output"], "")
+        self.assertEqual(res["error"], "")
+
+    @patch("modules.mammouth_code.get_mammouth_executable", return_value="C:\\Tools\\mammouth.exe")
     @patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="mammouth", timeout=10))
     def test_run_mammouth_task_timeout(self, mock_run, mock_exe):
         res = run_mammouth_task(

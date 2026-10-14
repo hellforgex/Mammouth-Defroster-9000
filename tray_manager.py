@@ -155,9 +155,16 @@ class DefrosterTrayApp:
             os.startfile(str(log_path))
 
     def on_open_workspace(self, icon=None, item=None):
-        ws_dir = BASE_DIR.parent / "workspace"
+        try:
+            from modules.shell_processes import resolve_workspace_root
+            ws_dir = Path(resolve_workspace_root())
+        except Exception:
+            ws_dir = (BASE_DIR / "workspace").resolve()
         ws_dir.mkdir(parents=True, exist_ok=True)
-        os.startfile(str(ws_dir))
+        try:
+            os.startfile(str(ws_dir))
+        except Exception:
+            pass
 
     def on_take_screenshot(self, icon=None, item=None):
         res = screen_capture(monitor=1, save_to_workspace=True)

@@ -33,8 +33,17 @@ if getattr(sys, "frozen", False):
 else:
     BASE_DIR = Path(__file__).parent.parent.resolve()
 
-SCREENSHOTS_DIR = BASE_DIR / "workspace" / "screenshots"
-SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+def _get_screenshots_dir() -> Path:
+    try:
+        from modules.screen_capture import get_workspace_screenshots_dir
+        return get_workspace_screenshots_dir()
+    except Exception:
+        d = BASE_DIR / "workspace" / "screenshots"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+
+SCREENSHOTS_DIR = _get_screenshots_dir()
 
 DEFAULT_PROFILE_DIR = BASE_DIR / "data" / "agent_browser_profile"
 DEFAULT_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
@@ -193,7 +202,8 @@ _MAX_BROWSER_SCREENSHOTS = 50
 def _prune_browser_screenshots() -> None:
     """Keep only the newest _MAX_BROWSER_SCREENSHOTS automation screenshots on disk."""
     try:
-        files = sorted(SCREENSHOTS_DIR.glob("browser_*.png"), key=lambda f: f.stat().st_mtime, reverse=True)
+        folder = _get_screenshots_dir()
+        files = sorted(folder.glob("browser_*.png"), key=lambda f: f.stat().st_mtime, reverse=True)
         for old in files[_MAX_BROWSER_SCREENSHOTS:]:
             try:
                 old.unlink()
@@ -445,7 +455,8 @@ class _BrowserWorker:
             # Millisecond timestamp: two snapshots in the same second no longer overwrite each other
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
             filename = f"browser_{timestamp}.png"
-            filepath = SCREENSHOTS_DIR / filename
+            target_dir = _get_screenshots_dir()
+            filepath = target_dir / filename
             try:
                 filepath.write_bytes(screenshot_bytes)
                 saved_path = str(filepath)
@@ -593,7 +604,8 @@ class _BrowserWorker:
         screenshot_bytes = self.active_page.screenshot(full_page=full_page, type="png")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"browser_{timestamp}.png"
-        filepath = SCREENSHOTS_DIR / filename
+        target_dir = _get_screenshots_dir()
+        filepath = target_dir / filename
         try:
             filepath.write_bytes(screenshot_bytes)
             path_str = str(filepath)
