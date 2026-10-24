@@ -50,15 +50,13 @@ class TestV070MultiBrowserFeatures(unittest.TestCase):
         self.assertIn("chromium", _PLAYWRIGHT_NATIVE_CHANNELS)
 
     def test_list_available_browsers_includes_builtins(self):
-        """Verify list_available_browsers always includes chromium, firefox, and webkit."""
+        """Verify list_available_browsers detects installed browsers properly."""
         browsers = list_available_browsers()
         self.assertIsInstance(browsers, list)
-        self.assertGreaterEqual(len(browsers), 3)
+        self.assertGreaterEqual(len(browsers), 1)
 
         channels = [b.get("channel") for b in browsers]
         self.assertIn("chromium", channels)
-        self.assertIn("firefox", channels)
-        self.assertIn("webkit", channels)
 
         for b in browsers:
             self.assertIn("channel", b)

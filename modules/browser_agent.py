@@ -311,6 +311,20 @@ _PLAYWRIGHT_NATIVE_CHANNELS = {"msedge", "msedge-beta", "msedge-dev", "msedge-ca
                                 "chrome", "chrome-beta", "chrome-dev", "chrome-canary", "chromium",
                                 "firefox", "webkit"}
 
+def _is_playwright_engine_installed(engine_name: str) -> bool:
+    """Check if Playwright's specific browser engine binary exists in %LOCALAPPDATA%\\ms-playwright."""
+    try:
+        appdata = os.environ.get("LOCALAPPDATA", "")
+        if not appdata:
+            return True
+        pw_dir = Path(appdata) / "ms-playwright"
+        if not pw_dir.exists():
+            return False
+        return any(d.is_dir() and d.name.startswith(f"{engine_name}-") for d in pw_dir.iterdir())
+    except Exception:
+        return False
+
+
 def list_available_browsers() -> List[Dict[str, Any]]:
     """Return detected browsers installed on this system, always including Playwright's built-in Chromium."""
     if sys.platform == "win32":
@@ -322,12 +336,15 @@ def list_available_browsers() -> List[Dict[str, Any]]:
 
     found: List[Dict[str, Any]] = []
     for entry in _BROWSER_CATALOG:
+        ch = entry["channel"]
         if entry.get("always_available"):
-            found.append({"channel": entry["channel"], "label": entry["label"], "path": "(Playwright built-in)"})
+            # Playwright engines: verify whether they are installed
+            if ch == "chromium" or _is_playwright_engine_installed(ch):
+                found.append({"channel": ch, "label": entry["label"], "path": "(Playwright built-in)"})
             continue
         for p in entry.get(platform_key, []):
             if p and os.path.exists(p):
-                found.append({"channel": entry["channel"], "label": entry["label"], "path": p})
+                found.append({"channel": ch, "label": entry["label"], "path": p})
                 break
     return found
 
@@ -426,6 +443,8 @@ class _BrowserWorker:
         self.is_running = False
         self._lock = threading.Lock()
         self._browser = None   # non-None only for Firefox/WebKit (separate browser handle)
+        self._actual_headless: Optional[bool] = None
+        self._actual_channel: Optional[str] = None
         self.config: Dict[str, Any] = {
             "channel": _detect_browser_channel(),
             "headless": False,
@@ -541,48 +560,65 @@ class _BrowserWorker:
           profile API, but full DOM access and distinct fingerprint from Chromium bots.
         - WebKit (safari): same as Firefox — launch() + new_context(), no persistent profile.
         """
-        if self.context and self.is_running:
-            if self.active_page and self.active_page.is_closed():
-                pages = self.context.pages
-                self.active_page = pages[0] if pages else self.context.new_page()
-            return
-
         channel = _resolve_channel(self.config.get("channel", "msedge"))
         headless = bool(self.config.get("headless", False))
         vw = int(self.config.get("viewport_width", 1280))
         vh = int(self.config.get("viewport_height", 800))
         timeout_ms = min(int(self.config.get("timeout_seconds", 30)) * 1000, _NAV_TIMEOUT_MS)
 
+        if self.context and self.is_running:
+            # If the currently running instance's visibility (headless vs visible) or engine differs, recreate
+            if (self._actual_headless is not None and self._actual_headless != headless) or \
+               (self._actual_channel is not None and self._actual_channel != channel):
+                self._do_close()
+            else:
+                if self.active_page and self.active_page.is_closed():
+                    pages = self.context.pages
+                    self.active_page = pages[0] if pages else self.context.new_page()
+                return
+
         is_firefox = channel == "firefox"
         is_webkit = channel in ("webkit", "safari")
 
         if is_firefox or is_webkit:
-            # Firefox / WebKit don't support launch_persistent_context, so we emulate
-            # session persistence via Playwright's storage_state (cookies + localStorage).
-            # The state file is per-channel so Firefox and WebKit each keep their own session.
-            state_file = self._storage_state_path(channel)
-            storage_state_arg = str(state_file) if state_file.exists() else None
-
-            engine = self.pw.firefox if is_firefox else self.pw.webkit
-            self._browser = engine.launch(headless=headless)
-            ctx_kwargs: Dict[str, Any] = {
-                "viewport": {"width": vw, "height": vh},
-                "accept_downloads": True,
-            }
-            if storage_state_arg:
-                ctx_kwargs["storage_state"] = storage_state_arg
-
-            self.context = self._browser.new_context(**ctx_kwargs)
-            self.context.set_default_timeout(timeout_ms)
-            self.active_page = self.context.new_page()
-            # Auto-save cookies/localStorage after every navigation so login sessions persist
-            self.active_page.on("load", lambda _page: self._save_storage_state(channel))
             try:
-                self.context.on("close", self._on_context_closed)
-            except Exception:
-                pass
-            self.is_running = True
-            return
+                # Firefox / WebKit don't support launch_persistent_context, so we emulate
+                # session persistence via Playwright's storage_state (cookies + localStorage).
+                state_file = self._storage_state_path(channel)
+                storage_state_arg = str(state_file) if state_file.exists() else None
+
+                engine = self.pw.firefox if is_firefox else self.pw.webkit
+                self._browser = engine.launch(headless=headless)
+                ctx_kwargs: Dict[str, Any] = {
+                    "viewport": {"width": vw, "height": vh},
+                    "accept_downloads": True,
+                }
+                if storage_state_arg:
+                    ctx_kwargs["storage_state"] = storage_state_arg
+
+                self.context = self._browser.new_context(**ctx_kwargs)
+                self.context.set_default_timeout(timeout_ms)
+                self.active_page = self.context.new_page()
+                # Auto-save cookies/localStorage after every navigation so login sessions persist
+                self.active_page.on("load", lambda _page: self._save_storage_state(channel))
+                try:
+                    self.context.on("close", self._on_context_closed)
+                except Exception:
+                    pass
+                self.is_running = True
+                self._actual_headless = headless
+                self._actual_channel = channel
+                return
+            except Exception as e:
+                # Engine failed (e.g. missing binary or compositor issue): log warning and fall back to Chromium
+                print(f"[BROWSER AGENT] Engine '{channel}' failed ({e}). Falling back to Chromium persistent context.", file=sys.stderr)
+                if hasattr(self, "_browser") and self._browser:
+                    try:
+                        self._browser.close()
+                    except Exception:
+                        pass
+                    self._browser = None
+                self.context = None
 
         # --- Chromium-based (persistent context with profile dir) ---
         profile_dir = Path(self.config.get("user_data_dir", str(DEFAULT_PROFILE_DIR))).resolve()
@@ -597,13 +633,14 @@ class _BrowserWorker:
         try:
             self.context = self.pw.chromium.launch_persistent_context(
                 user_data_dir=str(profile_dir),
-                channel=channel,
+                channel=channel if channel in ("msedge", "chrome", "msedge-beta", "chrome-beta") else None,
                 headless=headless,
                 viewport={"width": vw, "height": vh},
                 accept_downloads=True,
                 chromium_sandbox=True,
                 args=launch_args,
             )
+            self._actual_channel = channel
         except Exception:
             # Fallback: Playwright's bundled Chromium (no channel= required)
             self.context = self.pw.chromium.launch_persistent_context(
@@ -614,6 +651,7 @@ class _BrowserWorker:
                 chromium_sandbox=True,
                 args=launch_args,
             )
+            self._actual_channel = "chromium"
 
         self.context.set_default_timeout(timeout_ms)
         try:
@@ -624,6 +662,7 @@ class _BrowserWorker:
         pages = self.context.pages
         self.active_page = pages[0] if pages else self.context.new_page()
         self.is_running = True
+        self._actual_headless = headless
 
     def _do_close(self):
         if self.context:
@@ -641,6 +680,8 @@ class _BrowserWorker:
             self._browser = None
         self.active_page = None
         self.is_running = False
+        self._actual_headless = None
+        self._actual_channel = None
 
     # ---- Command Handlers ----
 

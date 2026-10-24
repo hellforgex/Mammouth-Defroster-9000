@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 
 # Ensure Windows COM ApartmentState is STA before Tkinter or WebView2 initialization
@@ -5158,6 +5158,7 @@ class MammouthControlCenter(ctk.CTk):
                     command=self._on_browser_agent_launch
                 )
                 btn_start_browser.pack(side="left", padx=5, pady=6)
+                self.btn_start_browser = btn_start_browser
 
                 btn_close_browser = ctk.CTkButton(
                     sub_opts,
@@ -5208,8 +5209,12 @@ class MammouthControlCenter(ctk.CTk):
         self.config_data.setdefault("browser_agent", {})["headless"] = val
         save_config(self.config_data)
         try:
-            from modules.browser_agent import init_browser_agent
+            from modules.browser_agent import init_browser_agent, browser_status, browser_restart
             init_browser_agent(self.config_data.get("browser_agent", {}))
+            st = browser_status()
+            if st.get("running"):
+                threading.Thread(target=lambda: browser_restart(headless=val), daemon=True).start()
+                self._log(f"[BROWSER AGENT] Headless mode toggled to: {val} (browser restarted)")
         except Exception as e:
             self._log(f"[BROWSER AGENT] Config update: {e}")
 
@@ -5218,24 +5223,50 @@ class MammouthControlCenter(ctk.CTk):
         self.config_data.setdefault("browser_agent", {})["channel"] = channel
         save_config(self.config_data)
         try:
-            from modules.browser_agent import browser_restart
-            threading.Thread(
-                target=lambda: browser_restart(channel=channel),
-                daemon=True
-            ).start()
-            self._log(f"[BROWSER AGENT] Browser switched to: {channel}")
+            from modules.browser_agent import browser_restart, browser_status
+            st = browser_status()
+            if st.get("running"):
+                threading.Thread(
+                    target=lambda: browser_restart(channel=channel),
+                    daemon=True
+                ).start()
+                self._log(f"[BROWSER AGENT] Browser switched to: {channel}")
         except Exception as e:
             self._log(f"[BROWSER AGENT] Channel change error: {e}")
 
     def _on_browser_agent_launch(self):
-        try:
-            from modules.browser_agent import init_browser_agent, browser_navigate
-            init_browser_agent(self.config_data.get("browser_agent", {}))
-            threading.Thread(target=lambda: browser_navigate("about:blank"), daemon=True).start()
-            self._log("[BROWSER AGENT] Automated browser launched.")
-            messagebox.showinfo("Browser Agent", "Automated browser started successfully!\n\nControlled by Mammouth Defroster MCP.", parent=self)
-        except Exception as e:
-            messagebox.showerror("Browser Error", f"Failed to launch browser: {e}", parent=self)
+        if hasattr(self, "btn_start_browser"):
+            self.btn_start_browser.configure(state="disabled", text="⏳ Starting...")
+
+        def _bg():
+            try:
+                from modules.browser_agent import init_browser_agent, browser_restart, browser_navigate
+                cfg = self.config_data.get("browser_agent", {})
+                init_browser_agent(cfg)
+                ch = cfg.get("channel", "msedge")
+                hl = bool(cfg.get("headless", False))
+                res = browser_restart(headless=hl, channel=ch)
+                if isinstance(res, dict) and res.get("error"):
+                    err = res["error"]
+                    self._log(f"[BROWSER AGENT ERROR] Launch failed: {err}")
+                    self.after(0, lambda: messagebox.showerror("Browser Error", f"Failed to launch browser:\n\n{err}", parent=self))
+                    return
+                nav_res = browser_navigate("about:blank")
+                if isinstance(nav_res, dict) and nav_res.get("error"):
+                    err = nav_res["error"]
+                    self._log(f"[BROWSER AGENT ERROR] Initial navigation failed: {err}")
+                    self.after(0, lambda: messagebox.showerror("Browser Error", f"Browser launch warning:\n\n{err}", parent=self))
+                    return
+                self._log(f"[BROWSER AGENT] Automated browser window ({ch}, headless={hl}) launched successfully.")
+                self.after(0, lambda: messagebox.showinfo("Browser Agent", f"Automated browser ({ch}) started successfully!\n\nControlled by Mammouth Defroster MCP.", parent=self))
+            except Exception as e:
+                self._log(f"[BROWSER AGENT ERROR] {e}")
+                self.after(0, lambda: messagebox.showerror("Browser Error", f"Failed to launch browser: {e}", parent=self))
+            finally:
+                if hasattr(self, "btn_start_browser"):
+                    self.after(0, lambda: self.btn_start_browser.configure(state="normal", text="🚀 Launch Browser"))
+
+        threading.Thread(target=_bg, daemon=True).start()
 
     def _on_browser_agent_close(self):
         try:
