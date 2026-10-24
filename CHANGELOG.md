@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.7.0] - 2026-10-24
+
+### 🌐 Feature: Multi-Browser Support & Model-Controlled Browser Mode
+
+#### Browser Engine Selection (GUI + MCP)
+- **Browser Dropdown in Cockpit UI:** The Browser Agent settings card now shows a live-detected dropdown of all installed browsers alongside the existing Headless toggle. Switching triggers an automatic browser restart.
+- **Auto-Detection (`list_available_browsers`):** Scans known installation paths for Microsoft Edge (stable/beta/dev/canary), Google Chrome (stable/beta/dev/canary), Brave, and Chromium. Firefox and WebKit/Safari are always listed as Playwright built-ins. Returns `channel`, `label`, `path`, and optional `note` per entry.
+- **New MCP Tool `browser_list_browsers`:** The AI model can enumerate available browsers on the host system before deciding which to launch.
+- **New MCP Tool `browser_restart(headless, channel)`:** The AI model can switch browser engine or toggle headless mode at runtime without user intervention. Closes the current session and relaunches with the new settings.
+
+#### Firefox & WebKit Support (Full DOM Access)
+- **Firefox engine via Playwright:** Supports all existing MCP tools (`browser_snapshot`, `browser_click`, `browser_fill`, etc.) with full DOM access. Resolves the limitation where `desktop_input` coordinate-based clicking was unreliable on dynamic/responsive pages (e.g. at 2560×1392 resolution).
+- **Persistent Login Sessions for Firefox/WebKit:** Playwright's `storage_state` API (cookies + localStorage) is saved to `data/browser_states/storage_state_<channel>.json` automatically on every page load. Login sessions survive browser restarts — no re-authentication needed after closing and reopening Firefox.
+- **Per-channel state isolation:** Each browser channel (firefox, webkit, msedge, chrome, …) maintains its own independent session file.
+
+#### Technical Details
+- `_resolve_channel()`: Maps user-supplied channel names (including aliases like "edge", "google-chrome") to Playwright-compatible values; unknown channels fall back to "chromium".
+- `_BrowserWorker._ensure_browser()`: Dispatches to Firefox/WebKit `launch()` + `new_context()` or Chromium `launch_persistent_context()` based on channel.
+- `_BrowserWorker._cmd_restart()`: Closes existing context, updates config, calls `_ensure_browser()` — fully synchronous on the worker thread.
+- `_BrowserWorker._cmd_status()`: Now includes `available_browsers` list in every status response.
+- `_do_close()`: Handles both Chromium (context-only) and Firefox/WebKit (browser handle + context) teardown paths.
+
 ## [0.6.0] - 2026-10-12
 
 ### 📸 Feature 1: Multimodal Screen & Window Copilot

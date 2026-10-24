@@ -187,6 +187,166 @@ def _detect_browser_channel() -> str:
     return "msedge"
 
 
+# Mapping: internal channel key → human label + known binary paths for detection
+_BROWSER_CATALOG: List[Dict[str, Any]] = [
+    {
+        "channel": "msedge",
+        "label": "Microsoft Edge",
+        "paths_win": [
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        ],
+        "paths_linux": ["/usr/bin/microsoft-edge", "/usr/bin/microsoft-edge-stable"],
+        "paths_mac": ["/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"],
+    },
+    {
+        "channel": "chrome",
+        "label": "Google Chrome",
+        "paths_win": [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ],
+        "paths_linux": ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable"],
+        "paths_mac": ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"],
+    },
+    {
+        "channel": "chrome-beta",
+        "label": "Google Chrome Beta",
+        "paths_win": [
+            r"C:\Program Files\Google\Chrome Beta\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome Beta\Application\chrome.exe",
+        ],
+        "paths_linux": ["/usr/bin/google-chrome-beta"],
+        "paths_mac": ["/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta"],
+    },
+    {
+        "channel": "chromium",
+        "label": "Chromium (Playwright built-in)",
+        "paths_win": [],   # Playwright downloads it automatically — always available
+        "paths_linux": ["/usr/bin/chromium", "/usr/bin/chromium-browser"],
+        "paths_mac": [],
+        "always_available": True,
+    },
+    {
+        "channel": "firefox",
+        "label": "Firefox (Playwright built-in, full DOM access)",
+        "paths_win": [],
+        "paths_linux": [],
+        "paths_mac": [],
+        "always_available": True,
+        "note": "No persistent profile (session resets on close). Full DOM access via Playwright.",
+    },
+    {
+        "channel": "webkit",
+        "label": "WebKit / Safari (Playwright built-in)",
+        "paths_win": [],
+        "paths_linux": [],
+        "paths_mac": [],
+        "always_available": True,
+        "note": "No persistent profile. Linux/Windows only for testing; macOS recommended for Safari behaviour.",
+    },
+    {
+        "channel": "msedge-beta",
+        "label": "Microsoft Edge Beta",
+        "paths_win": [
+            r"C:\Program Files (x86)\Microsoft\Edge Beta\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge Beta\Application\msedge.exe",
+        ],
+        "paths_linux": ["/usr/bin/microsoft-edge-beta"],
+        "paths_mac": ["/Applications/Microsoft Edge Beta.app/Contents/MacOS/Microsoft Edge Beta"],
+    },
+    {
+        "channel": "msedge-dev",
+        "label": "Microsoft Edge Dev",
+        "paths_win": [
+            r"C:\Program Files (x86)\Microsoft\Edge Dev\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge Dev\Application\msedge.exe",
+        ],
+        "paths_linux": ["/usr/bin/microsoft-edge-dev"],
+        "paths_mac": ["/Applications/Microsoft Edge Dev.app/Contents/MacOS/Microsoft Edge Dev"],
+    },
+    {
+        "channel": "chrome-dev",
+        "label": "Google Chrome Dev",
+        "paths_win": [
+            r"C:\Program Files\Google\Chrome Dev\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome Dev\Application\chrome.exe",
+        ],
+        "paths_linux": ["/usr/bin/google-chrome-dev"],
+        "paths_mac": ["/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev"],
+    },
+    {
+        "channel": "chrome-canary",
+        "label": "Google Chrome Canary",
+        "paths_win": [
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Google\Chrome SxS\Application\chrome.exe"),
+        ],
+        "paths_linux": [],
+        "paths_mac": ["/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"],
+    },
+    {
+        "channel": "msedge-canary",
+        "label": "Microsoft Edge Canary",
+        "paths_win": [
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Microsoft\Edge SxS\Application\msedge.exe"),
+        ],
+        "paths_linux": [],
+        "paths_mac": ["/Applications/Microsoft Edge Canary.app/Contents/MacOS/Microsoft Edge Canary"],
+    },
+    {
+        "channel": "brave",
+        "label": "Brave Browser",
+        "paths_win": [
+            r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+            r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe",
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), r"BraveSoftware\Brave-Browser\Application\brave.exe"),
+        ],
+        "paths_linux": ["/usr/bin/brave-browser", "/usr/bin/brave"],
+        "paths_mac": ["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"],
+    },
+]
+
+# Valid channel values accepted by Playwright — anything else gets remapped to "chromium"
+_PLAYWRIGHT_NATIVE_CHANNELS = {"msedge", "msedge-beta", "msedge-dev", "msedge-canary",
+                                "chrome", "chrome-beta", "chrome-dev", "chrome-canary", "chromium",
+                                "firefox", "webkit"}
+
+def list_available_browsers() -> List[Dict[str, Any]]:
+    """Return detected browsers installed on this system, always including Playwright's built-in Chromium."""
+    if sys.platform == "win32":
+        platform_key = "paths_win"
+    elif sys.platform == "darwin":
+        platform_key = "paths_mac"
+    else:
+        platform_key = "paths_linux"
+
+    found: List[Dict[str, Any]] = []
+    for entry in _BROWSER_CATALOG:
+        if entry.get("always_available"):
+            found.append({"channel": entry["channel"], "label": entry["label"], "path": "(Playwright built-in)"})
+            continue
+        for p in entry.get(platform_key, []):
+            if p and os.path.exists(p):
+                found.append({"channel": entry["channel"], "label": entry["label"], "path": p})
+                break
+    return found
+
+
+def _resolve_channel(channel: str) -> str:
+    """Map a user-supplied channel string to a Playwright-compatible value.
+    
+    Brave and other non-native channels are launched via launch_persistent_context
+    without a channel (using the detected binary path via args) which Playwright
+    doesn't natively support — for now they fall back to 'chromium' with a note.
+    """
+    c = (channel or "").strip().lower()
+    if c in _PLAYWRIGHT_NATIVE_CHANNELS:
+        return c
+    # Accept common aliases
+    aliases = {"edge": "msedge", "google chrome": "chrome", "google-chrome": "chrome"}
+    return aliases.get(c, "chromium")
+
+
 
 # Playwright waits must finish well before the caller gives up (call() timeout), otherwise the
 # worker keeps running a command nobody waits for and every following command queues behind it.
@@ -265,6 +425,7 @@ class _BrowserWorker:
         self.active_page = None
         self.is_running = False
         self._lock = threading.Lock()
+        self._browser = None   # non-None only for Firefox/WebKit (separate browser handle)
         self.config: Dict[str, Any] = {
             "channel": _detect_browser_channel(),
             "headless": False,
@@ -355,26 +516,82 @@ class _BrowserWorker:
         self.active_page = None
         self.is_running = False
 
+    def _storage_state_path(self, channel: str) -> Path:
+        """Return the per-channel storage_state JSON path (cookies + localStorage)."""
+        safe_name = re.sub(r"[^a-z0-9_-]", "_", channel.lower())
+        state_dir = BASE_DIR / "data" / "browser_states"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        return state_dir / f"storage_state_{safe_name}.json"
+
+    def _save_storage_state(self, channel: str) -> None:
+        """Persist cookies and localStorage for Firefox/WebKit so login sessions survive restarts."""
+        try:
+            if self.context:
+                self.context.storage_state(path=str(self._storage_state_path(channel)))
+        except Exception:
+            pass  # Non-fatal: best-effort persistence
+
     def _ensure_browser(self):
-        """Ensure persistent context and active page exist."""
+        """Ensure a browser context and active page exist.
+
+        Supports three engine families:
+        - Chromium-based (msedge, chrome, chromium, *-beta, *-dev, *-canary): persistent
+          context with a named profile directory so login sessions survive restarts.
+        - Firefox: Playwright's Firefox engine via launch() + new_context() — no persistent
+          profile API, but full DOM access and distinct fingerprint from Chromium bots.
+        - WebKit (safari): same as Firefox — launch() + new_context(), no persistent profile.
+        """
         if self.context and self.is_running:
-            # Check if active page is still alive
             if self.active_page and self.active_page.is_closed():
                 pages = self.context.pages
                 self.active_page = pages[0] if pages else self.context.new_page()
             return
 
-        profile_dir = Path(self.config.get("user_data_dir", str(DEFAULT_PROFILE_DIR))).resolve()
-        profile_dir.mkdir(parents=True, exist_ok=True)
-        channel = self.config.get("channel", "msedge")
+        channel = _resolve_channel(self.config.get("channel", "msedge"))
         headless = bool(self.config.get("headless", False))
         vw = int(self.config.get("viewport_width", 1280))
         vh = int(self.config.get("viewport_height", 800))
+        timeout_ms = min(int(self.config.get("timeout_seconds", 30)) * 1000, _NAV_TIMEOUT_MS)
+
+        is_firefox = channel == "firefox"
+        is_webkit = channel in ("webkit", "safari")
+
+        if is_firefox or is_webkit:
+            # Firefox / WebKit don't support launch_persistent_context, so we emulate
+            # session persistence via Playwright's storage_state (cookies + localStorage).
+            # The state file is per-channel so Firefox and WebKit each keep their own session.
+            state_file = self._storage_state_path(channel)
+            storage_state_arg = str(state_file) if state_file.exists() else None
+
+            engine = self.pw.firefox if is_firefox else self.pw.webkit
+            self._browser = engine.launch(headless=headless)
+            ctx_kwargs: Dict[str, Any] = {
+                "viewport": {"width": vw, "height": vh},
+                "accept_downloads": True,
+            }
+            if storage_state_arg:
+                ctx_kwargs["storage_state"] = storage_state_arg
+
+            self.context = self._browser.new_context(**ctx_kwargs)
+            self.context.set_default_timeout(timeout_ms)
+            self.active_page = self.context.new_page()
+            # Auto-save cookies/localStorage after every navigation so login sessions persist
+            self.active_page.on("load", lambda _page: self._save_storage_state(channel))
+            try:
+                self.context.on("close", self._on_context_closed)
+            except Exception:
+                pass
+            self.is_running = True
+            return
+
+        # --- Chromium-based (persistent context with profile dir) ---
+        profile_dir = Path(self.config.get("user_data_dir", str(DEFAULT_PROFILE_DIR))).resolve()
+        profile_dir.mkdir(parents=True, exist_ok=True)
 
         launch_args = [
             "--disable-blink-features=AutomationControlled",
             "--no-first-run",
-            "--no-default-browser-check"
+            "--no-default-browser-check",
         ]
 
         try:
@@ -384,25 +601,20 @@ class _BrowserWorker:
                 headless=headless,
                 viewport={"width": vw, "height": vh},
                 accept_downloads=True,
-                chromium_sandbox=True,  # Playwright defaults to --no-sandbox
-                args=launch_args
+                chromium_sandbox=True,
+                args=launch_args,
             )
-        except Exception as e:
-            # Fallback without channel if channel failed (e.g. system Edge not found)
-            if channel != "chromium":
-                self.context = self.pw.chromium.launch_persistent_context(
-                    user_data_dir=str(profile_dir),
-                    headless=headless,
-                    viewport={"width": vw, "height": vh},
-                    accept_downloads=True,
-                    chromium_sandbox=True,
-                    args=launch_args
-                )
-            else:
-                raise e
+        except Exception:
+            # Fallback: Playwright's bundled Chromium (no channel= required)
+            self.context = self.pw.chromium.launch_persistent_context(
+                user_data_dir=str(profile_dir),
+                headless=headless,
+                viewport={"width": vw, "height": vh},
+                accept_downloads=True,
+                chromium_sandbox=True,
+                args=launch_args,
+            )
 
-        # Attach default timeout (kept below the call() timeout, see _NAV_TIMEOUT_MS)
-        timeout_ms = min(int(self.config.get("timeout_seconds", 30)) * 1000, _NAV_TIMEOUT_MS)
         self.context.set_default_timeout(timeout_ms)
         try:
             self.context.on("close", self._on_context_closed)
@@ -420,6 +632,13 @@ class _BrowserWorker:
             except Exception:
                 pass
             self.context = None
+        # Firefox / WebKit use a separate browser handle (no persistent context)
+        if hasattr(self, "_browser") and self._browser:
+            try:
+                self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
         self.active_page = None
         self.is_running = False
 
@@ -657,7 +876,26 @@ class _BrowserWorker:
 
         raise ValueError(f"Unknown tabs action: {action}. Supported: 'list', 'create', 'switch', 'close'.")
 
+    def _cmd_restart(self, headless: Optional[bool] = None, channel: Optional[str] = None) -> Dict[str, Any]:
+        """Close the current browser (if any) and relaunch with updated headless/channel settings."""
+        if headless is not None:
+            self.config["headless"] = bool(headless)
+        if channel is not None:
+            self.config["channel"] = _resolve_channel(channel)
+        # Close existing context before relaunching
+        self._do_close()
+        # _ensure_browser() will open a fresh context on the next command.
+        # We call it directly here so the restart is synchronous and any error surfaces immediately.
+        self._ensure_browser()
+        return {
+            "status": "restarted",
+            "channel": self.config.get("channel", "msedge"),
+            "headless": bool(self.config.get("headless", False)),
+            "active_url": self.active_page.url if self.active_page else "",
+        }
+
     def _cmd_status(self) -> Dict[str, Any]:
+        available_browsers = list_available_browsers()
         if not self.is_running or not self.context:
             return {
                 "running": False,
@@ -666,7 +904,8 @@ class _BrowserWorker:
                 "active_url": "",
                 "active_title": "",
                 "tabs_count": 0,
-                "profile_dir": self.config.get("user_data_dir", str(DEFAULT_PROFILE_DIR))
+                "profile_dir": self.config.get("user_data_dir", str(DEFAULT_PROFILE_DIR)),
+                "available_browsers": available_browsers,
             }
         return {
             "running": True,
@@ -675,7 +914,8 @@ class _BrowserWorker:
             "active_url": self.active_page.url if self.active_page else "",
             "active_title": self.active_page.title() if self.active_page else "",
             "tabs_count": len(self.context.pages) if self.context else 0,
-            "profile_dir": self.config.get("user_data_dir", str(DEFAULT_PROFILE_DIR))
+            "profile_dir": self.config.get("user_data_dir", str(DEFAULT_PROFILE_DIR)),
+            "available_browsers": available_browsers,
         }
 
 
@@ -869,5 +1109,51 @@ def browser_close() -> Dict[str, Any]:
     """Close the automated browser session and release system resources."""
     try:
         return _WORKER.call("stop")
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def browser_list_browsers() -> List[Dict[str, Any]]:
+    """List all browsers available on this system that can be used by the browser agent.
+
+    Returns a list of entries with:
+    - channel: internal identifier to pass to browser_restart()
+    - label: human-readable name
+    - path: installation path or '(Playwright built-in)'
+    - note: optional caveats (e.g. no persistent profile for Firefox/WebKit)
+
+    Firefox and Chromium (Playwright built-in) are always listed regardless of
+    system installation. All others require a local install to be detected.
+    """
+    try:
+        return list_available_browsers()
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+def browser_restart(
+    headless: Optional[bool] = None,
+    channel: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Restart the automated browser, optionally switching browser engine or headless mode.
+
+    Call browser_list_browsers() first to see which channels are available on this system.
+
+    Args:
+        headless: True = run in background (no visible window); False = visible window.
+                  None = keep current setting.
+        channel:  Browser to use. Examples: 'msedge', 'chrome', 'firefox', 'chromium'.
+                  Use the 'channel' value from browser_list_browsers().
+                  None = keep current browser.
+
+    Notes:
+    - Chromium-based browsers (msedge, chrome, …) keep a persistent profile directory,
+      so login sessions (cookies, localStorage) survive restarts automatically.
+    - Firefox and WebKit save session state to a JSON file after each page load, so
+      logins also persist across restarts — but each browser has its own separate session.
+    - Switching browser closes the current session first; any open tabs are lost.
+    """
+    try:
+        return _WORKER.call("restart", headless=headless, channel=channel, timeout=60.0)
     except Exception as e:
         return {"error": str(e)}

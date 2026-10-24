@@ -133,6 +133,8 @@ from modules.browser_agent import (
     browser_tabs,
     browser_status,
     browser_close,
+    browser_restart,
+    browser_list_browsers,
     init_browser_agent
 )
 from modules.desktop_input import (
@@ -184,7 +186,7 @@ from modules.google_drive import (
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.6.0): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
+    Mammouth Defroster 9000 (v0.7.0): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, Google Drive cloud integration, and Mammouth Code CLI agent automation exclusively for Mammouth.ai.
     Always prioritize safety, sandboxing, and precision.
     """
@@ -504,6 +506,8 @@ def register_active_tools():
         mcp.tool()(require_module("browser_agent")(browser_tabs))
         mcp.tool()(require_module("browser_agent")(browser_status))
         mcp.tool()(require_module("browser_agent")(browser_close))
+        mcp.tool()(require_module("browser_agent")(browser_restart))
+        mcp.tool()(require_module("browser_agent")(browser_list_browsers))
 
     if mods.get("workspace_memory", {}).get("enabled", True):
         mcp.tool()(require_module("workspace_memory")(workspace_index_directory))

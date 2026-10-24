@@ -262,7 +262,7 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.6.0"
+APP_VERSION = "v0.7.0"
 
 
 
@@ -5112,6 +5112,38 @@ class MammouthControlCenter(ctk.CTk):
                 sw_headless.pack(side="left", padx=10, pady=6)
                 self.sw_browser_agent_headless = sw_headless
 
+                # Browser channel selector
+                try:
+                    from modules.browser_agent import list_available_browsers
+                    _avail = list_available_browsers()
+                    _browser_options = [f"{b['channel']} — {b['label']}" for b in _avail]
+                    _browser_channels = [b['channel'] for b in _avail]
+                except Exception:
+                    _browser_options = ["chromium — Chromium (Playwright built-in)"]
+                    _browser_channels = ["chromium"]
+                _current_channel = b_cfg.get("channel", "msedge")
+                _current_option = next(
+                    (o for o, c in zip(_browser_options, _browser_channels) if c == _current_channel),
+                    _browser_options[0] if _browser_options else "chromium — Chromium"
+                )
+                self._browser_channel_map = dict(zip(_browser_options, _browser_channels))
+                self.var_browser_channel = ctk.StringVar(value=_current_option)
+                opt_browser = ctk.CTkOptionMenu(
+                    sub_opts,
+                    variable=self.var_browser_channel,
+                    values=_browser_options,
+                    width=220,
+                    height=26,
+                    fg_color=THEME_INPUT_BG,
+                    button_color=THEME_ACCENT,
+                    button_hover_color=THEME_ACCENT_HOVER,
+                    text_color=THEME_TEXT_PRIMARY,
+                    font=ctk.CTkFont(size=11),
+                    command=self._on_browser_agent_channel_change
+                )
+                opt_browser.pack(side="left", padx=6, pady=6)
+                self.opt_browser_channel = opt_browser
+
                 btn_start_browser = ctk.CTkButton(
                     sub_opts,
                     text="🚀 Launch Browser",
@@ -5180,6 +5212,20 @@ class MammouthControlCenter(ctk.CTk):
             init_browser_agent(self.config_data.get("browser_agent", {}))
         except Exception as e:
             self._log(f"[BROWSER AGENT] Config update: {e}")
+
+    def _on_browser_agent_channel_change(self, option: str):
+        channel = getattr(self, "_browser_channel_map", {}).get(option, "chromium")
+        self.config_data.setdefault("browser_agent", {})["channel"] = channel
+        save_config(self.config_data)
+        try:
+            from modules.browser_agent import browser_restart
+            threading.Thread(
+                target=lambda: browser_restart(channel=channel),
+                daemon=True
+            ).start()
+            self._log(f"[BROWSER AGENT] Browser switched to: {channel}")
+        except Exception as e:
+            self._log(f"[BROWSER AGENT] Channel change error: {e}")
 
     def _on_browser_agent_launch(self):
         try:

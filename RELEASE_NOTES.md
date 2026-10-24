@@ -2,7 +2,18 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.6.0**
+> **Current Version:** **v0.7.0**
+
+---
+
+## 🚀 What's New in v0.7.0 — `v0.7.0 - Mammouth Defroster 9000`
+
+### 🌐 Feature: Multi-Browser Support & Model-Controlled Browser Automation
+* **Model-Controlled Headless & Browser Switching:** Added FastMCP tool `browser_restart(headless, channel)` allowing AI assistants to autonomously switch between headless background execution and visible window mode, or switch browser engines on the fly without user intervention.
+* **Host Browser Discovery (`browser_list_browsers`):** FastMCP tool scanning and listing all installed browsers (Microsoft Edge, Google Chrome, Brave, Chromium) as well as Playwright built-in engines (Firefox, WebKit/Safari) with channel IDs, labels, and installation paths.
+* **Firefox & WebKit Engines with Full DOM Tree Inspection:** Full integration with Playwright's Firefox and WebKit runtimes. Resolves the limitations of desktop coordinate-based clicks on responsive/dynamic interfaces at high display resolutions (e.g. 2560×1392), unlocking reliable DOM-level selectors (`browser_snapshot`, `browser_click`, `browser_fill`).
+* **Session & Login State Persistence (`storage_state`):** Automated per-channel cookie and LocalStorage extraction saved to `data/browser_states/storage_state_<channel>.json` on page loads. Firefox and WebKit login sessions survive browser restarts without requiring re-authentication.
+* **Cockpit GUI Browser Selection:** Interactive dropdown selector embedded in the Browser Agent card in the Cockpit GUI alongside the Headless switch, allowing 1-click browser selection and real-time auto-restart.
 
 ---
 
