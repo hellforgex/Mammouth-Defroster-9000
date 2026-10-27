@@ -3,381 +3,217 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hellforgex/Mammouth-Defroster-9000/releases"><img src="https://img.shields.io/github/v/release/hellforgex/Mammouth-Defroster-9000?include_prereleases&label=Latest%20Release&color=blueviolet" alt="Release"></a>
-  <img src="https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-0078D6?logo=windows&logoColor=white" alt="Platform">
-  <img src="https://img.shields.io/badge/Capabilities-15%20Modules%20%7C%2089%20Tools-0284C7" alt="Capabilities">
-  <img src="https://img.shields.io/badge/Self--Tooling-Autonomous%20Skills%20($0.00)-10B981" alt="Self-Tooling">
-  <img src="https://img.shields.io/badge/Vibecoded%20By-noskillz%20⚡-8A2BE2" alt="Vibecoded">
-  <img src="https://img.shields.io/badge/Security-Privacy%20Gate%20%2B%20Sandbox%20%2B%20Bearer%20Auth-10B981" alt="Security">
-  <img src="https://img.shields.io/badge/MCP%20Protocol-FastMCP%20%7C%20SSE%20%2B%20HTTP-purple" alt="MCP">
-  <img src="https://img.shields.io/badge/License-MIT%20%2B%20Legal%20Disclaimer-F59E0B" alt="License">
+  <a href="https://github.com/hellforgex/Mammouth-Defroster-9000/releases"><img src="https://img.shields.io/github/v/release/hellforgex/Mammouth-Defroster-9000?include_prereleases&label=Release&color=blueviolet" alt="Release"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white" alt="Platform">
+  <img src="https://img.shields.io/badge/Tools-97%20in%2015%20modules-0284C7" alt="Tools">
+  <img src="https://img.shields.io/badge/MCP-FastMCP%20%7C%20SSE%20%2B%20HTTP-purple" alt="MCP">
+  <img src="https://img.shields.io/badge/License-MIT-F59E0B" alt="License">
 </p>
 
-<h3 align="center">
-  🦣 <b>Thawing 10,000 years of frozen Windows automation power for <a href="https://mammouth.ai">Mammouth.ai</a>.</b> 🔥
-</h3>
+<h3 align="center">🦣 Thawing 10,000 years of frozen Windows automation power for <a href="https://mammouth.ai">Mammouth.ai</a>. 🔥</h3>
+
+**Mammouth Defroster 9000 (MD-9000)** is a desktop cockpit and MCP server that connects your [Mammouth.ai](https://mammouth.ai) assistant to your Windows PC. Your assistant can look at your screen (with your consent), drive mouse and keyboard, work on files in a sandboxed workspace, automate a browser, manage SSH hosts, check your hardware and run the Mammouth Code CLI — every module can be switched on or off in the GUI.
 
 <p align="center">
-  <b>Mammouth Defroster 9000 (MD-9000)</b> is a sovereign FastMCP desktop cockpit and Windows automation platform engineered by <b>noskillz</b>. It connects your remote <a href="https://mammouth.ai">Mammouth.ai</a> assistant directly to your local Windows PC — letting your AI see your desktop, automate clicks & keystrokes, edit code in a safe workspace, run PowerShell commands, monitor hardware, and orchestrate the official Mammouth Code CLI agent.
+  <img src="assets/cockpit_dark.png" alt="Cockpit dashboard (dark mode)" width="95%">
 </p>
+
+**Contents:** [Quickstart](#-quickstart) · [Connect to Mammouth.ai](#-connect-to-mammouthai) · [Exposure modes](#-exposure-modes) · [Safety defaults](#%EF%B8%8F-safety-defaults) · [What's new](#-whats-new-in-v070) · [Modules](#%EF%B8%8F-modules--tools) · [FAQ](#-faq) · [Developers](#-for-developers) · [Disclaimer](#%EF%B8%8F-disclaimer)
+
+---
+
+## 🚀 Quickstart
+
+No Python, Git or terminal needed — the release is a self-contained package.
+
+1. **Download** [`MammouthDefroster9000-v0.7.0-windows-x64.zip`](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest) (~128 MB).
+2. **Extract** it anywhere, e.g. `C:\MammouthDefroster9000`.
+3. **Start** `start_gui.bat` (or `MammouthDefroster9000.exe`).
+4. **Pick an exposure mode** ([see below](#-exposure-modes)) and click **`▶ Start Server`**.
+
+---
+
+## 🔗 Connect to Mammouth.ai
+
+1. In the cockpit, click **`📋 Copy Endpoint`** (e.g. `https://your-pc.ts.net/sse`) and **`📋 Copy Key`** (your Bearer token).
+2. In [Mammouth.ai](https://mammouth.ai) open **Settings ⚙️ → Custom MCP Servers → Add MCP Server**:
+
+   | Field | Value |
+   | :--- | :--- |
+   | Name | `Mammouth Defroster 9000` |
+   | Type | `SSE` (recommended) or `Streamable HTTP` |
+   | URL | your endpoint, ending in `/sse` (or `/mcp` for Streamable HTTP) |
+   | Bearer Token | your copied key |
+
+3. Save, start a new chat — Mammouth discovers the enabled tools automatically.
+
+---
+
+## 🌐 Exposure Modes
+
+Mammouth.ai runs in the cloud, so it has to reach your PC. Every mode except LAN makes the server reachable **from the public internet**; it is then protected by the Bearer token only. Use the least exposure that works for you.
+
+| Mode | Reachable from | Setup | Notes |
+| :--- | :--- | :---: | :--- |
+| **Tailscale Funnel** ⭐ | Public internet | Easy | Stable `https://<node>.ts.net/sse` address, TLS by Tailscale. Recommended for everyday use. |
+| **Cloudflare Quick Tunnel** | Public internet | None | Bundled `cloudflared`, temporary `https://<id>.trycloudflare.com/sse` address. Good for a quick test. |
+| **ngrok** | Public internet | Easy | Needs your ngrok authtoken; supports custom domains. |
+| **Direct LAN IP** | Your local network only | None | `http://192.168.x.x:8000/sse`. Only works if the client is in your network. |
+
+Tunnels are **never started automatically** unless you enable `auto_tunnel` yourself.
+
+---
+
+## 🛡️ Safety Defaults
 
 <p align="center">
-  <img src="assets/cockpit_dark.png" alt="Mammouth Defroster 9000 Cockpit Dashboard (Dark Mode)" width="95%">
+  <img src="assets/cockpit_light.png" alt="Security & settings (light mode)" width="95%">
 </p>
 
----
+| Default | What it means |
+| :--- | :--- |
+| **Bearer token required** | Every endpoint enforces token authentication (`enforce_auth`). |
+| **Bound to `127.0.0.1`** | The server only listens locally until you choose an exposure mode. |
+| **Workspace sandbox** | File tools are confined to `./workspace`. |
+| **PowerShell & daemons off** | Shell execution is disabled until you switch it on in the GUI. |
+| **Web scraper off** | Disabled by default; when enabled, an SSRF shield blocks private networks and cloud metadata endpoints. |
+| **Screen consent gate** | Every screenshot needs your approval (once / session / revoke). The model cannot grant consent itself — those functions are not exposed as tools. |
+| **Admin shell off** | `allow_admin_shell` is `false` by default. |
+| **Encrypted secrets** | SSH hosts and tokens are stored with Windows DPAPI. |
 
-## 🚀 60-Second Quickstart (The Easy Way — No Python Needed!)
-
-You do **not** need Python, Git, or terminal knowledge. Everything is bundled into a pre-compiled standalone package.
-
-```
-  1. Download ZIP  ──▶  2. Extract Anywhere  ──▶  3. Run start_gui.bat  ──▶  4. Connect to Mammouth.ai!
-```
-
-1. **Download the Release Package**:  
-   👉 **[Download MammouthDefroster9000-v0.7.0-windows-x64.zip](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest)** (~125 MB)
-2. **Extract the ZIP**:  
-   Extract the archive to any convenient folder on your Windows PC (e.g. `C:\MammouthDefroster9000` or your Desktop).
-3. **Launch the Cockpit**:  
-   Double-click **`start_gui.bat`** (or `MammouthDefroster9000.exe`).
-4. **Click `▶ Start Server`**:  
-   In the GUI dashboard, pick your preferred tunnel mode (e.g. **Tailscale Funnel** or **Cloudflare Quick Tunnel**) and click **`▶ Start Server`**!
+> ⚠️ Once you enable **PowerShell & daemons**, commands run with your user rights **outside** the workspace sandbox. Only enable it if you trust the prompts you send.
 
 ---
 
-## 🚀 What's New in v0.7.0
+## ✨ What's New in v0.7.0
 
-* ⚡ **Autonomous Self-Tooling & Infinite Skills (The Crown Jewel)**: The assistant is no longer bound to static tools. If a capability is missing, it autonomously writes tailored Python or PowerShell scripts into `skills/` via `file_write` and executes them locally at **$0.00 API cost** via `powershell_exec` or `command_run`!
-* 🦣 **Token-Budget-Safe Tool Discovery (`defroster_catalog`)**: Solves client schema token budget exhaustion in Mammouth's "On-Demand" mode (`_discover_tools`). The `file_read` anchor introduces the 10 capability domains, and the `defroster_catalog` tool allows on-demand category querying without blowing the token budget.
-* 🌐 **Multi-Browser & Host Discovery**: Full integration with Playwright Firefox & WebKit (Safari) engines with DOM tree element inspection, plus automatic detection of host browsers (Microsoft Edge, Google Chrome, Brave, Chromium). AI models can autonomously switch browser channels and toggle headless mode on the fly via `browser_restart(headless, channel)`.
-* 🔑 **Persistent Browser Login Sessions (`storage_state`)**: Automated per-channel cookie and LocalStorage persistence (`data/browser_states/storage_state_<channel>.json`). Web logins in Firefox and WebKit survive browser restarts without requiring re-authentication.
-* 🔒 **Security Hardening**: Fixed command suffix parsing (`removesuffix(".exe")`) in `shell_processes.py` ensuring strict workspace sandbox containment on commands like `type` and `findstr`.
+- **Self-tooling:** If no built-in tool fits, the assistant can write its own Python or PowerShell script into `workspace/skills/` and run it locally. Running a script costs no API tokens; writing it does. Requires the **PowerShell & daemons** module.
+- **`defroster_catalog`:** Token-budget-friendly tool discovery for Mammouth's on-demand mode — the model looks up tools by category or search term instead of loading all schemas at once.
+- **Multi-browser agent:** Playwright with Chromium, Firefox and WebKit plus detection of installed Edge, Chrome and Brave. The model can switch engine and headless mode via `browser_restart`.
+- **Persistent browser logins:** Cookies and LocalStorage are saved per browser channel (`data/browser_states/`), so web logins survive restarts.
+- **Security fix:** Stricter workspace containment for `type` and `findstr` in the shell module.
 
----
-
-## ⚡ The Crown Jewel: Autonomous Self-Tooling & Infinite Skills
-
-> **Why stop at 89 tools when your AI can write and run its own?**
-
-Previously, when an AI assistant encountered a task without a dedicated pre-built MCP tool, it reached a dead end: *"I don't have a tool for that."* 
-
-**v0.7.0 breaks through this barrier.** Mammouth Defroster 9000 transforms your AI assistant into a **Self-Extending Autonomous System**:
-* 🛠️ **On-the-Fly Skill Creation**: If no built-in tool exists for your goal (e.g. converting obscure file formats, querying specialized Windows APIs, automated batch processing, local system probes), the assistant writes a tailored Python or PowerShell script into `./workspace/skills/`.
-* ⚡ **Zero-Cost Local Execution ($0.00 API Cost)**: It immediately executes the newly created skill locally inside the Win32 workspace sandbox using `powershell_exec` or `command_run` — without burning external LLM API tokens or running into CLI budget limits.
-* ♾️ **Limitless Capabilities**: The model writes, refines, and executes its own custom tools in real-time, effectively giving Defroster 9000 **infinite capabilities** beyond its built-in toolset.
+Full history: [`CHANGELOG.md`](CHANGELOG.md) · [`RELEASE_NOTES.md`](RELEASE_NOTES.md)
 
 ---
 
-## 🔗 Connecting with Mammouth.ai (Step-by-Step)
+## 🛠️ Modules & Tools
 
 <p align="center">
-  <img src="assets/icon.png" alt="Mammouth Defroster Icon" width="90">
+  <img src="assets/cockpit_tools.png" alt="Module overview in the cockpit" width="95%">
 </p>
 
-Connecting MD-9000 to **Mammouth.ai** takes under a minute:
+15 switchable modules with 97 tools, plus the always-on `defroster_catalog`. Defaults as shipped in `config.example.json`.
 
-### Step 1: Copy Your Credentials from the Cockpit
-In the **Mammouth Defroster 9000** dashboard:
-* Click **`📋 Copy Endpoint`** next to your calculated Public Endpoint URL  
-  *(e.g. `https://your-pc.ts.net/sse` or `https://xyz.trycloudflare.com/sse`)*
-* Click **`📋 Copy Key`** to copy your secure Bearer API Token.
+| Module | Default | Tools | What it does | Key tools |
+| :--- | :---: | :---: | :--- | :--- |
+| 🌐 Browser Agent | ✅ on | 15 | Playwright automation: navigate, click, fill, DOM snapshot, screenshots, tabs, persistent logins | `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_fill`, `browser_restart` |
+| 👁️ Desktop Vision | ✅ on | 7 | Multi-monitor and window screenshots, tracked window, hotkey `Ctrl+Shift+Space` — behind the consent gate | `screen_capture`, `screen_capture_active_window`, `screen_list_windows` |
+| 🖱️ Mouse & Keyboard | ✅ on | 9 | Win32 mouse moves, clicks, drag & drop, scrolling, Unicode typing, hotkeys | `mouse_click`, `mouse_drag`, `keyboard_type`, `keyboard_hotkey` |
+| 💻 Mammouth Code CLI | ✅ on | 5 | Install/update, launch and run headless tasks with the Mammouth Code CLI; sync MCP config | `mammouth_code_run_task`, `mammouth_code_sync_mcp` |
+| ☁️ Google Drive | ✅ on | 11 | List, search, read, write, upload and download Drive files (OAuth2 or service account) | `gdrive_search_files`, `gdrive_read_file`, `gdrive_upload_from_workspace` |
+| 🔎 Workspace Search | ✅ on | 4 | Local SQLite FTS5 index of your code, symbol search, incremental updates | `workspace_index_directory`, `workspace_search`, `workspace_find_symbols` |
+| 📑 Smart Clipboard | ✅ on | 3 | Clipboard read/write and AI quick actions, hotkey `Ctrl+Shift+K` | `clipboard_get_text`, `clipboard_transform` |
+| 🧠 Long-Term Memory | ✅ on | 5 | Notes and context that survive across chats; Knowledge Vault tab in the GUI | `memory_save`, `memory_recall`, `memory_list` |
+| 📋 Tasks & Kanban | ✅ on | 4 | Task board with `todo` / `in_progress` / `done` / `blocked` | `task_create`, `task_update`, `task_list` |
+| ⏱️ Task Scheduler | ✅ on | 5 | Recurring prompts for Mammouth chat, Mammouth Code or local scripts | `task_schedule_create`, `task_schedule_control` |
+| 📁 File & Code Ops | ✅ on | 6 | Read, write, patch, search and list files inside `./workspace` | `file_read`, `file_write`, `file_replace_chunk`, `file_search_text` |
+| 🔑 PuTTY & SSH | ✅ on | 6 | Run commands and transfer files on saved SSH hosts (plink / pscp), DPAPI-encrypted host store | `ssh_exec_command`, `ssh_transfer_file`, `ssh_list_saved_hosts` |
+| 📊 System Diagnostics | ✅ on | 5 | CPU, RAM, disks, GPU, processes, Windows event logs | `system_get_specs`, `system_get_processes`, `system_get_event_logs` |
+| 💻 PowerShell & Daemons | ⛔ off | 9 | PowerShell / cmd execution and background processes — **not sandboxed** | `powershell_exec`, `command_run`, `process_start_background` |
+| 🌐 Web Scraper | ⛔ off | 2 | Fetch pages as Markdown, check endpoint status (SSRF shield) | `web_fetch_url`, `web_check_status` |
 
-### Step 2: Add the Server in Mammouth.ai
-1. Open **[Mammouth.ai](https://mammouth.ai)** in your browser.
-2. Go to **Settings ⚙️** → **Custom MCP Servers**.
-3. Click **Add MCP Server**:
-   * **Name**: `Mammouth Defroster 9000`
-   * **Type**: `SSE` *(Default & Recommended)* or `Streamable HTTP`
-   * **URL**: Paste your copied Endpoint URL (`https://.../sse`)
-   * **Bearer Token**: Paste your copied Bearer API Key
-4. Click **Save / Connect**.
-
-### Step 3: Enjoy Full Automation!
-Start a new chat with Mammouth! It will immediately discover your defrosted tools and can now assist you with system monitoring, file coding, visual inspection, and desktop tasks.
-
----
-
-## 🌐 Choosing Your Exposure Mode
-
-| Exposure Mode | Setup Difficulty | Best For | How it Works |
-| :--- | :---: | :--- | :--- |
-| **Tailscale Funnel** ⭐ *(Recommended)* | Easy | Anywhere in the world (Remote & Mobile) | Encrypted WireGuard tunnel via Tailscale. Gives you a permanent, secure `https://<node>.ts.net/sse` address. |
-| **Cloudflare Quick Tunnel** | Zero Setup | Instant 1-click public testing | Bundled `cloudflared` generates a temporary `https://<id>.trycloudflare.com/sse` link. No account needed. |
-| **Direct LAN IP** | Zero Setup | Same Wi-Fi / Local Home Network | Direct connection via your local network (`http://192.168.x.x:8000/sse`). Super fast, zero latency. |
-| **ngrok HTTP** | Easy | Custom domains / ngrok users | Automatic tunnel creation with your personal ngrok authtoken. |
+Global hotkey to summon the cockpit: `Ctrl+Shift+M`.
 
 ---
 
-## 🛡️ Sovereign Privacy & Safety Built-In
-
-<p align="center">
-  <img src="assets/cockpit_light.png" alt="Mammouth Defroster 9000 Security & Settings Cockpit (Light Mode)" width="95%">
-</p>
-
-MD-9000 gives AI assistants real Windows power, but keeps **you** in full control:
-
-* 👁️ **Desktop Vision Consent Gate**: When Mammouth requests a desktop screenshot, an interactive prompt pops up asking for your permission before any image is captured. You can grant permission for one capture, the whole session, or revoke it anytime.
-* 📁 **Sandboxed File Workspace**: By default, file read/write operations are strictly jailed inside `./workspace`, preventing unintended modifications to your Windows system files.
-* 💻 **PowerShell Safety Default**: Direct command-line execution and background daemons are **disabled by default**. You must explicitly toggle the switch in the GUI if you want your AI to run PowerShell commands.
-* 🔑 **Protected Token Auth**: All network endpoints enforce strong 32-character Bearer API token authentication.
-
----
-
-## 🛠️ 15 Defrosted Modules (89 Tools Total)
-
-<p align="center">
-  <img src="assets/cockpit_tools.png" alt="Mammouth Defroster 9000 Modular Capabilities (15 Modules)" width="95%">
-</p>
-
-<table align="center" width="100%">
-  <thead>
-    <tr>
-      <th>Module</th>
-      <th align="center">Status</th>
-      <th align="center">Safety</th>
-      <th>Capabilities</th>
-      <th>Key Tools</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><b>🌐 Playwright Multi-Browser Agent</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🛡️ Sandboxed Playwright</td>
-      <td>Multi-browser autonomous web automation via Playwright with host browser discovery (Edge, Chrome, Brave, Chromium) and built-in Firefox & WebKit (Safari) engines. Full DOM tree indexing, model-controlled switching (<code>browser_restart</code>), persistent login sessions (<code>storage_state</code>), form fills, clicks, and screenshots.</td>
-      <td><code>browser_navigate</code>, <code>browser_snapshot</code>, <code>browser_screenshot</code>, <code>browser_click</code>, <code>browser_fill</code>, <code>browser_list_browsers</code>, <code>browser_restart</code>, <code>browser_evaluate</code>, <code>browser_tabs</code> <i>(14 tools)</i></td>
-    </tr>
-    <tr>
-      <td><b>🦣 Skill Router & Catalog</b></td>
-      <td align="center">Core</td>
-      <td align="center">🟢 Safe / Local</td>
-      <td>Token-budget-safe capability router and dynamic self-tooling guide. Models query tools on-demand by category or search terms without blowing prompt token limits, and write/execute custom workspace skills at $0 API cost.</td>
-      <td><code>defroster_catalog</code>, <code>file_read</code></td>
-    </tr>
-    <tr>
-      <td><b>👁️ Desktop Vision & Copilot</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🔒 Consent Gate</td>
-      <td>Multi-monitor screenshot capture and active foreground window capture (Ctrl+Shift+Space) with on-screen confirmation popup and LLM downscaling.</td>
-      <td><code>screen_capture</code>, <code>screen_list_monitors</code>, <code>screen_capture_active_window</code></td>
-    </tr>
-    <tr>
-      <td><b>🖱️ Mouse & Keyboard</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🟡 Interactive</td>
-      <td>Native Win32 desktop automation: cursor movement, clicks, drag-and-drop, scrolling, typing Unicode text, and hotkeys.</td>
-      <td><code>mouse_move</code>, <code>mouse_click</code>, <code>mouse_drag</code>, <code>mouse_scroll</code>, <code>keyboard_type</code>, <code>keyboard_hotkey</code>, <code>desktop_get_screen_info</code></td>
-    </tr>
-    <tr>
-      <td><b>💻 Mammouth Code CLI</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🔒 DPAPI / Sandboxed</td>
-      <td>Terminal coding agent integration: 1-click install/update, interactive launcher, headless task execution (<code>mammouth run</code>), and dual-bridge MCP auto-configuration.</td>
-      <td><code>mammouth_code_status</code>, <code>mammouth_code_launch_terminal</code>, <code>mammouth_code_run_task</code>, <code>mammouth_code_install_or_update</code>, <code>mammouth_code_sync_mcp</code> <i>(5 tools)</i></td>
-    </tr>
-    <tr>
-      <td><b>☁️ Google Drive</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🔒 OAuth / Sandboxed</td>
-      <td>Browse, search, read, write, upload, and download Google Drive files with OAuth2 or Service Account authentication.</td>
-      <td><code>gdrive_status</code>, <code>gdrive_list_files</code>, <code>gdrive_read_file</code>, <code>gdrive_download_to_workspace</code>, <code>gdrive_upload_from_workspace</code> <i>(11 tools)</i></td>
-    </tr>
-    <tr>
-      <td><b>💾 Sovereign Workspace Memory (Local RAG)</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🟢 Safe / Local</td>
-      <td>Lightning-fast SQLite FTS5 full-text code search, AST/regex symbol extraction, and incremental mtime indexing without external APIs.</td>
-      <td><code>workspace_index_directory</code>, <code>workspace_search</code>, <code>workspace_find_symbols</code>, <code>workspace_get_stats</code> <i>(4 tools)</i></td>
-    </tr>
-    <tr>
-      <td><b>📑 Smart Clipboard AI & Quick-Actions</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🟢 Safe / Local</td>
-      <td>Native 64-bit Win32 Unicode clipboard bridge, global hotkey (Ctrl+Shift+K), and AI quick-actions (explain, fix bug, translate, format data, commit, summarize).</td>
-      <td><code>clipboard_get_text</code>, <code>clipboard_set_text</code>, <code>clipboard_transform</code> <i>(3 tools)</i></td>
-    </tr>
-    <tr>
-      <td><b>🧠 Long-Term Memory & Knowledge Vault</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🟢 Safe</td>
-      <td>Persistent SQLite memory storage with dedicated GUI Knowledge Vault tab (search, category filter, 1-click copy, live stats), automatic legacy release migration, and LLM parameter aliases. Saves notes, context, and project info across separate chat sessions.</td>
-      <td><code>memory_save</code>, <code>memory_recall</code>, <code>memory_list</code>, <code>memory_get</code>, <code>memory_delete</code></td>
-    </tr>
-
-    <tr>
-      <td><b>📋 Tasks & Kanban</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🟢 Safe</td>
-      <td>Persistent task manager and Kanban workflow (<code>todo</code>, <code>in_progress</code>, <code>done</code>, <code>blocked</code>).</td>
-      <td><code>task_create</code>, <code>task_update</code>, <code>task_list</code>, <code>task_delete</code></td>
-    </tr>
-    <tr>
-      <td><b>⏱️ Task Scheduler & Automations</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🟢 Safe</td>
-      <td>Automated recurring task triggers for Mammouth AI Web chat (e.g. 5-minute football live ticker), Mammouth Code CLI, or local scripts with live UI countdowns and preset templates.</td>
-      <td><code>task_schedule_create</code>, <code>task_schedule_list</code>, <code>task_schedule_control</code>, <code>task_schedule_delete</code>, <code>task_schedule_get_presets</code> <i>(5 tools)</i></td>
-    </tr>
-    <tr>
-      <td><b>📁 File & Code Ops</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🔒 Sandboxed</td>
-      <td>Safe workspace file reading, writing, precise line slicing, ripgrep text search, and directory tree exploration.</td>
-      <td><code>file_read</code>, <code>file_write</code>, <code>file_replace_chunk</code>, <code>file_search_text</code>, <code>directory_tree</code></td>
-    </tr>
-    <tr>
-      <td><b>💻 PowerShell & Daemons</b></td>
-      <td align="center">Disabled by Default</td>
-      <td align="center">⚠️ High Privilege</td>
-      <td>Synchronous PowerShell execution and background process daemon manager.</td>
-      <td><code>command_run</code>, <code>powershell_exec</code>, <code>process_start_background</code>, <code>process_get_output</code>, <code>process_kill_background</code></td>
-    </tr>
-    <tr>
-      <td><b>🔑 PuTTY & SSH Remote</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🔒 DPAPI Encrypted</td>
-      <td>Remote Linux/VPS management via plink, SCP file transfers, PuTTY GUI launch, and encrypted host storage.</td>
-      <td><code>ssh_exec_command</code>, <code>ssh_open_putty_window</code>, <code>ssh_transfer_file</code>, <code>ssh_list_saved_hosts</code></td>
-    </tr>
-    <tr>
-      <td><b>📊 System Diagnostics</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🟢 Safe</td>
-      <td>Real-time hardware inspection: CPU, RAM, disk partitions, GPU info, top processes, and Windows Event Logs.</td>
-      <td><code>system_get_specs</code>, <code>system_get_processes</code>, <code>system_get_gpu_info</code>, <code>system_get_event_logs</code>, <code>system_list_event_channels</code></td>
-    </tr>
-    <tr>
-      <td><b>🌐 Web Scraper & Tools</b></td>
-      <td align="center">Enabled</td>
-      <td align="center">🛡️ SSRF Shield</td>
-      <td>Webpage content fetcher with clean markdown conversion and HTTP endpoint latency checks.</td>
-      <td><code>web_fetch_url</code>, <code>web_check_status</code></td>
-    </tr>
-  </tbody>
-</table>
-
----
-
-## ❓ Beginner FAQ
+## ❓ FAQ
 
 <details>
-<summary><b>1. Do I need Python installed on my computer?</b></summary>
-<p><b>No!</b> If you download the pre-built release ZIP (<code>MammouthDefroster9000-v0.7.0-windows-x64.zip</code>), everything is self-contained. It includes all necessary runtimes, libraries, and executables. Just unzip and run!</p>
+<summary><b>Do I need Python?</b></summary>
+<p>No. The release ZIP contains everything. Python is only needed if you run from source.</p>
 </details>
 
 <details>
-<summary><b>2. How do I turn on PowerShell commands?</b></summary>
-<p>In the Cockpit GUI, click on the <b>Capabilities / Skills</b> tab. Find <b>PowerShell & Background Daemons</b> and toggle the switch to <b>ON</b>. Remember: only enable this if you trust your AI prompts!</p>
+<summary><b>How do I enable PowerShell?</b></summary>
+<p>In the cockpit, open <b>Capabilities / Skills</b> and switch on <b>PowerShell &amp; Background Daemons</b>. Commands then run with your user rights outside the workspace sandbox.</p>
 </details>
 
 <details>
-<summary><b>3. Is my screen or computer data sent to third parties?</b></summary>
-<p><b>Never.</b> Mammouth Defroster 9000 runs 100% locally on your machine. There are no tracking scripts, telemetry, or third-party servers. All communications go directly between your PC and your own Mammouth.ai chat session through your chosen encrypted tunnel.</p>
+<summary><b>Where does my data go?</b></summary>
+<p>MD-9000 has no telemetry and no server of its own. Tool results — including screenshots you approve — go to your Mammouth.ai chat and from there to the model provider you use in Mammouth. With a tunnel, traffic also passes through that tunnel provider (Tailscale, Cloudflare or ngrok).</p>
 </details>
 
 <details>
-<summary><b>4. Should I use <code>/sse</code> or <code>/mcp</code>?</b></summary>
-<p>We recommend <b><code>/sse</code></b> (the standard Server-Sent Events route, which is selected by default). Both <code>/sse</code> and <code>/mcp</code> are fully supported by MD-9000 and handle Bearer token authentication cleanly.</p>
+<summary><b><code>/sse</code> or <code>/mcp</code>?</b></summary>
+<p><code>/sse</code> is the default and recommended. <code>/mcp</code> (Streamable HTTP) works as well; both require the Bearer token.</p>
 </details>
 
 <details>
-<summary><b>5. How do I stop or exit the server?</b></summary>
-<p>Simply click the red <b><code>⏹ Stop Server</code></b> button in the GUI, or close the application window.</p>
+<summary><b>How do I stop the server?</b></summary>
+<p>Click <b><code>⏹ Stop Server</code></b> or close the cockpit window.</p>
 </details>
 
 ---
 
-## 💻 For Developers & Power Users
+## 💻 For Developers
 
-If you want to run from source, modify code, or use the dedicated CLI headless server:
-
-### Running from Source
 ```bash
-# Clone repository
+# Run from source
 git clone https://github.com/hellforgex/Mammouth-Defroster-9000.git
 cd Mammouth-Defroster-9000
-
-# Run with uv (or python)
 uv run gui.py
-```
 
-### Dedicated Headless CLI Server
-For automated startup or running without a GUI:
-```bash
-# Console server with live Uvicorn logs
-.\MammouthDefroster9000-server.exe
-# Or via batch script:
-.\start_server.bat
-```
+# Headless server (console with live logs)
+.\MammouthDefroster9000-server.exe   # or .\start_server.bat
 
-### Building Your Own Standalone Package
-```bash
-# Compiles both GUI and CLI binaries into dist/ and packages release ZIP
+# Build GUI + CLI binaries and the release ZIP
 .\build.bat
 ```
 
----
-
-## 📂 Project Architecture
+### Project structure
 
 ```
-mammouth-defroster-9000/
-├── assets/
-│   ├── banner.png           # Widescreen hero banner
-│   ├── cockpit_dark.png     # Full desktop cockpit dashboard (Dark Obsidian theme)
-│   ├── cockpit_light.png    # Sovereign security & sandboxing settings (Ivory Light theme)
-│   ├── cockpit_tools.png    # 15 defrosted modules deck & capability controls
-│   ├── icon.png             # High-res application icon
-│   └── icon.ico             # Windows multi-resolution taskbar/window icon
+├── server.py              # FastMCP server: auth, CORS, tool registration
+├── gui.py                 # CustomTkinter desktop cockpit
+├── config.py              # Config manager, DPAPI token encryption
+├── tray_manager.py        # System tray integration
 ├── modules/
-│   ├── memory.py            # SQLite Long-term memory
-│   ├── tasks_kanban.py      # SQLite Kanban & task tracker
-│   ├── task_scheduler.py    # Automated Task Scheduler & Recurring Prompts
-│   ├── mammouth_code.py     # Mammouth Code CLI terminal agent integration
-│   ├── global_hotkey.py     # Native Win32 Ctrl+Shift+M summon hotkey
-│   ├── embedded_browser.py  # WebView2 Mammouth AI web chat & Zen Mode
-│   ├── file_ops.py          # Sandboxed code & file operations
-│   ├── shell_processes.py   # PowerShell execution & background daemons
-│   ├── putty_ssh.py         # DPAPI-encrypted PuTTY / Plink / PSCP remote tools
-│   ├── system_monitor.py    # Hardware & Windows diagnostics
-│   ├── screen_capture.py    # Desktop vision & interactive consent gate
-│   ├── desktop_input.py     # Win32 user32 mouse & keyboard automation
-│   ├── google_drive.py      # Google Drive cloud file operations
-│   └── web_tools.py         # SSRF-protected web scraper & status checks
-├── config.py                # Configuration manager & DPAPI token encryption
-├── config.example.json      # Hardened template configuration
-├── hosts.example.json       # Template SSH hosts configuration
-├── server.py                # FastMCP server with Auth, DPAPI OAuth DB & CORS
-├── gui.py                   # CustomTkinter Windows 11 Desktop Cockpit (Obsidian Theme)
-├── start_gui.bat            # Quick GUI launcher script
-├── start_server.bat         # Headless CLI server launcher
-├── build.bat                # PyInstaller slim packager & ZIP generator
-├── MammouthDefroster9000.spec # PyInstaller compilation specification
-├── requirements.txt         # Pip dependency manifest
-├── pyproject.toml           # Project metadata
-├── LICENSE                  # MIT License & Legal Disclaimer
-├── RELEASE_NOTES.md         # Canonical release documentation
-├── CHANGELOG.md             # Version history
-└── README.md                # Main documentation
+│   ├── browser_agent.py   # Playwright multi-browser agent
+│   ├── screen_capture.py  # Desktop vision + consent gate
+│   ├── desktop_input.py   # Win32 mouse & keyboard
+│   ├── mammouth_code.py   # Mammouth Code CLI integration
+│   ├── google_drive.py    # Google Drive
+│   ├── workspace_indexer.py  # Local FTS5 code search
+│   ├── smart_clipboard.py # Clipboard + quick actions
+│   ├── memory.py          # Long-term memory (SQLite)
+│   ├── tasks_kanban.py    # Tasks & Kanban (SQLite)
+│   ├── task_scheduler.py  # Recurring automations
+│   ├── file_ops.py        # Sandboxed file operations
+│   ├── shell_processes.py # PowerShell & background daemons
+│   ├── putty_ssh.py       # PuTTY / plink / pscp
+│   ├── system_monitor.py  # Hardware & event logs
+│   ├── web_tools.py       # Web scraper with SSRF shield
+│   ├── embedded_browser.py  # WebView2 Mammouth chat in the cockpit
+│   ├── global_hotkey.py   # Win32 global hotkeys
+│   └── updater.py         # Update check
+├── config.example.json    # Template configuration (copy to config.json)
+├── hosts.example.json     # Template SSH hosts
+├── build.bat · MammouthDefroster9000.spec   # PyInstaller build
+├── start_gui.bat · start_server.bat
+└── assets/                # Banner, screenshots, icons
 ```
 
+Security reports: see [`SECURITY.md`](SECURITY.md).
+
 ---
+
+## ⚠️ Disclaimer
 
 > [!CAUTION]
-> ### ⚠️ ⚡ NOSKILLZ VIBECODED DISCLAIMER & HARDCORE WARNING ⚡ ⚠️
+> **Vibecoded by noskillz — with great agentic power comes great responsibility.**
 >
-> **WELCOME TO THE RAW AGENTIC POWERHOUSE.**
->
-> This software is **100% pure vibe-coded** by **noskillz** for maximum execution speed, sovereign Windows 11 DevOps supremacy, and zero-compromise automation.
->
-> 🦣 **With great agentic power comes absolute responsibility:**
-> - You are handing an autonomous AI assistant real keys to your operating system: PowerShell execution, sandboxed file modifications, hardware diagnostics, and remote SSH servers.
-> - **NEVER** expose this server publicly to the open internet without **Tailscale**, a private VPN, or Token Authentication enabled, unless you enjoy chaotic uninvited guests playing Doom in your PowerShell console.
-> - By running this tool, you acknowledge that you are a sovereign captain of your machine. If you instruct an AI to *"clean up everything"* and it happily deletes your favorite meme stash, that is between you, the AI, and the cosmos.
-> - Test your prompts, sandbox your workspaces, and embrace the agentic vibe responsibly. 🚀
-
----
+> You are handing an AI assistant real keys to your machine: file changes, desktop input, remote SSH servers and — if you enable it — PowerShell. Never expose the server to the internet without the Bearer token. Test your prompts, keep your workspace sandboxed, and remember: if you tell an AI to *"clean up everything"* and it deletes your favorite meme stash, that is between you, the AI and the cosmos. 🚀
 
 ## ⚖️ Legal Disclaimer & Limitation of Liability
 
@@ -399,5 +235,5 @@ mammouth-defroster-9000/
 ---
 
 ## 📄 License
-MIT License. Copyright (c) 2026 **noskillz** ([hellforgex](https://github.com/hellforgex)).  
-Governed by the **Legal Disclaimer & Limitation of Liability** above.
+
+MIT License — Copyright (c) 2026 **noskillz** ([hellforgex](https://github.com/hellforgex)). See [`LICENSE`](LICENSE) and the legal disclaimer above.
