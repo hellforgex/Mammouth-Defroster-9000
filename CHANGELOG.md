@@ -2,16 +2,21 @@
 
 ## [0.7.0] - 2026-10-27
 
-### 🦣 Feature 1: Token-Budget-Safe Tool Discovery & Dynamic Self-Tooling
+### ⚡ Feature 1: The Crown Jewel — Autonomous Self-Tooling & Infinite Skills
+- **On-the-Fly Skill Creation:** AI assistants can autonomously author tailored Python and PowerShell scripts (`skills/*.py`, `skills/*.ps1`) using `file_write` when built-in tools do not cover a specific objective.
+- **Zero-Cost Local Win32 Execution ($0.00 API Cost):** Direct execution of workspace scripts via `powershell_exec` or `command_run` inside the secured Win32 workspace sandbox, bypassing expensive external agent loops and API budget caps (`Budget has been exceeded`).
+- **Infinite Capabilities:** Dynamically extends Defroster 9000 beyond its 85 built-in MCP tools without restarting the server or adding code to the binary.
+
+### 🦣 Feature 2: Token-Budget-Safe Tool Discovery & Capability Router
 - **Initial Discovery Anchor (`file_read`):** Enhanced `file_read` docstring with an embedded Module Compass describing the 10 capability domains. Resolves Mammouth.ai client schema budget exhaustion (where 85 tools exceed the 7,719-token limit in "On-Demand" mode).
 - **Skill Directory & Capability Router (`defroster_catalog`):** Added a new FastMCP tool enabling AI assistants to explore tools by category (`files`, `shell`, `browser`, `screen`, `desktop`, `system`, `scheduler`, `gdrive`, `clipboard`, `memory`) or search terms without consuming large schema token budgets upfront.
-- **Zero-Cost Local Skill Execution:** Model guidance instructing assistants to execute workspace scripts (`skills/*.py`, `*.ps1`) directly via `powershell_exec` or `command_run` ($0 cost, local Win32 sandbox) rather than consuming external API budget through `mammouth run`. Includes an automated budget limit interceptor hint.
+- **Budget Interceptor:** Automated guidance and error interception instructing assistants to avoid external CLI calls when scripts can be executed locally.
 
-### 🔒 Security Hardening: Read-Only Path Containment Fix
+### 🔒 Feature 3: Security Hardening — Read-Only Path Containment Fix
 - **Command Suffix Stripping Fix (`modules/shell_processes.py`):** Replaced `.rstrip(".exe")` with `.removesuffix(".exe")` to prevent character set truncation that previously bypassed path containment checks for commands like `type`.
 - **Read-Only File Command Coverage:** Added `findstr` and `type` to `READONLY_FILE_COMMANDS` with mandatory workspace boundary enforcement.
 
-### 🌐 Feature 2: Multi-Browser Support & Model-Controlled Browser Mode
+### 🌐 Feature 4: Multi-Browser Support & Model-Controlled Browser Mode
 
 #### Browser Engine Selection (GUI + MCP)
 - **Browser Dropdown in Cockpit UI:** The Browser Agent settings card now shows a live-detected dropdown of all installed browsers alongside the existing Headless toggle. Switching triggers an automatic browser restart.

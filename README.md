@@ -46,11 +46,24 @@ You do **not** need Python, Git, or terminal knowledge. Everything is bundled in
 
 ## 🚀 What's New in v0.7.0
 
+* ⚡ **Autonomous Self-Tooling & Infinite Skills (The Crown Jewel)**: The assistant is no longer bound to static tools. If a capability is missing, it autonomously writes tailored Python or PowerShell scripts into `skills/` via `file_write` and executes them locally at **$0.00 API cost** via `powershell_exec` or `command_run`!
+* 🦣 **Token-Budget-Safe Tool Discovery (`defroster_catalog`)**: Solves client schema token budget exhaustion in Mammouth's "On-Demand" mode (`_discover_tools`). The `file_read` anchor introduces the 10 capability domains, and the `defroster_catalog` tool allows on-demand category querying without blowing the token budget.
 * 🌐 **Multi-Browser & Host Discovery**: Full integration with Playwright Firefox & WebKit (Safari) engines with DOM tree element inspection, plus automatic detection of host browsers (Microsoft Edge, Google Chrome, Brave, Chromium). AI models can autonomously switch browser channels and toggle headless mode on the fly via `browser_restart(headless, channel)`.
 * 🔑 **Persistent Browser Login Sessions (`storage_state`)**: Automated per-channel cookie and LocalStorage persistence (`data/browser_states/storage_state_<channel>.json`). Web logins in Firefox and WebKit survive browser restarts without requiring re-authentication.
-* 🦣 **Token-Budget-Safe Tool Discovery (`defroster_catalog`)**: Solves client schema token budget exhaustion in Mammouth's "On-Demand" mode (`_discover_tools`). The `file_read` anchor introduces the 10 capability domains, and the `defroster_catalog` tool allows on-demand category querying without blowing the token budget.
-* ⚡ **Dynamic Self-Tooling & Zero-Cost Execution**: AI models can write custom scripts (`skills/*.py`, `*.ps1`) via `file_write` and execute them locally in the Win32 sandbox using `powershell_exec` or `command_run` for $0 API cost, bypassing expensive external agent loops.
 * 🔒 **Security Hardening**: Fixed command suffix parsing (`removesuffix(".exe")`) in `shell_processes.py` ensuring strict workspace sandbox containment on commands like `type` and `findstr`.
+
+---
+
+## ⚡ The Crown Jewel: Autonomous Self-Tooling & Infinite Skills
+
+> **Why stop at 85 tools when your AI can write and run its own?**
+
+Previously, when an AI assistant encountered a task without a dedicated pre-built MCP tool, it reached a dead end: *"I don't have a tool for that."* 
+
+**v0.7.0 breaks through this barrier.** Mammouth Defroster 9000 transforms your AI assistant into a **Self-Extending Autonomous System**:
+* 🛠️ **On-the-Fly Skill Creation**: If no built-in tool exists for your goal (e.g. converting obscure file formats, querying specialized Windows APIs, automated batch processing, local system probes), the assistant writes a tailored Python or PowerShell script into `./workspace/skills/`.
+* ⚡ **Zero-Cost Local Execution ($0.00 API Cost)**: It immediately executes the newly created skill locally inside the Win32 workspace sandbox using `powershell_exec` or `command_run` — without burning external LLM API tokens or running into CLI budget limits.
+* ♾️ **Limitless Capabilities**: The model writes, refines, and executes its own custom tools in real-time, effectively giving Defroster 9000 **infinite capabilities** beyond its built-in toolset.
 
 ---
 

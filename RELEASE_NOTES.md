@@ -8,28 +8,33 @@
 
 ## 🚀 What's New in v0.7.0 — `v0.7.0 - Mammouth Defroster 9000`
 
-### 🌐 Feature 1: Multi-Browser Support & Model-Controlled Browser Automation
+### ⚡ Feature 1: The Crown Jewel — Autonomous Self-Tooling & Infinite Skills
+* **Autonomous Skill Authoring:** AI assistants are no longer constrained by static toolsets. When encountering an unserved requirement, the model autonomously writes custom Python or PowerShell scripts into `skills/` using `file_write`.
+* **Zero-Cost Local Win32 Sandbox Execution:** Scripts are executed locally via `powershell_exec` or `command_run` inside the secured Win32 workspace sandbox at **$0.00 API cost**, bypassing external agent CLI budget limits and preventing runaway token expenditure.
+* **Infinite Extensibility:** The assistant can write, test, debug, and chain its own tools in real time, granting Mammouth Defroster 9000 limitless task-solving capabilities.
+
+### 🦣 Feature 2: Token-Budget-Safe Tool Discovery & Catalog Meta-Tool
+* **Dynamic Tool Discovery Bootstrap (`file_read` Anchor):** Resolved Mammouth.ai client schema budget exhaustion (where 85 tools exceed the 7,719-token budget in "On-Demand" mode) by equipping the core `file_read` tool with a compact module compass so models immediately recognize available capability domains.
+* **Skill Directory & Router (`defroster_catalog`):** New FastMCP tool allowing models to query tool listings by category (`files`, `browser`, `shell`, `screen`, `desktop`, `system`, `scheduler`, `gdrive`, `clipboard`, `memory`) or search keywords without loading all 85 tool schemas into the system prompt simultaneously.
+* **Budget Limit Interceptor:** Built-in guidance and error interception instructing assistants to avoid expensive external CLI loops (`mammouth run`) when scripts are already present locally.
+
+### 🌐 Feature 3: Multi-Browser Support & Model-Controlled Browser Automation
 * **Model-Controlled Headless & Browser Switching:** Added FastMCP tool `browser_restart(headless, channel)` allowing AI assistants to autonomously switch between headless background execution and visible window mode, or switch browser engines on the fly without user intervention.
 * **Host Browser Discovery (`browser_list_browsers`):** FastMCP tool scanning and listing all installed browsers (Microsoft Edge, Google Chrome, Brave, Chromium) as well as Playwright built-in engines (Firefox, WebKit/Safari) with channel IDs, labels, and installation paths.
 * **Firefox & WebKit Engines with Full DOM Tree Inspection:** Full integration with Playwright's Firefox and WebKit runtimes. Resolves the limitations of desktop coordinate-based clicks on responsive/dynamic interfaces at high display resolutions (e.g. 2560×1392), unlocking reliable DOM-level selectors (`browser_snapshot`, `browser_click`, `browser_fill`).
 * **Session & Login State Persistence (`storage_state`):** Automated per-channel cookie and LocalStorage extraction saved to `data/browser_states/storage_state_<channel>.json` on page loads. Firefox and WebKit login sessions survive browser restarts without requiring re-authentication.
 * **Cockpit GUI Browser Selection:** Interactive dropdown selector embedded in the Browser Agent card in the Cockpit GUI alongside the Headless switch, allowing 1-click browser selection and real-time auto-restart.
 
-### 🦣 Feature 2: Token-Budget-Safe Tool Discovery & Catalog Meta-Tool
-* **Dynamic Tool Discovery Bootstrap (`file_read` Anker):** Resolved Mammouth.ai client schema budget exhaustion (where 85 tools exceed the 7,719-token budget in "On-Demand" mode) by equipping the core `file_read` tool with a compact module compass so models immediately recognize available capability domains.
-* **Skill Directory & Router (`defroster_catalog`):** New FastMCP tool allowing models to query tool listings by category (`files`, `browser`, `shell`, `screen`, `desktop`, `system`, `scheduler`, `gdrive`, `clipboard`, `memory`) or search keywords without loading all 85 tool schemas into the system prompt simultaneously.
-* **Zero-Cost Local Skill Execution:** Model guidance instructing assistants to execute workspace scripts (`skills/*.py`, `*.ps1`) directly via `powershell_exec` or `command_run` ($0 cost, local sandbox) rather than consuming external API budget through `mammouth run`. Includes budget limit interceptor hint.
-
-### 🔒 Security Hardening: Read-Only Path Containment Fix
+### 🔒 Feature 4: Security Hardening — Read-Only Path Containment Fix
 * **Command Suffix Stripping Fix:** Replaced `.rstrip(".exe")` with `.removesuffix(".exe")` in `modules/shell_processes.py` preventing character set truncation that previously bypassed path guards for commands such as `type`.
 * **Complete Read-Only File Command Coverage:** Added `findstr` and `type` to `READONLY_FILE_COMMANDS` with strict workspace sandbox containment checks.
 
 ### 📦 Release Verification & Checksums
 * **Archive:** `MammouthDefroster9000-v0.7.0-windows-x64.zip`
-* **Size:** `131,224,802 bytes` (~125.14 MB)
+* **Size:** `133,476,967 bytes` (~127.29 MB)
 * **SHA-256 Checksum:**
   ```text
-  9286454e095465ad13c35e50f3ed8294fc0a7433ac4620b4957999f3d4ac72c1
+  057d5cc80d1de30fccf27a943f37c57c77b1a5a3fe73a44d1ca901c951c130b3
   ```
 * **Test Suite:** 242 tests passing (100% clean, 0 failures, 0 errors).
 
