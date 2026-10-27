@@ -187,7 +187,9 @@ mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
     Mammouth Defroster 9000 (v0.7.0): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
-    Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, Google Drive cloud integration, and Mammouth Code CLI agent automation exclusively for Mammouth.ai.
+    Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, browser automation, Google Drive cloud integration, and Mammouth Code CLI agent automation exclusively for Mammouth.ai.
+    Core Tool Hub: Use 'defroster_catalog' or 'file_read' to discover available tools across [files, shell, browser, screen, desktop, system, scheduler, gdrive, clipboard, memory].
+    Dynamic Tooling: If a required capability is not available as a built-in MCP tool, write a custom Python or PowerShell script using 'file_write' and run it using 'powershell_exec' or 'command_run'.
     Always prioritize safety, sandboxing, and precision.
     """
 )
@@ -387,8 +389,192 @@ def task_schedule_get_presets() -> List[Dict[str, Any]]:
     return scheduler_get_presets()
 
 
+
+_DEFROSTER_MODULE_CATALOG: Dict[str, Dict[str, Any]] = {
+    "files": {
+        "module": "file_ops",
+        "title": "File Operations & Workspace Sandbox",
+        "description": "Read, write, edit, and search files inside the workspace sandbox.",
+        "tools": [
+            {"name": "file_read", "desc": "Read text file with optional line slicing."},
+            {"name": "file_write", "desc": "Write or overwrite file content."},
+            {"name": "file_replace_chunk", "desc": "Replace targeted text snippet in a file."},
+            {"name": "file_search_text", "desc": "Search for text or regex patterns across workspace files."},
+            {"name": "directory_list", "desc": "List directory contents."},
+            {"name": "directory_tree", "desc": "Render ASCII directory tree."}
+        ]
+    },
+    "shell": {
+        "module": "shell_processes",
+        "title": "PowerShell & Shell Command Execution",
+        "description": "Execute local shell and PowerShell commands, launch applications, manage background tasks.",
+        "tools": [
+            {"name": "powershell_exec", "desc": "Execute PowerShell commands or scripts with stdout/stderr capture."},
+            {"name": "command_run", "desc": "Run CLI command inside the workspace."},
+            {"name": "cmd_exec", "desc": "Execute cmd.exe command."},
+            {"name": "desktop_open", "desc": "Open a file or URL with default Windows application."},
+            {"name": "process_start_background", "desc": "Start long-running background process."},
+            {"name": "process_list_background", "desc": "List background processes."},
+            {"name": "process_get_output", "desc": "Get output from a background process."},
+            {"name": "process_kill_background", "desc": "Terminate a background process."}
+        ]
+    },
+    "browser": {
+        "module": "browser_agent",
+        "title": "Autonomous Browser Agent",
+        "description": "Full web automation via Playwright: navigate, click, fill forms, take screenshots, evaluate JS.",
+        "tools": [
+            {"name": "browser_navigate", "desc": "Navigate browser to a URL."},
+            {"name": "browser_snapshot", "desc": "Extract text/accessibility snapshot of the current page."},
+            {"name": "browser_screenshot", "desc": "Capture screenshot of current browser viewport."},
+            {"name": "browser_click", "desc": "Click element by selector or coordinate."},
+            {"name": "browser_fill", "desc": "Type text into form input."},
+            {"name": "browser_press_key", "desc": "Send keyboard key to page (Enter, Escape, etc.)."},
+            {"name": "browser_hover", "desc": "Hover mouse over element."},
+            {"name": "browser_scroll", "desc": "Scroll page vertically or horizontally."},
+            {"name": "browser_get_content", "desc": "Get HTML content or element text."},
+            {"name": "browser_evaluate", "desc": "Run JavaScript in browser context."},
+            {"name": "browser_tabs", "desc": "List or switch browser tabs."},
+            {"name": "browser_status", "desc": "Get current browser engine and page status."},
+            {"name": "browser_restart", "desc": "Restart browser with clean session."},
+            {"name": "browser_close", "desc": "Close browser instance."}
+        ]
+    },
+    "screen": {
+        "module": "screen_capture",
+        "title": "Screen Capture & Desktop Vision",
+        "description": "Capture full screen, specific monitors, or target windows for multimodal vision inspection.",
+        "tools": [
+            {"name": "screen_capture", "desc": "Capture full desktop screenshot."},
+            {"name": "screen_capture_active_window", "desc": "Capture screenshot of the currently active/focused window."},
+            {"name": "screen_capture_window", "desc": "Capture screenshot of window by title/handle."},
+            {"name": "screen_list_monitors", "desc": "List connected displays and resolutions."},
+            {"name": "screen_list_windows", "desc": "List visible application windows."}
+        ]
+    },
+    "desktop": {
+        "module": "desktop_input",
+        "title": "Desktop Mouse & Keyboard Input",
+        "description": "Simulate hardware mouse and keyboard events on Windows.",
+        "tools": [
+            {"name": "mouse_click", "desc": "Click at desktop coordinates."},
+            {"name": "mouse_move", "desc": "Move mouse cursor to coordinates."},
+            {"name": "mouse_drag", "desc": "Drag mouse between coordinates."},
+            {"name": "mouse_scroll", "desc": "Scroll mouse wheel."},
+            {"name": "keyboard_type", "desc": "Type text directly via simulated keystrokes."},
+            {"name": "keyboard_press", "desc": "Press a key (e.g. Enter, Tab, Win, Ctrl+S)."},
+            {"name": "keyboard_hotkey", "desc": "Trigger keyboard shortcut (e.g. ['ctrl', 'c'])."}
+        ]
+    },
+    "system": {
+        "module": "system_monitor",
+        "title": "System Hardware & Process Monitor",
+        "description": "Query CPU/RAM/GPU diagnostics, running Windows processes, and event viewer logs.",
+        "tools": [
+            {"name": "system_get_specs", "desc": "Get CPU, RAM, storage, and OS specifications."},
+            {"name": "system_get_processes", "desc": "List top running processes by CPU/memory."},
+            {"name": "system_get_gpu_info", "desc": "Query NVIDIA/AMD GPU utilization and VRAM."},
+            {"name": "system_get_event_logs", "desc": "Query Windows event log channels for warnings/errors."}
+        ]
+    },
+    "scheduler": {
+        "module": "task_scheduler",
+        "title": "Task Scheduler & Automation Engine",
+        "description": "Create automated recurring prompts or scripts triggered on intervals.",
+        "tools": [
+            {"name": "task_schedule_create", "desc": "Create recurring task (interval_minutes, prompt, target)."},
+            {"name": "task_schedule_list", "desc": "List scheduled automation tasks."},
+            {"name": "task_schedule_control", "desc": "Pause, resume, or trigger scheduled task."},
+            {"name": "task_schedule_delete", "desc": "Delete scheduled task."}
+        ]
+    },
+    "gdrive": {
+        "module": "google_drive",
+        "title": "Google Drive Cloud Integration",
+        "description": "Search, download, read, write, and manage Google Drive files.",
+        "tools": [
+            {"name": "gdrive_search_files", "desc": "Search Google Drive files by name/query."},
+            {"name": "gdrive_read_file", "desc": "Read text or Google Docs/Sheets content."},
+            {"name": "gdrive_download_to_workspace", "desc": "Download Drive file to local workspace."},
+            {"name": "gdrive_upload_from_workspace", "desc": "Upload workspace file to Google Drive."},
+            {"name": "gdrive_list_files", "desc": "List files in Google Drive folder."}
+        ]
+    },
+    "clipboard": {
+        "module": "smart_clipboard",
+        "title": "Smart Clipboard",
+        "description": "Read, update, and transform system clipboard content.",
+        "tools": [
+            {"name": "clipboard_get_text", "desc": "Read current clipboard text."},
+            {"name": "clipboard_set_text", "desc": "Set clipboard text."}
+        ]
+    },
+    "memory": {
+        "module": "memory",
+        "title": "Sovereign Long-Term Memory & RAG",
+        "description": "Persistent key-value and semantic memory recall across sessions.",
+        "tools": [
+            {"name": "memory_save", "desc": "Save key-value memory entry."},
+            {"name": "memory_recall", "desc": "Recall stored memories matching a query."},
+            {"name": "memory_list", "desc": "List stored memories."}
+        ]
+    }
+}
+
+
+def defroster_catalog(category: Optional[str] = None, search: Optional[str] = None) -> Dict[str, Any]:
+    """Mammouth Defroster Core Skill Directory & Capability Router (defrost / defroster main hub).
+
+    Lists available Defroster tools grouped by category.
+    Dynamic Tooling Rule: If a needed capability is not available as a built-in tool, create a custom Python or PowerShell script using file_write and execute it via powershell_exec.
+
+    Args:
+        category: Optional category filter ('files', 'shell', 'browser', 'screen', 'desktop', 'system', 'scheduler', 'gdrive', 'clipboard', 'memory', 'all').
+        search: Optional keyword search string (e.g. 'pdf', 'click', 'window', 'gpu').
+    """
+    cfg = load_config()
+    mods = cfg.get("modules", {})
+
+    target_category = str(category or "").strip().lower()
+    search_term = str(search or "").strip().lower()
+
+    filtered_categories: Dict[str, Any] = {}
+
+    for cat_key, cat_data in _DEFROSTER_MODULE_CATALOG.items():
+        if target_category and target_category not in ("all", "*") and cat_key != target_category:
+            continue
+
+        mod_name = cat_data["module"]
+        mod_enabled = mods.get(mod_name, {}).get("enabled", True)
+
+        matched_tools = []
+        for t in cat_data["tools"]:
+            if search_term:
+                if (search_term in t["name"].lower()) or (search_term in t["desc"].lower()) or (search_term in cat_data["title"].lower()):
+                    matched_tools.append(t)
+            else:
+                matched_tools.append(t)
+
+        if matched_tools or (not search_term and target_category in (cat_key, "all", "*")):
+            filtered_categories[cat_key] = {
+                "title": cat_data["title"],
+                "module_name": mod_name,
+                "module_enabled": mod_enabled,
+                "description": cat_data["description"],
+                "tools": matched_tools
+            }
+
+    return {
+        "status": "success",
+        "total_categories": len(filtered_categories),
+        "available_categories": list(_DEFROSTER_MODULE_CATALOG.keys()),
+        "categories": filtered_categories,
+        "dynamic_tooling_advice": "If no built-in tool satisfies your goal, use 'file_write' to save a Python or PowerShell script into the workspace, and execute it via 'powershell_exec' or 'command_run'."
+    }
+
 def register_active_tools():
     """Register tools dynamically based on enabled modules in config.json."""
+    mcp.tool()(defroster_catalog)
     cfg = load_config()
     mods = cfg.get("modules", {})
 

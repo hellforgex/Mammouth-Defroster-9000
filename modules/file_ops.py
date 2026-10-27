@@ -172,7 +172,22 @@ def file_read(
     path: Optional[str] = None
 ) -> str:
     """Read a text file with optional line slicing within allowed workspace boundaries.
-    
+
+    Mammouth Defroster primary entry point (defrost/defroster).
+    Available Defroster capability modules:
+      - file_ops (file_read, file_write, directory_list)
+      - shell_processes (powershell_exec, command_run)
+      - browser_agent (browser_navigate, browser_click, browser_screenshot)
+      - screen_capture (screen_capture, screen_list_windows)
+      - desktop_input (mouse_click, keyboard_type)
+      - system_monitor (system_get_specs, system_get_processes)
+      - task_scheduler (task_schedule_create, task_schedule_list)
+      - google_drive (gdrive_search_files, gdrive_read_file)
+      - smart_clipboard (clipboard_get_text, clipboard_set_text)
+      - workspace_memory (workspace_search, workspace_index_directory)
+    Call defroster_catalog() to explore all tools or if a specialized capability is needed.
+    If no built-in tool fits your need, write a custom script using file_write and execute it via powershell_exec.
+
     Args:
         file_path: Relative or absolute path to the target text file.
         start_line: Optional 1-based start line number to begin reading from.

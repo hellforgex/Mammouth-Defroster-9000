@@ -5,7 +5,7 @@ from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from server import require_module
+from server import require_module, defroster_catalog
 from modules.file_ops import directory_list, directory_tree, file_read, file_write, file_search_text
 from modules.tasks_kanban import task_update, task_delete, task_list
 from modules.memory import memory_recall, memory_list
@@ -60,6 +60,27 @@ class TestMcpToolSchemas(unittest.TestCase):
         """Test task_update and task_delete accept id alias."""
         del_res = task_delete(id=999999)
         self.assertIn('not found', del_res.lower())
+
+    def test_defroster_catalog_all(self):
+        """Test defroster_catalog returns full categories and dynamic tooling advice."""
+        res = defroster_catalog()
+        self.assertEqual(res['status'], 'success')
+        self.assertIn('files', res['categories'])
+        self.assertIn('browser', res['categories'])
+        self.assertIn('dynamic_tooling_advice', res)
+
+    def test_defroster_catalog_filter_category(self):
+        """Test defroster_catalog category filter."""
+        res = defroster_catalog(category='files')
+        self.assertEqual(len(res['categories']), 1)
+        self.assertIn('files', res['categories'])
+        self.assertTrue(any(t['name'] == 'file_read' for t in res['categories']['files']['tools']))
+
+    def test_defroster_catalog_search(self):
+        """Test defroster_catalog search filter."""
+        res = defroster_catalog(search='navigate')
+        self.assertIn('browser', res['categories'])
+        self.assertTrue(any(t['name'] == 'browser_navigate' for t in res['categories']['browser']['tools']))
 
 if __name__ == '__main__':
     unittest.main()
