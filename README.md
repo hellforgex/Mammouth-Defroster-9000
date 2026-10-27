@@ -5,6 +5,8 @@
 <p align="center">
   <a href="https://github.com/hellforgex/Mammouth-Defroster-9000/releases"><img src="https://img.shields.io/github/v/release/hellforgex/Mammouth-Defroster-9000?include_prereleases&label=Latest%20Release&color=blueviolet" alt="Release"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-0078D6?logo=windows&logoColor=white" alt="Platform">
+  <img src="https://img.shields.io/badge/Capabilities-15%20Modules%20%7C%2089%20Tools-0284C7" alt="Capabilities">
+  <img src="https://img.shields.io/badge/Self--Tooling-Autonomous%20Skills%20($0.00)-10B981" alt="Self-Tooling">
   <img src="https://img.shields.io/badge/Vibecoded%20By-noskillz%20⚡-8A2BE2" alt="Vibecoded">
   <img src="https://img.shields.io/badge/Security-Privacy%20Gate%20%2B%20Sandbox%20%2B%20Bearer%20Auth-10B981" alt="Security">
   <img src="https://img.shields.io/badge/MCP%20Protocol-FastMCP%20%7C%20SSE%20%2B%20HTTP-purple" alt="MCP">
@@ -56,7 +58,7 @@ You do **not** need Python, Git, or terminal knowledge. Everything is bundled in
 
 ## ⚡ The Crown Jewel: Autonomous Self-Tooling & Infinite Skills
 
-> **Why stop at 85 tools when your AI can write and run its own?**
+> **Why stop at 89 tools when your AI can write and run its own?**
 
 Previously, when an AI assistant encountered a task without a dedicated pre-built MCP tool, it reached a dead end: *"I don't have a tool for that."* 
 
@@ -123,6 +125,10 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
 ---
 
 ## 🛠️ 15 Defrosted Modules (89 Tools Total)
+
+<p align="center">
+  <img src="assets/cockpit_tools.png" alt="Mammouth Defroster 9000 Modular Capabilities (15 Modules)" width="95%">
+</p>
 
 <table align="center" width="100%">
   <thead>
@@ -319,6 +325,9 @@ For automated startup or running without a GUI:
 mammouth-defroster-9000/
 ├── assets/
 │   ├── banner.png           # Widescreen hero banner
+│   ├── cockpit_dark.png     # Full desktop cockpit dashboard (Dark Obsidian theme)
+│   ├── cockpit_light.png    # Sovereign security & sandboxing settings (Ivory Light theme)
+│   ├── cockpit_tools.png    # 15 defrosted modules deck & capability controls
 │   ├── icon.png             # High-res application icon
 │   └── icon.ico             # Windows multi-resolution taskbar/window icon
 ├── modules/
