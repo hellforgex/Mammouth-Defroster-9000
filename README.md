@@ -44,6 +44,16 @@ You do **not** need Python, Git, or terminal knowledge. Everything is bundled in
 
 ---
 
+## 🚀 What's New in v0.7.0
+
+* 🌐 **Multi-Browser & Host Discovery**: Full integration with Playwright Firefox & WebKit (Safari) engines with DOM tree element inspection, plus automatic detection of host browsers (Microsoft Edge, Google Chrome, Brave, Chromium). AI models can autonomously switch browser channels and toggle headless mode on the fly via `browser_restart(headless, channel)`.
+* 🔑 **Persistent Browser Login Sessions (`storage_state`)**: Automated per-channel cookie and LocalStorage persistence (`data/browser_states/storage_state_<channel>.json`). Web logins in Firefox and WebKit survive browser restarts without requiring re-authentication.
+* 🦣 **Token-Budget-Safe Tool Discovery (`defroster_catalog`)**: Solves client schema token budget exhaustion in Mammouth's "On-Demand" mode (`_discover_tools`). The `file_read` anchor introduces the 10 capability domains, and the `defroster_catalog` tool allows on-demand category querying without blowing the token budget.
+* ⚡ **Dynamic Self-Tooling & Zero-Cost Execution**: AI models can write custom scripts (`skills/*.py`, `*.ps1`) via `file_write` and execute them locally in the Win32 sandbox using `powershell_exec` or `command_run` for $0 API cost, bypassing expensive external agent loops.
+* 🔒 **Security Hardening**: Fixed command suffix parsing (`removesuffix(".exe")`) in `shell_processes.py` ensuring strict workspace sandbox containment on commands like `type` and `findstr`.
+
+---
+
 ## 🔗 Connecting with Mammouth.ai (Step-by-Step)
 
 <p align="center">
@@ -113,11 +123,18 @@ MD-9000 gives AI assistants real Windows power, but keeps **you** in full contro
   </thead>
   <tbody>
     <tr>
-      <td><b>🌐 Playwright Browser Agent</b></td>
+      <td><b>🌐 Playwright Multi-Browser Agent</b></td>
       <td align="center">Enabled</td>
-      <td align="center">🛡️ Sandboxed Edge</td>
-      <td>Claude Desktop-equivalent autonomous web browser control via Playwright & system Microsoft Edge: navigation, numbered element indexing, form fills, clicks, full-DOM Markdown, and multimodal visual screenshots.</td>
-      <td><code>browser_navigate</code>, <code>browser_snapshot</code>, <code>browser_screenshot</code>, <code>browser_click</code>, <code>browser_fill</code>, <code>browser_get_content</code>, <code>browser_evaluate</code>, <code>browser_tabs</code> <i>(12 tools)</i></td>
+      <td align="center">🛡️ Sandboxed Playwright</td>
+      <td>Multi-browser autonomous web automation via Playwright with host browser discovery (Edge, Chrome, Brave, Chromium) and built-in Firefox & WebKit (Safari) engines. Full DOM tree indexing, model-controlled switching (<code>browser_restart</code>), persistent login sessions (<code>storage_state</code>), form fills, clicks, and screenshots.</td>
+      <td><code>browser_navigate</code>, <code>browser_snapshot</code>, <code>browser_screenshot</code>, <code>browser_click</code>, <code>browser_fill</code>, <code>browser_list_browsers</code>, <code>browser_restart</code>, <code>browser_evaluate</code>, <code>browser_tabs</code> <i>(14 tools)</i></td>
+    </tr>
+    <tr>
+      <td><b>🦣 Skill Router & Catalog</b></td>
+      <td align="center">Core</td>
+      <td align="center">🟢 Safe / Local</td>
+      <td>Token-budget-safe capability router and dynamic self-tooling guide. Models query tools on-demand by category or search terms without blowing prompt token limits, and write/execute custom workspace skills at $0 API cost.</td>
+      <td><code>defroster_catalog</code>, <code>file_read</code></td>
     </tr>
     <tr>
       <td><b>👁️ Desktop Vision & Copilot</b></td>
