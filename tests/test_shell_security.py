@@ -97,7 +97,10 @@ class TestShellSecurity(unittest.TestCase):
             r"gi C:\Windows\System32\config\system",
             r"Get-Acl ..\hosts.json",
             r"Get-Content C:\certs\server.key",
-            r"type C:\certs\cert.pem"
+            r"type C:\certs\cert.pem",
+            r"type C:\Windows\win.ini",
+            r"type.exe C:\Windows\win.ini",
+            r"findstr /c:fonts C:\Windows\win.ini"
         ]
         for cmd in blocked_reads:
             with self.assertRaises(PermissionError, msg=f"Expected Path Guard to block '{cmd}'"):

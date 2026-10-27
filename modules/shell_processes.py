@@ -80,7 +80,7 @@ READONLY_FILE_COMMANDS = {
     "get-content", "gc", "cat", "type",
     "get-item", "gi",
     "get-childitem", "gci", "dir", "ls",
-    "get-acl"
+    "get-acl", "findstr"
 }
 
 
@@ -185,7 +185,7 @@ def _check_readonly_path_guard(raw_cmd: str, cwd: Optional[str] = None) -> None:
         tokens = re.findall(r'--?[a-zA-Z0-9_-]+|"[^"]*"|\'[^\']*\'|[^\s]+', seg)
         if not tokens:
             continue
-        first_token = tokens[0].lower().strip("&.").rstrip(".exe")
+        first_token = tokens[0].lower().strip("&.").removesuffix(".exe")
         if first_token in READONLY_FILE_COMMANDS:
             for tok in tokens[1:]:
                 # Ignore parameter switches (e.g. -Path, -Filter, -Recurse, /s, /a)
