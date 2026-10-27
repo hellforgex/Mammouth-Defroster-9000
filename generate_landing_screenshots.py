@@ -75,7 +75,7 @@ def render_screenshot(appearance_mode: str, tab_key: str, output_file: str, cust
 
     app = gui.MammouthControlCenter()
     app.title(f"Mammouth Defroster 9000 🦣❄️🔥 ({gui.APP_VERSION})")
-    app.geometry("1320x900+60+40")
+    app.geometry("1330x925+60+30")
 
     if appearance_mode == "Light":
         app._on_theme_changed("Light")
@@ -93,7 +93,7 @@ def render_screenshot(appearance_mode: str, tab_key: str, output_file: str, cust
 
     app.update_idletasks()
     app.update()
-    time.sleep(0.4)
+    time.sleep(0.5)
 
     hwnd = int(app.wm_frame(), 16)
     capture_window_hwnd(hwnd, ASSETS_DIR / output_file)
@@ -104,7 +104,7 @@ def render_screenshot(appearance_mode: str, tab_key: str, output_file: str, cust
         gui.save_config(cfg)
 
     app.destroy()
-    time.sleep(0.3)
+    time.sleep(0.4)
 
 
 def customize_dashboard_dark(app):
@@ -120,14 +120,32 @@ def customize_dashboard_dark(app):
     if hasattr(app, "btn_toggle_server"):
         app.btn_toggle_server.configure(text="⏹ STOP SERVER", fg_color="#EF4444", hover_color="#DC2626")
 
-    if hasattr(app, "lbl_uptime_val"):
-        app.lbl_uptime_val.configure(text="01:24:50")
+    if hasattr(app, "lbl_stat_uptime"):
+        app.lbl_stat_uptime.configure(text="⏱️ Uptime: 01:24:50")
 
-    if hasattr(app, "lbl_tools_val"):
-        app.lbl_tools_val.configure(text="89 Tools active")
+    if hasattr(app, "lbl_stat_tools"):
+        app.lbl_stat_tools.configure(text="⚡ 89 Tools active")
 
     if hasattr(app, "lbl_nav_tools"):
         app.lbl_nav_tools.configure(text="⚡ 89 Tools active")
+
+    if hasattr(app, "lbl_stat_cpu"):
+        app.lbl_stat_cpu.configure(text="💻 CPU: 3.8%")
+    if hasattr(app, "bar_cpu"):
+        app.bar_cpu.set(0.038)
+    if hasattr(app, "lbl_stat_ram"):
+        app.lbl_stat_ram.configure(text="🧠 RAM: 24.2%")
+    if hasattr(app, "bar_ram"):
+        app.bar_ram.set(0.242)
+
+    if hasattr(app, "lbl_nav_cpu"):
+        app.lbl_nav_cpu.configure(text="CPU: 3.8%")
+    if hasattr(app, "bar_nav_cpu"):
+        app.bar_nav_cpu.set(0.038)
+    if hasattr(app, "lbl_nav_ram"):
+        app.lbl_nav_ram.configure(text="RAM: 24.2%")
+    if hasattr(app, "bar_nav_ram"):
+        app.bar_nav_ram.set(0.242)
 
     if hasattr(app, "log_textbox"):
         app.log_textbox.configure(state="normal")
@@ -154,10 +172,37 @@ def customize_settings_light(app):
     if hasattr(app, "theme_menu"):
         app.theme_menu.set("Light")
 
+    if hasattr(app, "lbl_nav_tools"):
+        app.lbl_nav_tools.configure(text="⚡ 89 Tools active")
+
+    if hasattr(app, "lbl_nav_cpu"):
+        app.lbl_nav_cpu.configure(text="CPU: 3.8%")
+    if hasattr(app, "bar_nav_cpu"):
+        app.bar_nav_cpu.set(0.038)
+    if hasattr(app, "lbl_nav_ram"):
+        app.lbl_nav_ram.configure(text="RAM: 24.2%")
+    if hasattr(app, "bar_nav_ram"):
+        app.bar_nav_ram.set(0.242)
+
 
 def customize_tools_dark(app):
     if hasattr(app, "lbl_nav_tools"):
         app.lbl_nav_tools.configure(text="⚡ 89 Tools active")
+
+    if hasattr(app, "lbl_nav_cpu"):
+        app.lbl_nav_cpu.configure(text="CPU: 3.8%")
+    if hasattr(app, "bar_nav_cpu"):
+        app.bar_nav_cpu.set(0.038)
+    if hasattr(app, "lbl_nav_ram"):
+        app.lbl_nav_ram.configure(text="RAM: 24.2%")
+    if hasattr(app, "bar_nav_ram"):
+        app.bar_nav_ram.set(0.242)
+
+    if hasattr(app, "scroll_skills"):
+        # Scroll to show Playwright Multi-Browser controls, Vision Gate, and Local RAG
+        app.scroll_skills._parent_canvas.yview_moveto(0.605)
+        app.update_idletasks()
+        app.update()
 
 
 if __name__ == "__main__":

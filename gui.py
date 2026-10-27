@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 
 # Ensure Windows COM ApartmentState is STA before Tkinter or WebView2 initialization
@@ -1453,7 +1453,7 @@ class MammouthControlCenter(ctk.CTk):
     def _build_sidebar(self, parent):
         self.sidebar = ctk.CTkFrame(
             parent,
-            width=225,
+            width=235,
             corner_radius=0,
             fg_color=THEME_HEADER_BG,
             border_width=1,
@@ -1572,7 +1572,7 @@ class MammouthControlCenter(ctk.CTk):
         self.btn_quick_ws_choose = ctk.CTkButton(
             f_quick_ws,
             text="📁 Choose",
-            width=68,
+            width=64,
             height=32,
             corner_radius=6,
             font=ctk.CTkFont(size=10, weight="bold"),
@@ -4005,15 +4005,17 @@ class MammouthControlCenter(ctk.CTk):
             "file_ops": 6,
             "shell_processes": 8,
             "putty_ssh": 6,
-            "system_monitor": 4,
+            "system_monitor": 5,
             "web_tools": 2,
-            "screen_capture": 4,
+            "screen_capture": 7,
             "mammouth_code": 5,
             "desktop_input": 9,
             "google_drive": 11,
-            "browser_agent": 12
+            "browser_agent": 14,
+            "workspace_memory": 4,
+            "smart_clipboard": 3,
         }
-        total = 0
+        total = 1  # Core token-budget-safe defroster_catalog router
         for k, v in mods.items():
             if v.get("enabled", True):
                 total += counts.get(k, 1)
@@ -4907,8 +4909,9 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_save_skills.pack(side="left")
 
-        scroll = ctk.CTkScrollableFrame(self.tab_skills, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=15, pady=(0, 10))
+        self.scroll_skills = ctk.CTkScrollableFrame(self.tab_skills, fg_color="transparent")
+        self.scroll_skills.pack(fill="both", expand=True, padx=15, pady=(0, 10))
+        scroll = self.scroll_skills
 
         self.module_switches = {}
         modules = self.config_data.get("modules", {})
@@ -4938,13 +4941,13 @@ class MammouthControlCenter(ctk.CTk):
             "file_ops": "6 Tools",
             "shell_processes": "8 Tools (Privileged)",
             "putty_ssh": "6 Tools",
-            "system_monitor": "4 Tools",
+            "system_monitor": "5 Tools",
             "web_tools": "2 Tools (SSRF Shield)",
-            "screen_capture": "5 Tools (Vision Gate)",
+            "screen_capture": "7 Tools (Vision Gate)",
             "mammouth_code": "5 Tools (Agent Bridge)",
             "desktop_input": "9 Tools",
             "google_drive": "11 Tools (Cloud & Docs)",
-            "browser_agent": "12 Tools (Edge / Playwright)",
+            "browser_agent": "14 Tools (Multi-Browser / Playwright)",
             "workspace_memory": "4 Tools (Local RAG)",
             "smart_clipboard": "3 Tools (AI Bridge)"
         }
