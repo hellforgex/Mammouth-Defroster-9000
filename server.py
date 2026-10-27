@@ -189,7 +189,7 @@ mcp = FastMCP(
     Mammouth Defroster 9000 (v0.7.0): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, browser automation, Google Drive cloud integration, and Mammouth Code CLI agent automation exclusively for Mammouth.ai.
     Core Tool Hub: Use 'defroster_catalog' or 'file_read' to discover available tools across [files, shell, browser, screen, desktop, system, scheduler, gdrive, clipboard, memory].
-    Dynamic Tooling: If a required capability is not available as a built-in MCP tool, write a custom Python or PowerShell script using 'file_write' and run it using 'powershell_exec' or 'command_run'.
+    Dynamic Tooling: If a required capability is not available as a built-in MCP tool, write a custom Python or PowerShell script using 'file_write' and execute it locally via 'powershell_exec' or 'command_run' ($0 cost). Do NOT use 'mammouth_code_run_task' to run existing local scripts.
     Always prioritize safety, sandboxing, and precision.
     """
 )
@@ -526,7 +526,7 @@ def defroster_catalog(category: Optional[str] = None, search: Optional[str] = No
     """Mammouth Defroster Core Skill Directory & Capability Router (defrost / defroster main hub).
 
     Lists available Defroster tools grouped by category.
-    Dynamic Tooling Rule: If a needed capability is not available as a built-in tool, create a custom Python or PowerShell script using file_write and execute it via powershell_exec.
+    Dynamic Tooling Rule: If a needed capability is not available as a built-in tool, create a custom Python or PowerShell script using file_write and execute it locally via powershell_exec or command_run ($0 API cost). Do not use mammouth_code_run_task for local script execution.
 
     Args:
         category: Optional category filter ('files', 'shell', 'browser', 'screen', 'desktop', 'system', 'scheduler', 'gdrive', 'clipboard', 'memory', 'all').
@@ -569,7 +569,7 @@ def defroster_catalog(category: Optional[str] = None, search: Optional[str] = No
         "total_categories": len(filtered_categories),
         "available_categories": list(_DEFROSTER_MODULE_CATALOG.keys()),
         "categories": filtered_categories,
-        "dynamic_tooling_advice": "If no built-in tool satisfies your goal, use 'file_write' to save a Python or PowerShell script into the workspace, and execute it via 'powershell_exec' or 'command_run'."
+        "dynamic_tooling_advice": "To execute custom or newly written scripts (e.g. skills/*.py, *.ps1), ALWAYS use 'powershell_exec' or 'command_run' ($0 cost, local). Do not use 'mammouth_code_run_task' to run existing scripts as it consumes API budget."
     }
 
 def register_active_tools():

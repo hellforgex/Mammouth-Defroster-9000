@@ -207,6 +207,20 @@ class TestMammouthCodeModule(unittest.TestCase):
             global_entry = json.load(f)["mcp"]["mammouth-defroster-9000"]
         self.assertEqual(global_entry["headers"]["Authorization"], f"Bearer {api_token}")
 
+    @patch("modules.mammouth_code.get_mammouth_executable", return_value="C:\\dummy\\mammouth.exe")
+    @patch("modules.mammouth_code.subprocess.run")
+    def test_run_mammouth_task_budget_hint(self, mock_run, mock_exe):
+        mock_proc = unittest.mock.MagicMock()
+        mock_proc.returncode = 1
+        mock_proc.stdout = ""
+        mock_proc.stderr = "Error: Budget has been exceeded! Current cost: 7.17 | Max budget: 7.00"
+        mock_run.return_value = mock_proc
+
+        res = run_mammouth_task(prompt="run skill")
+        self.assertFalse(res["success"])
+        self.assertIn("powershell_exec", res["error"])
+        self.assertIn("Defroster Hint", res["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

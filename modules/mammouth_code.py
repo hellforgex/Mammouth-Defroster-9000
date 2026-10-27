@@ -410,7 +410,11 @@ def run_mammouth_task(
     timeout_seconds: int = 180,
     auto_approve: bool = True
 ) -> Dict[str, Any]:
-    """Execute a coding task headless via Mammouth Code CLI ('mammouth run') and return output."""
+    """Execute a multi-turn autonomous coding task headless via Mammouth Code CLI ('mammouth run').
+    
+    NOTE: This invokes an external autonomous LLM agent loop which consumes API budget quota.
+    To execute existing local Python or PowerShell scripts (e.g. skills/*.py, *.ps1), ALWAYS use powershell_exec or command_run instead ($0 cost, local).
+    """
     exe = get_mammouth_executable()
     if not exe:
         return {
@@ -479,6 +483,9 @@ def run_mammouth_task(
         duration = round(time.time() - start_time, 2)
         out = (proc.stdout or "").strip()
         err = (proc.stderr or "").strip()
+        if "budget has been exceeded" in err.lower() or "budget has been exceeded" in out.lower():
+            hint = "\n[Defroster Hint] Mammouth Code CLI API budget was exceeded. To execute local scripts (.py, .ps1) without consuming API budget, use the 'powershell_exec' or 'command_run' tools directly."
+            err = (err + hint).strip()
         return {
             "success": proc.returncode == 0,
             "returncode": proc.returncode,
