@@ -262,7 +262,7 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.7.3"
+APP_VERSION = "v0.7.2"
 
 
 
@@ -1571,7 +1571,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self.lbl_nav_tools = ctk.CTkLabel(
             inner_card,
-            text=f"⚡ {self._count_active_tools()} Tools active",
+            text=f"⚡ {self._count_active_tools()}",
             font=ctk.CTkFont(size=11, weight="bold"),
             text_color=THEME_SUCCESS
         )
@@ -2682,7 +2682,7 @@ class MammouthControlCenter(ctk.CTk):
         tile1 = ctk.CTkFrame(metrics_frame, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
         tile1.pack(side="left", fill="both", expand=True, padx=(0, 8))
         ctk.CTkLabel(tile1, text="TOOLS", font=ctk.CTkFont(size=10, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", padx=14, pady=(10, 2))
-        self.lbl_stat_tools = ctk.CTkLabel(tile1, text=f"⚡ {self._count_active_tools()} Tools active", font=ctk.CTkFont(size=14, weight="bold"), text_color=("#059669", "#10B981"))
+        self.lbl_stat_tools = ctk.CTkLabel(tile1, text=f"⚡ {self._count_active_tools()}", font=ctk.CTkFont(size=14, weight="bold"), text_color=("#059669", "#10B981"))
         self.lbl_stat_tools.pack(anchor="w", padx=14, pady=(0, 10))
 
         # Tile 2: CPU
@@ -4120,30 +4120,27 @@ class MammouthControlCenter(ctk.CTk):
             command=submit
         ).pack(side="right")
 
-    def _count_active_tools(self) -> int:
-        mods = self.config_data.get("modules", {})
-        counts = {
-            "memory": 5,
-            "tasks_kanban": 4,
-            "task_scheduler": 5,
-            "file_ops": 6,
-            "shell_processes": 8,
-            "putty_ssh": 6,
-            "system_monitor": 5,
-            "web_tools": 2,
-            "screen_capture": 7,
-            "mammouth_code": 5,
-            "desktop_input": 9,
-            "google_drive": 11,
-            "browser_agent": 14,
-            "workspace_memory": 4,
-            "smart_clipboard": 3,
-        }
-        total = 1  # Core token-budget-safe defroster_catalog router
-        for k, v in mods.items():
-            if v.get("enabled", True):
-                total += counts.get(k, 1)
-        return total
+    def _count_active_tools(self) -> str:
+        prof_id = str(self.config_data.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+        from config import TOOL_PROFILES
+        if prof_id in TOOL_PROFILES and prof_id not in ("all", "custom"):
+            p_tools = len(TOOL_PROFILES[prof_id].get("tools", []))
+            return f"{p_tools} Promoted (86 Total)"
+        elif prof_id == "custom":
+            mods = self.config_data.get("modules", {})
+            cnt = 1
+            tool_counts = {
+                "memory": 5, "tasks_kanban": 4, "task_scheduler": 5, "file_ops": 6,
+                "shell_processes": 8, "putty_ssh": 6, "system_monitor": 5, "web_tools": 2,
+                "screen_capture": 7, "mammouth_code": 5, "desktop_input": 9, "google_drive": 11,
+                "browser_agent": 14, "workspace_memory": 4, "smart_clipboard": 3
+            }
+            for k, v in mods.items():
+                if v.get("enabled", True):
+                    cnt += tool_counts.get(k, 1)
+            return f"{cnt} Custom (86 Total)"
+        else:
+            return "86 Promoted (Uncapped)"
 
     def _copy_mcp_client_config(self):
         url = self._calculate_active_endpoint_url()
@@ -4304,7 +4301,7 @@ class MammouthControlCenter(ctk.CTk):
 
                 active_cnt = self._count_active_tools()
                 if hasattr(self, "lbl_stat_tools"):
-                    self.lbl_stat_tools.configure(text=f"⚡ {active_cnt} Tools active")
+                    self.lbl_stat_tools.configure(text=f"⚡ {self._count_active_tools()}")
                 if hasattr(self, "lbl_nav_tools"):
                     self.lbl_nav_tools.configure(text=f"⚡ {active_cnt} Tools active")
 
@@ -5009,8 +5006,8 @@ class MammouthControlCenter(ctk.CTk):
 
         btn_enable_safe = ctk.CTkButton(
             btn_box,
-            text="✅ Enable Safe Tools",
-            width=140,
+            text="🛡️ Mammouth Chat Safe",
+            width=165,
             height=32,
             fg_color=THEME_BTN_SEC_BG,
             hover_color=THEME_BTN_SEC_HOVER,
@@ -5034,6 +5031,68 @@ class MammouthControlCenter(ctk.CTk):
             command=self._save_skills
         )
         btn_save_skills.pack(side="left")
+
+        # Profile & Schema Budget Card
+        profile_card = ctk.CTkFrame(self.tab_skills, fg_color=THEME_CARD_BG, corner_radius=10, border_width=1, border_color=THEME_CARD_BORDER)
+        profile_card.pack(fill="x", padx=15, pady=(0, 10))
+
+        prof_inner = ctk.CTkFrame(profile_card, fg_color="transparent")
+        prof_inner.pack(fill="x", padx=14, pady=10)
+
+        prof_left = ctk.CTkFrame(prof_inner, fg_color="transparent")
+        prof_left.pack(side="left", fill="x", expand=True)
+
+        ctk.CTkLabel(
+            prof_left,
+            text="🎯 Active Tool Exposure Profile (MCP tools/list schema)",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY
+        ).pack(anchor="w")
+
+        from config import TOOL_PROFILES
+        profile_labels = [p["label"] for p in TOOL_PROFILES.values()]
+        self._profile_id_by_label = {p["label"]: p["id"] for p in TOOL_PROFILES.values()}
+        self._profile_label_by_id = {p["id"]: p["label"] for p in TOOL_PROFILES.values()}
+
+        curr_prof_id = str(self.config_data.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+        curr_prof_label = self._profile_label_by_id.get(curr_prof_id, TOOL_PROFILES["mammouth_safe"]["label"])
+        self.var_tool_profile = ctk.StringVar(value=curr_prof_label)
+
+        opt_profile = ctk.CTkOptionMenu(
+            prof_left,
+            variable=self.var_tool_profile,
+            values=profile_labels,
+            width=380,
+            height=30,
+            fg_color=THEME_INPUT_BG,
+            button_color=THEME_ACCENT,
+            button_hover_color=THEME_ACCENT_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._on_tool_profile_change
+        )
+        opt_profile.pack(anchor="w", pady=(6, 2))
+
+        prof_right = ctk.CTkFrame(prof_inner, fg_color="transparent")
+        prof_right.pack(side="right", padx=(10, 0))
+
+        self.lbl_schema_gauge = ctk.CTkLabel(
+            prof_right,
+            text="",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#10B981"
+        )
+        self.lbl_schema_gauge.pack(anchor="e")
+
+        self.lbl_schema_subtext = ctk.CTkLabel(
+            prof_right,
+            text="Platform Limit: ~7,719 tokens",
+            font=ctk.CTkFont(size=11),
+            text_color=THEME_TEXT_MUTED
+        )
+        self.lbl_schema_subtext.pack(anchor="e")
+
+        self._update_schema_gauge(curr_prof_id)
 
         self.scroll_skills = ctk.CTkScrollableFrame(self.tab_skills, fg_color="transparent")
         self.scroll_skills.pack(fill="both", expand=True, padx=15, pady=(0, 10))
@@ -5466,13 +5525,47 @@ class MammouthControlCenter(ctk.CTk):
             return "denied"
         return result[0]
 
+    def _on_tool_profile_change(self, selected_label: str):
+        prof_id = getattr(self, "_profile_id_by_label", {}).get(selected_label, "mammouth_safe")
+        self.config_data.setdefault("server", {})["tool_profile"] = prof_id
+        save_config(self.config_data)
+        self._update_schema_gauge(prof_id)
+        if hasattr(self, "lbl_stat_tools"):
+            self.lbl_stat_tools.configure(text=f"⚡ {self._count_active_tools()}")
+        self._log(f"[TOOLS] Active tool profile switched to '{prof_id}' ({selected_label}).")
+
+    def _update_schema_gauge(self, prof_id: str):
+        from config import TOOL_PROFILES
+        p_info = TOOL_PROFILES.get(prof_id, TOOL_PROFILES["mammouth_safe"])
+        est = p_info.get("token_estimate", 0)
+        t_cnt = len(p_info.get("tools", []))
+        if prof_id == "all":
+            badge_text = "⚠️ ~16,461 tokens (Exceeds Chat limit!)"
+            color = "#EF4444"
+            subtext = "Claude Desktop / Cursor uncapped"
+        elif prof_id == "custom":
+            badge_text = "⚙️ Custom Selection"
+            color = "#10B981"
+            subtext = "Promotes tools from enabled modules below"
+        else:
+            badge_text = f"✅ ~{est:,} tokens ({t_cnt} tools promoted)"
+            color = "#10B981"
+            subtext = "Safe for Mammouth AI Chat (< 7,719 limit)"
+
+        if hasattr(self, "lbl_schema_gauge"):
+            self.lbl_schema_gauge.configure(text=badge_text, text_color=color)
+        if hasattr(self, "lbl_schema_subtext"):
+            self.lbl_schema_subtext.configure(text=subtext)
+
     def _enable_safe_skills(self):
-        for k, v in self.module_switches.items():
-            if k == "shell_processes":
-                v.set(False)
-            else:
-                v.set(True)
+        self.config_data.setdefault("server", {})["tool_profile"] = "mammouth_safe"
+        from config import TOOL_PROFILES
+        lbl = TOOL_PROFILES["mammouth_safe"]["label"]
+        if hasattr(self, "var_tool_profile"):
+            self.var_tool_profile.set(lbl)
+        self._update_schema_gauge("mammouth_safe")
         self._save_skills()
+        self._log("[TOOLS] Preset 'Mammouth Chat Safe' activated: 10 core tools promoted under ~2,485 tokens.")
 
     def _save_skills(self):
         for key, var in self.module_switches.items():
@@ -5488,7 +5581,7 @@ class MammouthControlCenter(ctk.CTk):
         save_config(self.config_data)
         self._log("Updated module configuration in config.json.")
         if hasattr(self, "lbl_stat_tools"):
-            self.lbl_stat_tools.configure(text=f"⚡ Active Tools: {self._count_active_tools()}")
+            self.lbl_stat_tools.configure(text=f"⚡ {self._count_active_tools()}")
         if self.is_server_running:
             messagebox.showinfo("Saved", "Skills configuration saved!\n\nNote: Please restart the server for active tool updates to take effect.", parent=self)
         else:

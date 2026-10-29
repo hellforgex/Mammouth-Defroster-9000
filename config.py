@@ -58,7 +58,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "screen_copilot_hotkey_enabled": True, # Global hotkey (Ctrl+Shift+Space) for active window multimodal capture
         "screen_copilot_hotkey": "Ctrl+Shift+Space",
         "smart_clipboard_hotkey_enabled": True, # Global hotkey (Ctrl+Shift+K) for smart clipboard quick actions
-        "smart_clipboard_hotkey": "Ctrl+Shift+K"
+        "smart_clipboard_hotkey": "Ctrl+Shift+K",
+        "tool_profile": "mammouth_safe"         # Active Tool Profile: "mammouth_safe", "developer", "web_vision", "automation", "all", "custom"
     },
     "modules": {
 
@@ -164,6 +165,123 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "zen_mode": False
     }
 }
+
+
+TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
+    "mammouth_safe": {
+        "id": "mammouth_safe",
+        "name": "Mammouth Chat Safe",
+        "label": "🛡️ Mammouth Chat Safe (10 Tools - Recommended)",
+        "description": "Recommended for Mammouth AI Chat. Curated core tools (~2,485 tokens) guaranteed to fit within platform session limits.",
+        "icon": "🛡️",
+        "token_estimate": 2485,
+        "tools": [
+            "defroster_catalog",
+            "file_read",
+            "file_write",
+            "command_run",
+            "screen_capture",
+            "browser_navigate",
+            "browser_snapshot",
+            "memory_save",
+            "memory_recall",
+            "system_get_specs",
+            "clipboard_get_text",
+        ]
+    },
+    "developer": {
+        "id": "developer",
+        "name": "Developer & Scripting",
+        "label": "💻 Developer & Scripting (14 Tools)",
+        "description": "File search, chunk replacement, directory trees, local PowerShell execution, and diagnostics (~3,800 tokens).",
+        "icon": "💻",
+        "token_estimate": 3800,
+        "tools": [
+            "defroster_catalog",
+            "file_read",
+            "file_write",
+            "file_replace_chunk",
+            "file_search_text",
+            "directory_list",
+            "directory_tree",
+            "command_run",
+            "powershell_exec",
+            "system_get_specs",
+            "system_get_processes",
+            "memory_save",
+            "memory_recall",
+            "clipboard_get_text",
+        ]
+    },
+    "web_vision": {
+        "id": "web_vision",
+        "name": "Web & Vision",
+        "label": "👁️ Web & Vision (12 Tools)",
+        "description": "Browser automation (navigate, snapshot, click, fill), multi-monitor screen capture, and desktop input (~3,300 tokens).",
+        "icon": "👁️",
+        "token_estimate": 3300,
+        "tools": [
+            "defroster_catalog",
+            "browser_navigate",
+            "browser_snapshot",
+            "browser_screenshot",
+            "browser_click",
+            "browser_fill",
+            "screen_capture",
+            "screen_list_windows",
+            "screen_capture_active_window",
+            "mouse_click",
+            "keyboard_type",
+            "memory_save",
+            "memory_recall",
+        ]
+    },
+    "automation": {
+        "id": "automation",
+        "name": "Tasks & Automation",
+        "label": "⏱️ Tasks & Automation (11 Tools)",
+        "description": "Scheduled background prompt triggers and Kanban project management (~2,900 tokens).",
+        "icon": "⏱️",
+        "token_estimate": 2900,
+        "tools": [
+            "defroster_catalog",
+            "task_create",
+            "task_update",
+            "task_list",
+            "task_delete",
+            "task_schedule_create",
+            "task_schedule_list",
+            "task_schedule_control",
+            "task_schedule_delete",
+            "memory_save",
+            "memory_recall",
+        ]
+    },
+    "all": {
+        "id": "all",
+        "name": "Full Defroster (All Enabled Modules)",
+        "label": "⚡ Full Defroster (All 85+ Tools - Uncapped)",
+        "description": "Exposes all 85+ tools across all enabled modules (~16,461 tokens). Recommended for Claude Desktop or Cursor.",
+        "icon": "⚡",
+        "token_estimate": 16461,
+        "tools": []
+    },
+    "custom": {
+        "id": "custom",
+        "name": "Custom Module Selection",
+        "label": "⚙️ Custom Module Selection",
+        "description": "Advertise only tools belonging to modules explicitly toggled Active in the GUI below.",
+        "icon": "⚙️",
+        "token_estimate": 0,
+        "tools": []
+    }
+}
+
+
+def get_tool_profile(profile_id: Optional[str] = None) -> Dict[str, Any]:
+    """Retrieve metadata for a specific tool profile (defaults to 'mammouth_safe')."""
+    p_id = str(profile_id or '').strip().lower()
+    return TOOL_PROFILES.get(p_id, TOOL_PROFILES['mammouth_safe'])
 
 
 import base64

@@ -1,9 +1,26 @@
 # Changelog
 
-## [0.7.3] - 2026-10-29
+## [0.7.2] - 2026-10-29
+
+### ⚡ Features & MCP Tool Promotion Architecture
+- **Tool Profiles & Schema Budget Management:** Resolved tool promotion failures in Mammouth AI chat ("No matching tools were promoted") caused by schema token overload (86 tools totaling ~16,461 tokens vs ~7,719 token session budget):
+  - **Dynamic Tool Profiles:** Introduced configurable tool exposure profiles:
+    - `🛡️ Mammouth Chat Safe` (Default): 10 core tools (`defroster_catalog`, `file_read`, `file_write`, `screen_capture`, `browser_navigate`, `browser_snapshot`, `memory_save`, `memory_recall`, `system_get_specs`, `clipboard_get_text`, and optional `command_run`) consuming only **~2,485 tokens** (< 35% of platform budget), guaranteeing immediate tool promotion into Mammouth AI chat sessions.
+    - `💻 Developer & Scripting`: 14 tools (~3,800 tokens) for workspace file editing, search, local PowerShell execution, and diagnostics.
+    - `👁️ Web & Vision`: 12 tools (~3,300 tokens) for Playwright browser automation and multi-monitor screen capture.
+    - `⏱️ Tasks & Automation`: 11 tools (~2,900 tokens) for scheduled background triggers and Kanban boards.
+    - `⚡ Full Defroster`: 86 tools (~16,461 tokens) for uncapped clients (Claude Desktop, Cursor).
+    - `⚙️ Custom Module Selection`: Dynamically exposes only tools belonging to modules toggled Active in the GUI.
+  - **Dynamic Server-Side Tool Filtering:** FastMCP `_list_tools_mcp` dynamically reads the active profile from `config.json` on every request. Switching profiles in the GUI takes effect **immediately** on the very next chat session without requiring a server restart.
+  - **OpenAPI Schema Sanitization & Type Bug Fixes:**
+    - Repaired `screen_set_tracked_window` in `screen_capture.py` (`target: Union[str, int] = "auto"`), eliminating untyped `{}` parameter schemas.
+    - Repaired `memory_get` in `memory.py` (`id: Optional[Union[str, int]] = None`), eliminating empty dict `{}` inside `anyOf` arrays.
+    - Added automated `_sanitize_mcp_tool_schema` in `server.py` that inspects every tool's `inputSchema` before serialization, ensuring 100% valid OpenAPI types.
+  - **Enhanced `defroster_catalog` Router:** Now reports the active tool profile, promoted tools count, schema budget status, and supports on-the-fly profile switching via `switch_profile` parameter.
+  - **GUI Modular Capabilities Overhaul:** Added an Active Tool Exposure Profile dropdown, live Schema Token Budget meter (`Estimated Schema Budget: ~2,485 tokens / 7,719 limit (Safe ✅)`), and 1-click `🛡️ Mammouth Chat Safe` preset button. Dashboard KPI tile displays `⚡ 10 Promoted (86 Total)`.
 
 ### 🐛 UI & Desktop Automation Fixes
-- **Tasks & Automation Header Anti-Clipping:** Reordered Tkinter pack geometry across `tab_tasks`, `tab_memory`, `tab_mammouth_code`, `tab_skills`, and individual task cards. Action buttons (`➕ New Task`, `🔄 Refresh`) are now packed right-first (`side="right"`), preventing clipping against the window edge at all display resolutions. Subtitle labels now wrap gracefully via `wraplength=480`.
+- **Tasks & Automation Header Anti-Clipping:** Reordered Tkinter pack geometry across `tab_tasks`, `tab_memory`, `tab_mammouth_code`, `tab_skills`, and individual task cards so action buttons (`➕ New Task`, `🔄 Refresh`) are packed right-first (`side="right"`), preventing clipping against the window edge at all display resolutions. Subtitle labels now wrap gracefully via `wraplength=480`.
 - **Web Chat Prompt Submission Engine:** Overhauled `send_chat_prompt` in `embedded_browser.py`:
   - Reset React synthetic value tracker (`el._valueTracker.setValue('')`), prompting React to recognize injected text and enable the Send button.
   - Implemented an intelligent multilingual send button resolver (`send`, `envoyer`, `submit`, `prompt`, `valider`) that strictly filters out file attachment, mic, and tool buttons, selecting the true action submit button.
@@ -17,8 +34,6 @@
   - **Execution Working Directory:** Relaunches `MammouthDefroster9000.exe` with explicit working directory (`/D "%~2"`), preventing crashes caused by temporary directory cleanup.
   - **Dev-Mode Protection:** Gracefully informs users running from Python source to use `git pull` rather than attempting self-replacement of the git workspace.
 
-## [0.7.2] - 2026-10-29
-
 ### 🔒 Security Hardening & Remediation
 - **Autonomous CLI Agent Sandboxing (A-01):** Disabled `mammouth_code` by default in configuration. Enforced strict admin shell permission check on `mammouth_code_run_task`, `launch_mammouth_terminal`, and installer tools, preventing arbitrary command and code execution when `allow_admin_shell=false`. Defaulted `auto_approve` to `False`.
 - **Public Exposure Tunnel Gating (A-03):** Gated Tailscale Funnel in `start_server.bat`, `start_server.ps1`, and GUI server startup behind `server.auto_tunnel: true` and the configured port, preventing unwanted external port exposure.
@@ -27,17 +42,13 @@
   - Expanded read-only inspection to all file-reading cmdlets (`Select-String`, `Get-FileHash`, `Get-ItemProperty`, `Get-WinEvent`, `Get-AuthenticodeSignature`, etc.).
   - Hardened root recursion detection against drive root traversal variants.
   - Blocked access to PowerShell PSDrives (`env:`, `HKLM:`, `HKCU:`, `cert:`, `variable:`, `wsman:`), `$env:` expansion, tilde (`~`) home directory expansion, and `Get-Clipboard`.
-  - Prohibited UNC network paths (`//` and `\\`) in Read-Only mode.
+  - Prohibited UNC network paths (`//` and `\`) in Read-Only mode.
   - Expanded sensitive credentials denylist to include `credentials.json`, `oauth.db`, `gdrive_token.json`, `tasks.db`, `memory.db`, `.env`, and wildcard variants.
 - **Security Shield Blacklist Expansion (B-07):** Added `curl.exe`, `wget.exe`, `Start-Process`/`saps`, `pwsh.exe -c`, `python.exe -c`/`-m`, and `Invoke-Command -ScriptBlock` to `BLOCKED_COMMAND_PATTERNS` across all modes.
 - **Desktop Open Execution Gate (B-08):** Restricted `desktop_open` when `allow_admin_shell=false`: prohibited command-line arguments and execution of desktop binaries/scripts (`.exe`, `.bat`, `.cmd`, `.ps1`, etc.), permitting only safe web URLs (`http://`, `https://`, `mailto:`) and workspace documents.
 - **PuTTY & SSH Management Hardening (B-09):** Disabled `putty_ssh` by default in configuration. Gated remote command execution and SCP file transfers behind admin shell permissions. Prohibited leading `-` in all parameter values and validated `remote_path`.
 - **Package Supply Chain & Dependency Upgrades (C-05):** Fully upgraded all locked dependencies in `uv.lock` via `uv lock --upgrade` (`fastmcp` 4.1.4, `mcp` 2.3.0, `authlib` 1.9.1, `pillow` 13.0.0, `pyjwt` 2.15.1, `certifi`, etc.).
 - **Update Verification & Zip-Slip Defense (C-01):** Added archive traversal checks (`_verify_zip_slip_safe`) to updater and `install.ps1` to prevent Zip-Slip vulnerabilities. Added support for release signature verification.
-
-### 🐛 UI & Automation Fixes
-- **Tasks UI Header Layout & Anti-Clipping:** Reordered Tkinter pack geometry across `tab_tasks`, `tab_memory`, `tab_mammouth_code`, `tab_skills`, and individual task cards so action buttons (`➕ New Task`, `🔄 Refresh`, etc.) are packed right-first (`side="right"`), preventing clipping against the window edge regardless of screen resolution. Added `wraplength=480` and streamlined subtitles.
-- **Task Execution Web Chat Prompt Submission:** Enhanced `send_chat_prompt` in `embedded_browser.py` to reset React synthetic value tracker (`_valueTracker`), accurately resolve the send button across English and French locales while filtering out attachment/upload buttons, poll for React disabled-state resolution, dispatch synthetic keyboard events, and provide a native Win32 hardware `VK_RETURN` fallback for 100% reliable automated prompt delivery.
 
 ### ⚡ Features
 - **Daily Startup Auto-Update Check:** Added 1x daily rate-limiting to automatic startup update checks (throttled to 24-hour intervals) while preserving immediate checks on manual button clicks.

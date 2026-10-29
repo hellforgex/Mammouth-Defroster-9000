@@ -57,7 +57,7 @@ except ImportError:
             create_base_app
         )
 
-from config import load_config, _encrypt_dpapi, _decrypt_dpapi
+from config import load_config, save_config, _encrypt_dpapi, _decrypt_dpapi, TOOL_PROFILES, get_tool_profile
 
 # Import modular capabilities
 from modules.memory import memory_save, memory_recall, memory_get, memory_delete, memory_list
@@ -186,7 +186,7 @@ from modules.google_drive import (
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.7.3): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
+    Mammouth Defroster 9000 (v0.7.2): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, browser automation, Google Drive cloud integration, and Mammouth Code CLI agent automation exclusively for Mammouth.ai.
     Core Tool Hub: Use 'defroster_catalog' or 'file_read' to discover available tools across [files, shell, browser, screen, desktop, system, scheduler, gdrive, clipboard, memory].
     Dynamic Tooling: If a required capability is not available as a built-in MCP tool, write a custom Python or PowerShell script using 'file_write' and execute it locally via 'powershell_exec' or 'command_run' ($0 cost). Do NOT use 'mammouth_code_run_task' to run existing local scripts.
@@ -522,17 +522,34 @@ _DEFROSTER_MODULE_CATALOG: Dict[str, Dict[str, Any]] = {
 }
 
 
-def defroster_catalog(category: Optional[str] = None, search: Optional[str] = None) -> Dict[str, Any]:
+def defroster_catalog(
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    switch_profile: Optional[str] = None
+) -> Dict[str, Any]:
     """Mammouth Defroster Core Skill Directory & Capability Router (defrost / defroster main hub).
 
-    Lists available Defroster tools grouped by category.
+    Lists available Defroster tools grouped by category, reports active tool profile, and promoted tools.
     Dynamic Tooling Rule: If a needed capability is not available as a built-in tool, create a custom Python or PowerShell script using file_write and execute it locally via powershell_exec or command_run ($0 API cost). Do not use mammouth_code_run_task for local script execution.
 
     Args:
         category: Optional category filter ('files', 'shell', 'browser', 'screen', 'desktop', 'system', 'scheduler', 'gdrive', 'clipboard', 'memory', 'all').
         search: Optional keyword search string (e.g. 'pdf', 'click', 'window', 'gpu').
+        switch_profile: Optional profile switch ('mammouth_safe', 'developer', 'web_vision', 'automation', 'all', 'custom').
     """
     cfg = load_config()
+    profile_switch_msg = None
+    if switch_profile:
+        target_p = str(switch_profile).strip().lower()
+        if target_p in TOOL_PROFILES:
+            cfg.setdefault("server", {})["tool_profile"] = target_p
+            save_config(cfg)
+            profile_switch_msg = f"Tool profile successfully switched to '{target_p}' ({TOOL_PROFILES[target_p]['name']})."
+        else:
+            profile_switch_msg = f"Unknown profile '{switch_profile}'. Available: {list(TOOL_PROFILES.keys())}"
+
+    active_profile_key = str(cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+    profile_info = TOOL_PROFILES.get(active_profile_key, TOOL_PROFILES["mammouth_safe"])
     mods = cfg.get("modules", {})
 
     target_category = str(category or "").strip().lower()
@@ -564,13 +581,28 @@ def defroster_catalog(category: Optional[str] = None, search: Optional[str] = No
                 "tools": matched_tools
             }
 
-    return {
+    token_est = profile_info.get("token_estimate", 0)
+    budget_status = "Safe for Mammouth AI Chat (< 3,000 tokens / 7,719 limit)" if token_est < 4000 else "Warning: Exceeds Mammouth AI Chat session limit (~7,719 tokens)"
+
+    res = {
         "status": "success",
+        "active_tool_profile": {
+            "id": active_profile_key,
+            "name": profile_info["name"],
+            "token_estimate": token_est,
+            "schema_budget_status": budget_status,
+            "promoted_tools_count": len(profile_info.get("tools", [])) if profile_info.get("tools") else "all enabled",
+            "promoted_tools": profile_info.get("tools", ["all"])
+        },
+        "available_profiles": [p["id"] for p in TOOL_PROFILES.values()],
         "total_categories": len(filtered_categories),
         "available_categories": list(_DEFROSTER_MODULE_CATALOG.keys()),
         "categories": filtered_categories,
         "dynamic_tooling_advice": "To execute custom or newly written scripts (e.g. skills/*.py, *.ps1), ALWAYS use 'powershell_exec' or 'command_run' ($0 cost, local). Do not use 'mammouth_code_run_task' to run existing scripts as it consumes API budget."
     }
+    if profile_switch_msg:
+        res["profile_switch_status"] = profile_switch_msg
+    return res
 
 def register_active_tools():
     """Register tools dynamically based on enabled modules in config.json."""
@@ -708,6 +740,120 @@ def register_active_tools():
 
 
 register_active_tools()
+
+# ==========================================
+# TOOL PROFILING & SCHEMA BUDGET MANAGEMENT
+# ==========================================
+
+_DEFROSTER_TOOL_TO_MODULE: Dict[str, str] = {
+    "defroster_catalog": "core",
+    "memory_save": "memory", "memory_recall": "memory", "memory_get": "memory", "memory_delete": "memory", "memory_list": "memory",
+    "task_create": "tasks_kanban", "task_update": "tasks_kanban", "task_list": "tasks_kanban", "task_delete": "tasks_kanban",
+    "task_schedule_create": "task_scheduler", "task_schedule_list": "task_scheduler", "task_schedule_control": "task_scheduler", "task_schedule_delete": "task_scheduler", "task_schedule_get_presets": "task_scheduler",
+    "file_read": "file_ops", "file_write": "file_ops", "file_replace_chunk": "file_ops", "file_search_text": "file_ops", "directory_list": "file_ops", "directory_tree": "file_ops",
+    "local_exec_command": "shell_processes", "command_run": "shell_processes", "powershell_exec": "shell_processes", "cmd_exec": "shell_processes", "desktop_open": "shell_processes", "process_start_background": "shell_processes", "process_list_background": "shell_processes", "process_get_output": "shell_processes", "process_kill_background": "shell_processes",
+    "ssh_exec_command": "putty_ssh", "ssh_open_putty_window": "putty_ssh", "ssh_transfer_file": "putty_ssh", "ssh_list_saved_hosts": "putty_ssh", "ssh_save_host": "putty_ssh", "ssh_list_putty_registry_sessions": "putty_ssh",
+    "system_get_specs": "system_monitor", "system_get_processes": "system_monitor", "system_get_gpu_info": "system_monitor", "system_get_event_logs": "system_monitor", "system_list_event_channels": "system_monitor",
+    "screen_capture": "screen_capture", "screen_list_monitors": "screen_capture", "screen_list_windows": "screen_capture", "screen_capture_active_window": "screen_capture", "screen_capture_window": "screen_capture", "screen_set_tracked_window": "screen_capture", "screen_get_tracked_window": "screen_capture",
+    "web_fetch_url": "web_tools", "web_check_status": "web_tools",
+    "mammouth_code_status": "mammouth_code", "get_mammouth_code_status": "mammouth_code", "launch_mammouth_terminal": "mammouth_code", "run_mammouth_task": "mammouth_code", "install_or_update_mammouth_code": "mammouth_code", "sync_opencode_mcp_config": "mammouth_code",
+    "desktop_get_screen_info": "desktop_input", "mouse_move": "desktop_input", "mouse_click": "desktop_input", "mouse_drag": "desktop_input", "mouse_scroll": "desktop_input", "mouse_get_position": "desktop_input", "keyboard_type": "desktop_input", "keyboard_press": "desktop_input", "keyboard_hotkey": "desktop_input",
+    "gdrive_status": "google_drive", "gdrive_list_files": "google_drive", "gdrive_search_files": "google_drive", "gdrive_get_metadata": "google_drive", "gdrive_read_file": "google_drive", "gdrive_download_to_workspace": "google_drive", "gdrive_upload_from_workspace": "google_drive", "gdrive_write_file": "google_drive", "gdrive_update_file": "google_drive", "gdrive_create_folder": "google_drive", "gdrive_delete_file": "google_drive",
+    "browser_navigate": "browser_agent", "browser_snapshot": "browser_agent", "browser_screenshot": "browser_agent", "browser_click": "browser_agent", "browser_fill": "browser_agent", "browser_press_key": "browser_agent", "browser_hover": "browser_agent", "browser_scroll": "browser_agent", "browser_get_content": "browser_agent", "browser_evaluate": "browser_agent", "browser_tabs": "browser_agent", "browser_status": "browser_agent", "browser_close": "browser_agent", "browser_restart": "browser_agent", "browser_list_browsers": "browser_agent",
+    "workspace_index_directory": "workspace_memory", "workspace_search": "workspace_memory", "workspace_find_symbols": "workspace_memory", "workspace_get_stats": "workspace_memory",
+    "clipboard_get_text": "smart_clipboard", "clipboard_set_text": "smart_clipboard", "clipboard_transform": "smart_clipboard"
+}
+
+
+def _sanitize_schema_dict(schema: Dict[str, Any]) -> None:
+    """Recursively repair OpenAPI/JSON schema dictionary."""
+    if not isinstance(schema, dict):
+        return
+
+    if "type" not in schema:
+        schema["type"] = "object"
+
+    props = schema.get("properties")
+    if not isinstance(props, dict):
+        return
+
+    for prop_name, prop_val in list(props.items()):
+        if not isinstance(prop_val, dict):
+            props[prop_name] = {"type": "string"}
+            continue
+
+        if not prop_val:
+            prop_val["type"] = "string"
+            continue
+
+        if "anyOf" in prop_val and isinstance(prop_val["anyOf"], list):
+            cleaned_anyof = []
+            for sub in prop_val["anyOf"]:
+                if isinstance(sub, dict):
+                    if not sub:
+                        cleaned_anyof.append({"type": "string"})
+                    elif "type" not in sub and "$ref" not in sub:
+                        sub["type"] = "string"
+                        cleaned_anyof.append(sub)
+                    else:
+                        cleaned_anyof.append(sub)
+            prop_val["anyOf"] = cleaned_anyof
+
+        if "type" not in prop_val and "anyOf" not in prop_val and "oneOf" not in prop_val and "$ref" not in prop_val:
+            prop_val["type"] = "string"
+
+
+def _sanitize_mcp_tool_schema(tool: Any) -> None:
+    """Sanitize and repair OpenAPI / JSON schema constructs on mcp.types.Tool or FastMCP Tool."""
+    schema = getattr(tool, "inputSchema", None) or getattr(tool, "input_schema", None)
+    if isinstance(schema, dict):
+        _sanitize_schema_dict(schema)
+    if hasattr(tool, "parameters") and isinstance(tool.parameters, dict):
+        _sanitize_schema_dict(tool.parameters)
+
+
+_orig_list_tools = mcp.list_tools
+
+
+async def _profile_filtered_list_tools(*args, **kwargs) -> Any:
+    """Filter and sanitize advertised tools dynamically based on active tool profile in config.json."""
+    tools = await _orig_list_tools(*args, **kwargs)
+    cfg = load_config()
+    profile_key = str(cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+
+    if profile_key == "all":
+        filtered_tools = list(tools)
+    elif profile_key == "custom":
+        mods = cfg.get("modules", {})
+        filtered_tools = [
+            t for t in tools
+            if t.name == "defroster_catalog" or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(t.name, ""), {}).get("enabled", True)
+        ]
+    else:
+        profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
+        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog"}
+        filtered_tools = [t for t in tools if t.name in allowed_names]
+
+    # Sanitize each tool schema
+    for t in filtered_tools:
+        _sanitize_mcp_tool_schema(t)
+
+    return filtered_tools
+
+
+mcp.list_tools = _profile_filtered_list_tools
+
+# Also wrap _list_tools_mcp if present (older FastMCP protocol handler)
+if hasattr(mcp, "_list_tools_mcp"):
+    _orig_list_tools_mcp = mcp._list_tools_mcp
+
+    async def _profile_filtered_list_tools_mcp(request: Any = None) -> Any:
+        result = await _orig_list_tools_mcp(request)
+        for tool in result.tools:
+            _sanitize_mcp_tool_schema(tool)
+        return result
+
+    mcp._list_tools_mcp = _profile_filtered_list_tools_mcp
 
 # ==========================================
 # AUTHENTICATION & SECURITY MIDDLEWARE

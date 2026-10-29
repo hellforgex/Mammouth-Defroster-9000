@@ -3,7 +3,7 @@ import sqlite3
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 
 import sys
 
@@ -199,7 +199,7 @@ def memory_list(category: Optional[str] = None, limit: int = 50) -> List[Dict[st
     conn.close()
     return [dict(r) for r in rows]
 
-def memory_get(key: str = "", name: Optional[str] = None, id: Optional[Any] = None) -> Dict[str, Any]:
+def memory_get(key: str = "", name: Optional[str] = None, id: Optional[Union[str, int]] = None) -> Dict[str, Any]:
     """Retrieve full content of a specific memory entry by exact key."""
     actual_key = str(key or name or (str(id) if id is not None else "")).strip()
     if not actual_key:

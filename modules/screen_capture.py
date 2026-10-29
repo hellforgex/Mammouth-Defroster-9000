@@ -4,7 +4,7 @@ import io
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 
 try:
     from PIL import Image as PILImage, ImageGrab
@@ -706,7 +706,7 @@ def capture_window_via_printwindow(hwnd: int) -> Optional[Any]:
         return None
 
 
-def screen_set_tracked_window(target: Any) -> Dict[str, Any]:
+def screen_set_tracked_window(target: Union[str, int] = "auto") -> Dict[str, Any]:
     """Set the target application or window to track for screenshots.
 
     Args:
