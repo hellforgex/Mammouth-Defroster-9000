@@ -2,7 +2,24 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.7.0**
+> **Current Version:** **v0.7.1**
+
+---
+
+## 🚀 What's New in v0.7.1 — `v0.7.1 - Mammouth Defroster 9000`
+
+### 🐛 Bug Fix 1: Startup Resolution for Scheduled Tasks (`datetime` Scope)
+* **Resolved Startup Crash:** Fixed an issue where the Cockpit failed to initialize when pre-existing scheduled tasks were present in `tasks.db`. The task countdown and card rendering logic previously threw `NameError: name 'datetime' is not defined` because datetime symbols were only imported locally in helper functions.
+* **Module-Level Datetime & DPAPI Scope:** Promoted `datetime`, `timezone`, `timedelta`, and `_encrypt_dpapi` to the top-level module scope in `gui.py`, harmonizing datetime arithmetic and cryptographic credential handling across all UI components.
+
+### 🛡️ Bug Fix 2: Splash Screen Unmasking & Fail-Safe Crash Reporting
+* **Unmasked Error Reporting:** Enhanced `SplashScreen.close()` with explicit `withdraw()`, `update_idletasks()`, and topmost-state clearing.
+* **Isolated Startup Error Dialogs:** Wrapped root window initialization and UI callbacks to ensure that any startup exception immediately unmaps and destroys the splash window, rendering a topmost modal error dialog and appending full stack traces to `gui_crash.log`. Error dialogs are never hidden behind an always-on-top splash screen.
+
+### ⏱️ Feature Hardening: Task Scheduler & Countdown Robustness
+* **Timezone-Aware Countdown Arithmetic:** Added automatic timezone normalization (`.astimezone().replace(tzinfo=None)`) for ISO 8601 timestamps containing UTC `Z` indicators or explicit UTC offsets, preventing `TypeError: can't subtract offset-naive and offset-aware datetimes`.
+* **Dynamic KPI Stat Cleanup:** Ensured the "Next Trigger" KPI label properly resets to `"No active task"` when tasks are deleted, completed, or when the task database is empty.
+* **Per-Card Error Isolation:** Wrapped individual task card countdown updates in isolated exception blocks so corrupted or destroyed widget handles never halt updates for remaining tasks.
 
 ---
 

@@ -1141,9 +1141,12 @@ def browser_tabs(action: str = "list", tab_index: int = -1, url: str = "") -> Di
 def browser_status() -> Dict[str, Any]:
     """Get the current operational status of the automated browser agent."""
     try:
-        return _WORKER.call("status")
+        res = _WORKER.call("status")
+        if isinstance(res, dict) and "available_browsers" not in res:
+            res["available_browsers"] = list_available_browsers()
+        return res
     except Exception as e:
-        return {"running": False, "error": str(e)}
+        return {"running": False, "error": str(e), "available_browsers": list_available_browsers()}
 
 
 def browser_close() -> Dict[str, Any]:

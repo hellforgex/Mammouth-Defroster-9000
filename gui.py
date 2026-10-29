@@ -27,6 +27,7 @@ import queue
 import threading
 import subprocess
 import webbrowser
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Callable
 
@@ -67,7 +68,7 @@ if (BASE_DIR / "mcpserv").exists() and str(BASE_DIR / "mcpserv") not in sys.path
 if (BASE_DIR / "modules").exists() and str(BASE_DIR / "modules") not in sys.path:
     sys.path.insert(0, str(BASE_DIR / "modules"))
 
-from config import load_config, save_config, get_lan_ip, generate_secure_token, _decrypt_dpapi, CONFIG_FILE
+from config import load_config, save_config, get_lan_ip, generate_secure_token, _encrypt_dpapi, _decrypt_dpapi, CONFIG_FILE
 from server import build_app, app
 from modules.embedded_browser import MammouthBrowserFrame, HAS_WEBVIEW2, parse_mammouth_quota_data
 from modules.updater import check_for_update, download_and_verify_update, apply_update_and_restart
@@ -103,7 +104,6 @@ def generate_self_signed_cert(cert_path: str, key_path: str, hostname: str = "lo
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric import rsa
         from cryptography.hazmat.primitives import serialization
-        import datetime
         import ipaddress
 
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -125,8 +125,8 @@ def generate_self_signed_cert(cert_path: str, key_path: str, hostname: str = "lo
             .issuer_name(issuer)
             .public_key(key.public_key())
             .serial_number(x509.random_serial_number())
-            .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
-            .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650))
+            .not_valid_before(datetime.now(timezone.utc))
+            .not_valid_after(datetime.now(timezone.utc) + timedelta(days=3650))
             .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
             .sign(key, hashes.SHA256())
         )
@@ -262,7 +262,7 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.7.0"
+APP_VERSION = "v0.7.1"
 
 
 
@@ -789,6 +789,29 @@ class SplashScreen(ctk.CTkToplevel):
         except Exception:
             pass
 
+    def close(self):
+        """Safely destroy the splash screen and unmask underlying windows."""
+        try:
+            self.attributes("-topmost", False)
+        except Exception:
+            pass
+        try:
+            self.grab_release()
+        except Exception:
+            pass
+        try:
+            self.withdraw()
+        except Exception:
+            pass
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
+        try:
+            self.destroy()
+        except Exception:
+            pass
+
 
 class CTkMammouthQuotaCard(ctk.CTkFrame):
     """Native CustomTkinter Sidebar Card for Mammouth.ai Quota & Telemetry."""
@@ -1122,64 +1145,77 @@ class MammouthControlCenter(ctk.CTk):
                 pass
 
         # Show splash loading screen
-        splash = None
+        self.splash = None
         try:
-            splash = SplashScreen(self)
+            self.splash = SplashScreen(self)
         except Exception:
             pass
 
-        if splash:
-            splash.set_progress(0.25, "Loading configuration and security credentials...")
-
-        self.config_data = load_config()
-        self.appearance_mode = self.config_data.get("server", {}).get("appearance_mode", "Dark")
-        ctk.set_appearance_mode(self.appearance_mode)
-
-        self.uvicorn_server = None
-        self.server_thread: Optional[threading.Thread] = None
-        self.is_server_running = False
-        self.dynamic_tunnel_url: Optional[str] = None
-        self.server_start_time = None
-        self.log_filter_mode = "ALL"
-        self.sidebar_visible = True
-        self.zen_mode_active = False
-        self.task_countdown_labels: Dict[int, ctk.CTkLabel] = {}
-        self.scheduler_engine = None
-
-        if splash:
-            splash.set_progress(0.50, "Setting up system logging and audit streams...")
-
-        self._setup_logging()
-
-        if splash:
-            splash.set_progress(0.75, "Building desktop cockpit user interface...")
-
-        self._build_ui()
-        self._update_workspace_button_labels()
-        self._update_screen_target_button_label()
-        self._start_stats_timer()
-        self._init_task_scheduler()
-        self._init_global_hotkey()
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
-
-        # Register interactive screen capture consent callback
         try:
-            from modules.screen_capture import set_consent_prompt_callback
-            set_consent_prompt_callback(self._prompt_screen_capture_consent)
-        except Exception:
-            pass
+            if self.splash:
+                self.splash.set_progress(0.25, "Loading configuration and security credentials...")
 
-        if splash:
-            splash.set_progress(1.0, "Ready! Starting Mammouth Defroster 9000...")
+            self.config_data = load_config()
+            self.appearance_mode = self.config_data.get("server", {}).get("appearance_mode", "Dark")
+            ctk.set_appearance_mode(self.appearance_mode)
 
-            def finish_loading():
-                try:
-                    splash.destroy()
-                except Exception:
-                    pass
+            self.uvicorn_server = None
+            self.server_thread: Optional[threading.Thread] = None
+            self.is_server_running = False
+            self.dynamic_tunnel_url: Optional[str] = None
+            self.server_start_time = None
+            self.log_filter_mode = "ALL"
+            self.sidebar_visible = True
+            self.zen_mode_active = False
+            self.task_countdown_labels: Dict[int, ctk.CTkLabel] = {}
+            self.scheduler_engine = None
+
+            if self.splash:
+                self.splash.set_progress(0.50, "Setting up system logging and audit streams...")
+
+            self._setup_logging()
+
+            if self.splash:
+                self.splash.set_progress(0.75, "Building desktop cockpit user interface...")
+
+            self._build_ui()
+            self._update_workspace_button_labels()
+            self._update_screen_target_button_label()
+            self._start_stats_timer()
+            self._init_task_scheduler()
+            self._init_global_hotkey()
+            self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+            # Register interactive screen capture consent callback
+            try:
+                from modules.screen_capture import set_consent_prompt_callback
+                set_consent_prompt_callback(self._prompt_screen_capture_consent)
+            except Exception:
+                pass
+
+            if self.splash:
+                self.splash.set_progress(1.0, "Ready! Starting Mammouth Defroster 9000...")
+
+                def finish_loading():
+                    if getattr(self, "splash", None) is not None:
+                        try:
+                            self.splash.close()
+                        except Exception:
+                            pass
+                        self.splash = None
+                    self.deiconify()
+                    self.lift()
+                    self.focus_force()
+                    if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", False):
+                        self.after(200, self._start_server)
+                    if self.config_data.get("server", {}).get("auto_check_updates", True):
+                        self.after(2500, self._check_updates_async)
+                    if self.config_data.get("server", {}).get("start_in_web_tab", False) or self.config_data.get("embedded_browser", {}).get("zen_mode", False):
+                        self.after(400, lambda: self.toggle_zen_mode(True))
+
+                self.after(350, finish_loading)
+            else:
                 self.deiconify()
-                self.lift()
-                self.focus_force()
                 if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", False):
                     self.after(200, self._start_server)
                 if self.config_data.get("server", {}).get("auto_check_updates", True):
@@ -1187,15 +1223,29 @@ class MammouthControlCenter(ctk.CTk):
                 if self.config_data.get("server", {}).get("start_in_web_tab", False) or self.config_data.get("embedded_browser", {}).get("zen_mode", False):
                     self.after(400, lambda: self.toggle_zen_mode(True))
 
-            self.after(350, finish_loading)
-        else:
-            self.deiconify()
-            if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", False):
-                self.after(200, self._start_server)
-            if self.config_data.get("server", {}).get("auto_check_updates", True):
-                self.after(2500, self._check_updates_async)
-            if self.config_data.get("server", {}).get("start_in_web_tab", False) or self.config_data.get("embedded_browser", {}).get("zen_mode", False):
-                self.after(400, lambda: self.toggle_zen_mode(True))
+            # Safety fallback: unmask/close splash if still open after timeout
+            def _splash_safety_timeout():
+                if getattr(self, "splash", None) is not None:
+                    try:
+                        self.splash.close()
+                    except Exception:
+                        pass
+                    self.splash = None
+                    try:
+                        self.deiconify()
+                    except Exception:
+                        pass
+            self.after(10000, _splash_safety_timeout)
+
+        except Exception:
+            # On any startup failure, immediately unmask/close splash before propagating
+            if getattr(self, "splash", None) is not None:
+                try:
+                    self.splash.close()
+                except Exception:
+                    pass
+                self.splash = None
+            raise
 
 
     def _setup_logging(self):
@@ -1845,7 +1895,7 @@ class MammouthControlCenter(ctk.CTk):
             else:
                 self.after(0, lambda: self._log(f"[COPILOT ERROR] Window capture returned: {res}"))
         except Exception as ex:
-            self.after(0, lambda: self._log(f"[COPILOT ERROR] Screen copilot error: {ex}"))
+            self.after(0, lambda ex=ex: self._log(f"[COPILOT ERROR] Screen copilot error: {ex}"))
 
     def _on_screen_copilot_completed(self, win_title: str, proc_name: str, saved_path: str):
         disp_proc = f" ({proc_name})" if proc_name else ""
@@ -2098,7 +2148,6 @@ class MammouthControlCenter(ctk.CTk):
 
         from modules.screen_capture import launch_windows_snipping_tool, copy_image_to_clipboard, get_workspace_screenshots_dir, _cleanup_old_screenshots
         from PIL import ImageGrab, Image as PILImage
-        from datetime import datetime
 
         if sys.platform != "win32":
             saved = self._take_and_copy_screenshot()
@@ -3242,7 +3291,8 @@ class MammouthControlCenter(ctk.CTk):
 
     def _init_task_scheduler(self):
         """Initialize the automated task scheduler and register event callbacks."""
-        self.task_countdown_labels: Dict[int, ctk.CTkLabel] = {}
+        if "task_countdown_labels" not in self.__dict__ or self.task_countdown_labels is None:
+            self.task_countdown_labels: Dict[int, ctk.CTkLabel] = {}
         try:
             self.scheduler_engine = TaskSchedulerEngine.get_instance()
             self.scheduler_engine.register_handler("mammouth_web", self._on_trigger_mammouth_web_task)
@@ -3257,13 +3307,16 @@ class MammouthControlCenter(ctk.CTk):
     def _on_scheduler_tick(self):
         """Runs every 1 second on the Tkinter UI thread to check due tasks and update countdowns."""
         try:
-            if hasattr(self, "scheduler_engine"):
+            if hasattr(self, "scheduler_engine") and self.scheduler_engine:
                 self.scheduler_engine.check_and_run_due_tasks()
             self._update_task_countdowns()
         except Exception:
             pass
         finally:
-            self.after(1000, self._on_scheduler_tick)
+            try:
+                self.after(1000, self._on_scheduler_tick)
+            except Exception:
+                pass
 
     def _on_trigger_mammouth_web_task(self, task: Dict[str, Any]) -> str:
         """Trigger handler: Injects prompt into the embedded Mammouth AI Web chat."""
@@ -3436,13 +3489,13 @@ class MammouthControlCenter(ctk.CTk):
 
     def _refresh_task_cards(self):
         """Re-render the list of scheduled tasks cards and update KPI stats."""
-        if not hasattr(self, "tasks_scroll"):
+        if self.__dict__.get("tasks_scroll") is None:
             return
 
         for w in self.tasks_scroll.winfo_children():
             w.destroy()
 
-        if not hasattr(self, "task_countdown_labels"):
+        if "task_countdown_labels" not in self.__dict__ or self.task_countdown_labels is None:
             self.task_countdown_labels = {}
         else:
             self.task_countdown_labels.clear()
@@ -3457,6 +3510,8 @@ class MammouthControlCenter(ctk.CTk):
             self.lbl_task_stat_running.configure(text=f"{active_count} active")
         if hasattr(self, "lbl_task_stat_total"):
             self.lbl_task_stat_total.configure(text=str(total_runs))
+        if hasattr(self, "lbl_task_stat_next") and active_count == 0:
+            self.lbl_task_stat_next.configure(text="No active task")
 
         if not tasks:
             empty_card = ctk.CTkFrame(
@@ -3703,63 +3758,83 @@ class MammouthControlCenter(ctk.CTk):
 
     def _update_task_countdowns(self):
         """Update live countdown labels on all rendered task cards."""
-        if not hasattr(self, "task_countdown_labels") or not self.task_countdown_labels:
+        labels = self.__dict__.get("task_countdown_labels")
+        if not labels:
+            if hasattr(self, "lbl_task_stat_next"):
+                try:
+                    self.lbl_task_stat_next.configure(text="No active task")
+                except Exception:
+                    pass
             return
 
-        now_dt = datetime.now()
-        earliest_next_str = None
-        earliest_task_name = None
+        try:
+            now_dt = datetime.now()
+            earliest_dt = None
+            earliest_task_name = None
 
-        tasks = scheduler_list_tasks()
-        task_map = {t["id"]: t for t in tasks}
+            tasks = scheduler_list_tasks()
+            task_map = {t["id"]: t for t in tasks}
 
-        for tid, lbl in list(self.task_countdown_labels.items()):
-            task = task_map.get(tid)
-            if not task:
-                continue
-
-            status = task.get("status", "active")
-            next_run = task.get("next_run", "")
-
-            if status == "active" and next_run:
+            for tid, lbl in list(labels.items()):
                 try:
-                    nr_dt = datetime.fromisoformat(next_run)
-                    diff = (nr_dt - now_dt).total_seconds()
-                    if diff > 0:
-                        mm = int(diff) // 60
-                        ss = int(diff) % 60
-                        lbl.configure(text=f"⏳ Next trigger: {mm:02d}:{ss:02d} min", text_color=("#4F46E5", "#818CF8"))
-                    else:
-                        lbl.configure(text="⏳ Executing...", text_color=("#059669", "#10B981"))
+                    task = task_map.get(tid)
+                    if not task:
+                        continue
 
-                    if earliest_next_str is None or next_run < earliest_next_str:
-                        earliest_next_str = next_run
-                        earliest_task_name = task.get("name", "Task")
+                    status = task.get("status", "active")
+                    next_run = task.get("next_run", "")
+
+                    if status == "active" and next_run:
+                        try:
+                            nr_dt = datetime.fromisoformat(next_run)
+                            if nr_dt.tzinfo is not None:
+                                nr_dt = nr_dt.astimezone().replace(tzinfo=None)
+                            diff = (nr_dt - now_dt).total_seconds()
+                            if diff > 0:
+                                mm = int(diff) // 60
+                                ss = int(diff) % 60
+                                lbl.configure(text=f"⏳ Next trigger: {mm:02d}:{ss:02d} min", text_color=("#4F46E5", "#818CF8"))
+                            else:
+                                lbl.configure(text="⏳ Executing...", text_color=("#059669", "#10B981"))
+
+                            if earliest_dt is None or nr_dt < earliest_dt:
+                                earliest_dt = nr_dt
+                                earliest_task_name = task.get("name", "Task")
+                        except Exception:
+                            try:
+                                lbl.configure(text=f"⏳ {next_run[:19]}")
+                            except Exception:
+                                pass
+                    elif status == "paused":
+                        lbl.configure(text="⏸️ Paused", text_color=("#D97706", "#FBBF24"))
+                    elif status == "completed":
+                        lbl.configure(text="🏁 Completed", text_color=THEME_TEXT_MUTED)
+                    elif status == "stopped":
+                        lbl.configure(text="⏹️ Stopped", text_color=("#DC2626", "#F87171"))
                 except Exception:
-                    lbl.configure(text=f"⏳ {next_run[:19]}")
-            elif status == "paused":
-                lbl.configure(text="⏸️ Paused", text_color=("#D97706", "#FBBF24"))
-            elif status == "completed":
-                lbl.configure(text="🏁 Completed", text_color=THEME_TEXT_MUTED)
-            elif status == "stopped":
-                lbl.configure(text="⏹️ Stopped", text_color=("#DC2626", "#F87171"))
+                    pass
 
-        if hasattr(self, "lbl_task_stat_next"):
-            if earliest_next_str:
+            if hasattr(self, "lbl_task_stat_next"):
+                if earliest_dt is not None:
+                    try:
+                        e_diff = (earliest_dt - now_dt).total_seconds()
+                        if e_diff > 0:
+                            mm = int(e_diff) // 60
+                            ss = int(e_diff) % 60
+                            short_name = (earliest_task_name[:16] + "...") if len(earliest_task_name or "") > 18 else earliest_task_name
+                            self.lbl_task_stat_next.configure(text=f"{mm:02d}:{ss:02d} min ({short_name})")
+                        else:
+                            self.lbl_task_stat_next.configure(text="Executing...")
+                    except Exception:
+                        self.lbl_task_stat_next.configure(text="Scheduled")
+                else:
+                    self.lbl_task_stat_next.configure(text="No active task")
+        except Exception as err:
+            if hasattr(self, "_log"):
                 try:
-                    e_dt = datetime.fromisoformat(earliest_next_str)
-                    e_diff = (e_dt - now_dt).total_seconds()
-                    if e_diff > 0:
-                        mm = int(e_diff) // 60
-                        ss = int(e_diff) % 60
-                        short_name = (earliest_task_name[:16] + "...") if len(earliest_task_name or "") > 18 else earliest_task_name
-                        self.lbl_task_stat_next.configure(text=f"{mm:02d}:{ss:02d} min ({short_name})")
-                    else:
-                        self.lbl_task_stat_next.configure(text="Executing...")
+                    self._log(f"[TASK COUNTDOWN ERROR] {err}")
                 except Exception:
-                    self.lbl_task_stat_next.configure(text="Scheduled")
-            else:
-                self.lbl_task_stat_next.configure(text="No active task")
+                    pass
 
     def _trigger_task_now_ui(self, task_id: int):
         scheduler_trigger_task_now(task_id)
@@ -5264,7 +5339,7 @@ class MammouthControlCenter(ctk.CTk):
                 self.after(0, lambda: messagebox.showinfo("Browser Agent", f"Automated browser ({ch}) started successfully!\n\nControlled by Mammouth Defroster MCP.", parent=self))
             except Exception as e:
                 self._log(f"[BROWSER AGENT ERROR] {e}")
-                self.after(0, lambda: messagebox.showerror("Browser Error", f"Failed to launch browser: {e}", parent=self))
+                self.after(0, lambda e=e: messagebox.showerror("Browser Error", f"Failed to launch browser: {e}", parent=self))
             finally:
                 if hasattr(self, "btn_start_browser"):
                     self.after(0, lambda: self.btn_start_browser.configure(state="normal", text="🚀 Launch Browser"))
@@ -6439,7 +6514,6 @@ class MammouthControlCenter(ctk.CTk):
             port = 8000
 
         # Check if port is already bound by an existing process
-        import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(0.3)
         check_ip = host if host not in ("0.0.0.0", "") else "127.0.0.1"
@@ -6856,6 +6930,12 @@ class MammouthControlCenter(ctk.CTk):
     def report_callback_exception(self, exc, val, tb):
         import traceback
         traceback.print_exception(exc, val, tb)
+        if getattr(self, "splash", None) is not None:
+            try:
+                self.splash.close()
+            except Exception:
+                pass
+            self.splash = None
         if hasattr(self, "_log"):
             try:
                 self._log(f"[ERROR] UI callback error: {val}")
@@ -6870,11 +6950,39 @@ def main():
     except Exception as e:
         import traceback
         traceback.print_exc()
+        crash_log = BASE_DIR / "gui_crash.log"
         try:
-            from tkinter import messagebox
-            messagebox.showerror("Mammouth Defroster Error", f"An unexpected error occurred:\n{e}\n\nCheck console log for details.")
+            with open(crash_log, "a", encoding="utf-8") as f:
+                f.write(f"\n=== {datetime.now().isoformat()} ===\n{traceback.format_exc()}")
         except Exception:
             pass
+        # Tear down the half-built root (and its topmost splash) so the error dialog is not hidden behind it
+        try:
+            if tk._default_root is not None:
+                for child in list(tk._default_root.winfo_children()):
+                    try:
+                        child.destroy()
+                    except Exception:
+                        pass
+                tk._default_root.destroy()
+                tk._default_root = None
+        except Exception:
+            pass
+        try:
+            err_root = tk.Tk()
+            err_root.withdraw()
+            err_root.attributes("-topmost", True)
+            messagebox.showerror(
+                "Mammouth Defroster Error",
+                f"An unexpected error occurred during startup:\n\n{e}\n\nCrash log written to:\n{crash_log}",
+                parent=err_root
+            )
+            err_root.destroy()
+        except Exception:
+            try:
+                messagebox.showerror("Mammouth Defroster Error", f"An unexpected error occurred:\n{e}\n\nDetails: {crash_log}")
+            except Exception:
+                pass
     finally:
         os._exit(0)
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1] - 2026-10-28
+
+### 🐛 Fixes & Stability
+- **Startup Crash Resolution (`gui.py`):** Fixed `NameError: name 'datetime' is not defined` when scheduled tasks exist in `tasks.db` by promoting `datetime`, `timezone`, `timedelta`, and `_encrypt_dpapi` to module level.
+- **Splash Screen Masking:** Added `SplashScreen.close()` with full window unmapping, unmasking dialogs on unhandled startup errors.
+- **Task Scheduler Hardening:** Added timezone normalization for ISO 8601 UTC stamps (`Z`) and error isolation across task card widgets.
+
 ## [0.7.0] - 2026-10-27
 
 ### ⚡ Feature 1: The Crown Jewel — Autonomous Self-Tooling & Infinite Skills
