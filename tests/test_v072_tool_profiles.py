@@ -177,3 +177,20 @@ def test_schema_sanitizer_repairs_untyped():
     assert props["empty_prop"]["type"] == "string"
     assert props["untyped_prop"]["type"] == "string"
     assert props["empty_anyof"]["anyOf"][0]["type"] == "string"
+
+
+def test_mcp_standard_schema_cleanliness():
+    """Verify that tools/list output conforms strictly to standard MCP 2024-11-05 (no outputSchema or _meta)."""
+    async def _test():
+        tools = await _get_tools_list()
+        for t in tools:
+            if hasattr(t, 'to_mcp_tool'):
+                m = t.to_mcp_tool()
+                _sanitize_mcp_tool_schema(m)
+                d = m.model_dump(by_alias=True, exclude_none=True)
+                assert 'outputSchema' not in d, f"outputSchema found in {t.name}"
+                assert '_meta' not in d, f"_meta found in {t.name}"
+                assert 'name' in d
+                assert 'inputSchema' in d
+
+    _run(_test())

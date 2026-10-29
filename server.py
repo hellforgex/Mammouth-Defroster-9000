@@ -805,11 +805,18 @@ def _sanitize_schema_dict(schema: Dict[str, Any]) -> None:
 
 def _sanitize_mcp_tool_schema(tool: Any) -> None:
     """Sanitize and repair OpenAPI / JSON schema constructs on mcp.types.Tool or FastMCP Tool."""
-    schema = getattr(tool, "inputSchema", None) or getattr(tool, "input_schema", None)
+    schema = getattr(tool, "input_schema", None) or getattr(tool, "inputSchema", None)
     if isinstance(schema, dict):
         _sanitize_schema_dict(schema)
     if hasattr(tool, "parameters") and isinstance(tool.parameters, dict):
         _sanitize_schema_dict(tool.parameters)
+    # Clear non-standard draft fields for strict MCP 2024-11-05 client compatibility
+    for attr in ("output_schema", "meta", "_meta"):
+        if hasattr(tool, attr):
+            try:
+                setattr(tool, attr, None)
+            except Exception:
+                pass
 
 
 _orig_list_tools = mcp.list_tools
@@ -849,11 +856,42 @@ if hasattr(mcp, "_list_tools_mcp"):
 
     async def _profile_filtered_list_tools_mcp(request: Any = None) -> Any:
         result = await _orig_list_tools_mcp(request)
+        cfg = load_config()
+        profile_key = str(cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+        if profile_key != "all":
+            if profile_key == "custom":
+                mods = cfg.get("modules", {})
+                result.tools = [
+                    t for t in result.tools
+                    if t.name == "defroster_catalog" or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(t.name, ""), {}).get("enabled", True)
+                ]
+            else:
+                profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
+                allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog"}
+                result.tools = [t for t in result.tools if t.name in allowed_names]
         for tool in result.tools:
             _sanitize_mcp_tool_schema(tool)
         return result
 
     mcp._list_tools_mcp = _profile_filtered_list_tools_mcp
+
+# Wrap FastMCP 4.x / MCP SDK 2.x protocol handler in _mcp_server if present
+if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_request_handlers"):
+    _orig_tools_entry = mcp._mcp_server._request_handlers.get("tools/list")
+    if _orig_tools_entry:
+        _orig_on_list = _orig_tools_entry.handler
+
+        async def _profile_filtered_on_list_handler(*args, **kwargs):
+            result = await _orig_on_list(*args, **kwargs)
+            if hasattr(result, "tools"):
+                for tool in result.tools:
+                    _sanitize_mcp_tool_schema(tool)
+            return result
+
+        mcp._mcp_server._request_handlers["tools/list"] = _orig_tools_entry.__class__(
+            params_type=_orig_tools_entry.params_type,
+            handler=_profile_filtered_on_list_handler
+        )
 
 # ==========================================
 # AUTHENTICATION & SECURITY MIDDLEWARE
