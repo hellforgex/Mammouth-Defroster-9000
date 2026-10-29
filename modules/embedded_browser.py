@@ -504,12 +504,14 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         )
         self.btn_zen.pack(side="right", padx=(0, 6))
 
-        # 2. Seamless Full-Bleed Viewport Frame for hosting Edge WebView2
-        self.viewport = ctk.CTkFrame(
+        import tkinter as tk
+        # 2. Native Win32 viewport container (plain tk.Frame without an internal canvas)
+        # to ensure zero Z-order collisions with the child WinForms/WebView2 HWND.
+        self.viewport = tk.Frame(
             self,
-            corner_radius=0,
-            fg_color=BROWSER_VIEWPORT_BG,
-            border_width=0
+            bg=BROWSER_VIEWPORT_BG[1],
+            highlightthickness=0,
+            bd=0
         )
         self.viewport.pack(fill="both", expand=True, padx=0, pady=0)
         self.viewport.bind("<Configure>", self._on_viewport_resize)
@@ -607,7 +609,18 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
             parent_hwnd = self.viewport.winfo_id()
             user32.SetParent(self.hwnd, parent_hwnd)
+
+            # Set WS_CLIPCHILDREN (0x02000000) on parent viewport so Tkinter never clips or paints over WebView2
+            try:
+                cur_style = user32.GetWindowLongW(parent_hwnd, -16)  # GWL_STYLE
+                user32.SetWindowLongW(parent_hwnd, -16, cur_style | 0x02000000)
+            except Exception:
+                pass
+
+            HWND_TOP = 0
+            SWP_SHOWWINDOW = 0x0040
             user32.MoveWindow(self.hwnd, 0, 0, w, h, True)
+            user32.SetWindowPos(self.hwnd, HWND_TOP, 0, 0, w, h, SWP_SHOWWINDOW)
             user32.ShowWindow(self.hwnd, 5)  # SW_SHOW
 
             # Explicitly load the start URL
@@ -827,7 +840,11 @@ class MammouthBrowserFrame(ctk.CTkFrame):
     def _on_viewport_resize(self, event):
         """Resizes the Win32 WebView2 control to match the viewport container."""
         if self.hwnd and self.is_embedded and self._is_visible:
-            user32.MoveWindow(self.hwnd, 0, 0, event.width, event.height, True)
+            if event.width > 10 and event.height > 10:
+                HWND_TOP = 0
+                SWP_SHOWWINDOW = 0x0040
+                user32.MoveWindow(self.hwnd, 0, 0, event.width, event.height, True)
+                user32.SetWindowPos(self.hwnd, HWND_TOP, 0, 0, event.width, event.height, SWP_SHOWWINDOW)
 
     def set_tab_visible(self, visible: bool):
         """Controls Win32 visibility when switching between tabs."""
@@ -842,7 +859,10 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                     pass
                 w = max(self.viewport.winfo_width(), self.winfo_width(), 400)
                 h = max(self.viewport.winfo_height(), self.winfo_height(), 300)
+                HWND_TOP = 0
+                SWP_SHOWWINDOW = 0x0040
                 user32.MoveWindow(self.hwnd, 0, 0, w, h, True)
+                user32.SetWindowPos(self.hwnd, HWND_TOP, 0, 0, w, h, SWP_SHOWWINDOW)
                 self.focus_browser()
 
                 # Deferred layout sync: ensure viewport rendered width/height are applied once Tk renders
@@ -852,6 +872,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                         vh = self.viewport.winfo_height()
                         if vw > 10 and vh > 10:
                             user32.MoveWindow(self.hwnd, 0, 0, vw, vh, True)
+                            user32.SetWindowPos(self.hwnd, HWND_TOP, 0, 0, vw, vh, SWP_SHOWWINDOW)
                 self.after(50, _deferred_resize)
                 self.after(150, _deferred_resize)
 
@@ -1240,6 +1261,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         if self.hwnd and self.is_embedded:
             try:
                 user32.SetFocus(self.hwnd)
+                user32.BringWindowToTop(self.hwnd)
             except Exception:
                 pass
 

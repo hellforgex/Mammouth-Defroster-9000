@@ -36,7 +36,7 @@ ROOT_DIR = BASE_DIR
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 try:
     from fastmcp.server.http import (
         StreamableHTTPASGIApp,
@@ -525,7 +525,8 @@ _DEFROSTER_MODULE_CATALOG: Dict[str, Dict[str, Any]] = {
 def defroster_catalog(
     category: Optional[str] = None,
     search: Optional[str] = None,
-    switch_profile: Optional[str] = None
+    switch_profile: Optional[str] = None,
+    ctx: Optional[Context] = None
 ) -> Dict[str, Any]:
     """Mammouth Defroster Core Skill Directory & Capability Router (defrost / defroster main hub).
 
@@ -539,12 +540,29 @@ def defroster_catalog(
     """
     cfg = load_config()
     profile_switch_msg = None
+    tools_auto_refreshed = False
     if switch_profile:
         target_p = str(switch_profile).strip().lower()
         if target_p in TOOL_PROFILES:
             cfg.setdefault("server", {})["tool_profile"] = target_p
             save_config(cfg)
+            if ctx and getattr(ctx, "session", None):
+                register_active_mcp_session(ctx.session)
+            try:
+                import asyncio
+                import threading
+                threading.Thread(
+                    target=lambda: asyncio.run(notify_all_mcp_sessions_tools_changed()),
+                    daemon=True,
+                    name="BroadcastToolListChangedSync"
+                ).start()
+                tools_auto_refreshed = True
+            except Exception as notif_err:
+                logger.debug(f"Tool list change broadcast notice: {notif_err}")
+
             profile_switch_msg = f"Tool profile successfully switched to '{target_p}' ({TOOL_PROFILES[target_p]['name']})."
+            if tools_auto_refreshed:
+                profile_switch_msg += " Sent tools/list_changed notification: connected client will auto-refresh active tools."
         else:
             profile_switch_msg = f"Unknown profile '{switch_profile}'. Available: {list(TOOL_PROFILES.keys())}"
 
@@ -582,7 +600,13 @@ def defroster_catalog(
             }
 
     token_est = profile_info.get("token_estimate", 0)
-    budget_status = "Safe for Mammouth AI Chat (< 3,000 tokens / 7,719 limit)" if token_est < 4000 else "Warning: Exceeds Mammouth AI Chat session limit (~7,719 tokens)"
+    MAX_SCHEMA_BUDGET = 7719
+    if token_est <= 4000:
+        budget_status = f"Safe (~{token_est:,} / {MAX_SCHEMA_BUDGET:,} tokens - optimal for Mammouth AI Chat)"
+    elif token_est <= MAX_SCHEMA_BUDGET:
+        budget_status = f"Safe (~{token_est:,} / {MAX_SCHEMA_BUDGET:,} tokens - within platform limit)"
+    else:
+        budget_status = f"Warning (~{token_est:,} / {MAX_SCHEMA_BUDGET:,} tokens - exceeds platform limit, promotion may fail)"
 
     res = {
         "status": "success",
@@ -602,6 +626,8 @@ def defroster_catalog(
     }
     if profile_switch_msg:
         res["profile_switch_status"] = profile_switch_msg
+    if tools_auto_refreshed:
+        res["tools_auto_refreshed"] = True
     return res
 
 def register_active_tools():
@@ -875,6 +901,27 @@ if hasattr(mcp, "_list_tools_mcp"):
 
     mcp._list_tools_mcp = _profile_filtered_list_tools_mcp
 
+_ACTIVE_MCP_SESSIONS = set()
+
+def register_active_mcp_session(session: Any):
+    """Register an active MCP ServerSession to broadcast tool list updates."""
+    if session:
+        _ACTIVE_MCP_SESSIONS.add(session)
+
+async def notify_all_mcp_sessions_tools_changed():
+    """Broadcast notifications/tools/list_changed to all active MCP sessions."""
+    import mcp.types as mcp_types
+    dead = set()
+    for s in list(_ACTIVE_MCP_SESSIONS):
+        try:
+            if hasattr(s, "send_tool_list_changed"):
+                await s.send_tool_list_changed()
+            elif hasattr(s, "send_notification"):
+                await s.send_notification(mcp_types.ToolListChangedNotification())
+        except Exception:
+            dead.add(s)
+    _ACTIVE_MCP_SESSIONS.difference_update(dead)
+
 # Wrap FastMCP 4.x / MCP SDK 2.x protocol handler in _mcp_server if present
 if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_request_handlers"):
     _orig_tools_entry = mcp._mcp_server._request_handlers.get("tools/list")
@@ -882,6 +929,8 @@ if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_request_handlers")
         _orig_on_list = _orig_tools_entry.handler
 
         async def _profile_filtered_on_list_handler(*args, **kwargs):
+            if args and hasattr(args[0], "session"):
+                register_active_mcp_session(args[0].session)
             result = await _orig_on_list(*args, **kwargs)
             if hasattr(result, "tools"):
                 for tool in result.tools:
@@ -891,6 +940,20 @@ if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_request_handlers")
         mcp._mcp_server._request_handlers["tools/list"] = _orig_tools_entry.__class__(
             params_type=_orig_tools_entry.params_type,
             handler=_profile_filtered_on_list_handler
+        )
+
+    _orig_call_entry = mcp._mcp_server._request_handlers.get("tools/call")
+    if _orig_call_entry:
+        _orig_on_call = _orig_call_entry.handler
+
+        async def _session_tracking_on_call_handler(*args, **kwargs):
+            if args and hasattr(args[0], "session"):
+                register_active_mcp_session(args[0].session)
+            return await _orig_on_call(*args, **kwargs)
+
+        mcp._mcp_server._request_handlers["tools/call"] = _orig_call_entry.__class__(
+            params_type=_orig_call_entry.params_type,
+            handler=_session_tracking_on_call_handler
         )
 
 # ==========================================

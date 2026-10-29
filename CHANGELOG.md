@@ -5,8 +5,12 @@
 ### ⚡ Features & MCP Tool Promotion Architecture
 - **Tool Profiles & Schema Budget Management:** Resolved tool promotion failures in Mammouth AI chat ("No matching tools were promoted") caused by schema token overload (86 tools totaling ~16,461 tokens vs ~7,719 token session budget):
   - **Dynamic Tool Profiles:** Introduced configurable tool exposure profiles:
-    - `🛡️ Mammouth Chat Safe` (Default): 10 core tools (`defroster_catalog`, `file_read`, `file_write`, `screen_capture`, `browser_navigate`, `browser_snapshot`, `memory_save`, `memory_recall`, `system_get_specs`, `clipboard_get_text`, and optional `command_run`) consuming only **~2,485 tokens** (< 35% of platform budget), guaranteeing immediate tool promotion into Mammouth AI chat sessions.
+    - `🛡️ Mammouth Chat Safe` (Default): 12 core tools (`defroster_catalog`, `directory_list`, `file_read`, `file_write`, `command_run`, `screen_capture`, `browser_navigate`, `browser_snapshot`, `memory_save`, `memory_recall`, `system_get_specs`, `clipboard_get_text`) consuming only **~2,700 tokens** (< 35% of platform budget), giving models immediate directory listing capability on session start.
     - `💻 Developer & Scripting`: 14 tools (~3,800 tokens) for workspace file editing, search, local PowerShell execution, and diagnostics.
+  - **Automated Tool Promotion Refresh (`tools/list_changed`):** When switching tool profiles via `defroster_catalog(switch_profile=...)` or the GUI combobox, the server broadcasts an MCP `notifications/tools/list_changed` notification to active sessions, allowing connected AI models to automatically re-discover tools without requiring manual intervention.
+  - **Path Aliases (`workspace:/<path>` & `@workspace/<path>`):** Both file tools (`file_read`, `file_write`, `file_replace_chunk`, `file_search_text`, `directory_list`, `directory_tree`) and shell path guard now recognize `workspace:/` and `@workspace/` aliases, eliminating path guessing and drive letter hallucinations.
+  - **Actionable Sandbox Violation Feedback:** Enhanced path violation messages to provide actionable guidance, directing models to use `directory_list` and `workspace:/` relative syntax.
+  - **Crystal-Clear Schema Budget Status:** Eliminated contradictory limit messages; token budgets are evaluated and displayed consistently against the platform limit (~7,719 tokens).
     - `👁️ Web & Vision`: 12 tools (~3,300 tokens) for Playwright browser automation and multi-monitor screen capture.
     - `⏱️ Tasks & Automation`: 11 tools (~2,900 tokens) for scheduled background triggers and Kanban boards.
     - `⚡ Full Defroster`: 86 tools (~16,461 tokens) for uncapped clients (Claude Desktop, Cursor).

@@ -233,10 +233,23 @@ def _check_readonly_path_guard(raw_cmd: str, cwd: Optional[str] = None) -> None:
                 if not arg_val:
                     continue
 
-                # Resolve relative paths against the directory the command will actually run in
-                base_dir = cwd or str(BASE_DIR)
-                is_abs = os.path.isabs(arg_val) or (len(arg_val) >= 2 and arg_val[1] == ":") or arg_val.startswith(("/", "\\\\"))
-                candidate = arg_val if is_abs else os.path.join(base_dir, arg_val)
+                # Check for workspace alias prefix (workspace:/..., workspace:\..., @workspace/...)
+                arg_lower = arg_val.lower()
+                alias_prefix = None
+                for pfx in ("workspace:/", "workspace:\\", "workspace:", "@workspace/", "@workspace\\", "@workspace"):
+                    if arg_lower.startswith(pfx):
+                        alias_prefix = pfx
+                        break
+
+                if alias_prefix:
+                    rel_part = arg_val[len(alias_prefix):].lstrip("/\\")
+                    candidate = os.path.join(workspace_root, rel_part)
+                else:
+                    # Resolve relative paths against the directory the command will actually run in
+                    base_dir = cwd or str(BASE_DIR)
+                    is_abs = os.path.isabs(arg_val) or (len(arg_val) >= 2 and arg_val[1] == ":") or arg_val.startswith(("/", "\\\\"))
+                    candidate = arg_val if is_abs else os.path.join(base_dir, arg_val)
+
                 resolved = os.path.realpath(os.path.abspath(candidate)).casefold()
 
                 # Denylist check on resolved path
@@ -253,7 +266,7 @@ def _check_readonly_path_guard(raw_cmd: str, cwd: Optional[str] = None) -> None:
                 if not is_in_workspace:
                     raise PermissionError(
                         f"Path Guard: Path '{arg_val}' resolves to '{resolved}' which is outside the workspace sandbox '{workspace_root}'. "
-                        f"Access is blocked in Read-Only mode."
+                        f"Tip: Explore files inside workspace using 'directory_list', or use relative paths / 'workspace:/<path>'."
                     )
 
 

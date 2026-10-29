@@ -120,19 +120,32 @@ def _validate_path(target_path_str: str, for_write: bool = False) -> Path:
     enforce_sandbox, ws_root = _get_sandbox_config()
     ws_root_resolved = Path(os.path.realpath(os.path.abspath(str(ws_root))))
 
-    # Check if clean_target is an absolute path with drive letter or UNC
-    is_absolute_drive = len(clean_target) >= 2 and clean_target[1] == ':' and clean_target[0].isalpha()
-    is_unc = clean_target.startswith("\\\\") or clean_target.startswith("//")
+    # Check for workspace alias prefix (workspace:/..., workspace:\..., workspace:..., @workspace/..., @workspace\...)
+    alias_prefix = None
+    clean_lower = clean_target.lower()
+    for pfx in ("workspace:/", "workspace:\\", "workspace:", "@workspace/", "@workspace\\", "@workspace"):
+        if clean_lower.startswith(pfx):
+            alias_prefix = pfx
+            break
 
-    if is_absolute_drive or is_unc:
-        # Full absolute path provided
-        canonical_path = _normalize_and_resolve_path(clean_target)
-    else:
-        # Relative path (e.g. "src/file.py", "./notes.txt", "/script.py", "\test.py")
-        # Strip leading slashes to prevent Path("/foo") from jumping to drive root
-        rel_clean = clean_target.lstrip("/\\")
-        combined = os.path.join(str(ws_root_resolved), rel_clean)
+    if alias_prefix:
+        rel_part = clean_target[len(alias_prefix):].lstrip("/\\")
+        combined = os.path.join(str(ws_root_resolved), rel_part)
         canonical_path = _normalize_and_resolve_path(combined)
+    else:
+        # Check if clean_target is an absolute path with drive letter or UNC
+        is_absolute_drive = len(clean_target) >= 2 and clean_target[1] == ':' and clean_target[0].isalpha()
+        is_unc = clean_target.startswith("\\\\") or clean_target.startswith("//")
+
+        if is_absolute_drive or is_unc:
+            # Full absolute path provided
+            canonical_path = _normalize_and_resolve_path(clean_target)
+        else:
+            # Relative path (e.g. "src/file.py", "./notes.txt", "/script.py", "\test.py")
+            # Strip leading slashes to prevent Path("/foo") from jumping to drive root
+            rel_clean = clean_target.lstrip("/\\")
+            combined = os.path.join(str(ws_root_resolved), rel_clean)
+            canonical_path = _normalize_and_resolve_path(combined)
 
     canonical_cf = canonical_path.casefold()
 
@@ -143,7 +156,10 @@ def _validate_path(target_path_str: str, for_write: bool = False) -> Path:
 
         is_inside = (canonical_cf == ws_cf) or canonical_cf.startswith(ws_cf + sep) or canonical_cf.startswith(ws_cf + "/")
         if not is_inside:
-            raise PermissionError(f"Sandbox Violation: Path '{target_path_str}' is outside allowed workspace '{ws_canonical}'.")
+            raise PermissionError(
+                f"Sandbox Violation: Path '{target_path_str}' is outside allowed workspace '{ws_canonical}'. "
+                f"Tip: Target files inside workspace root, use relative paths or 'workspace:/<path>', or use 'directory_list' to discover available files."
+            )
 
     # Hard write guards (evaluated regardless of sandbox settings)
     if for_write:

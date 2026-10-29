@@ -4484,8 +4484,14 @@ class MammouthControlCenter(ctk.CTk):
             domain = get_tailscale_public_domain(cfg.get("tailscale_path", ""))
             if domain:
                 self._log(f"[DISCOVERY] Successfully detected Tailscale domain: {domain}")
+                if self.is_server_running:
+                    port = cfg.get("port", 8000)
+                    self._start_tailscale_funnel(port)
                 self._refresh_all_endpoint_labels()
-                messagebox.showinfo("Tailscale Discovered", f"Successfully detected your Tailscale domain:\n\n{domain}", parent=self)
+                msg = f"Successfully detected your Tailscale domain:\n\n{domain}"
+                if self.is_server_running:
+                    msg += f"\n\nTailscale Funnel proxy activated on port {cfg.get('port', 8000)}."
+                messagebox.showinfo("Tailscale Discovered", msg, parent=self)
             else:
                 self._log("[DISCOVERY WARNING] Could not detect active Tailscale domain.")
                 messagebox.showwarning("Tailscale Not Found", "Could not detect active Tailscale node.\n\nMake sure Tailscale is running and connected.", parent=self)
@@ -5558,6 +5564,18 @@ class MammouthControlCenter(ctk.CTk):
         if hasattr(self, "lbl_stat_tools"):
             self.lbl_stat_tools.configure(text=f"⚡ {self._count_active_tools()}")
         self._log(f"[TOOLS] Active tool profile switched to '{prof_id}' ({selected_label}).")
+        if self.is_server_running:
+            try:
+                import asyncio
+                from server import notify_all_mcp_sessions_tools_changed
+                threading.Thread(
+                    target=lambda: asyncio.run(notify_all_mcp_sessions_tools_changed()),
+                    daemon=True,
+                    name="BroadcastToolListChanged"
+                ).start()
+                self._log("[TOOLS] Broadcasted tools/list_changed notification to connected MCP sessions.")
+            except Exception as e:
+                self._log(f"[TOOLS WARNING] Could not broadcast tools changed: {e}")
 
     def _update_schema_gauge(self, prof_id: str):
         from config import TOOL_PROFILES
@@ -5575,7 +5593,7 @@ class MammouthControlCenter(ctk.CTk):
         else:
             badge_text = f"✅ ~{est:,} tokens ({t_cnt} tools promoted)"
             color = "#10B981"
-            subtext = "Safe for Mammouth AI Chat (< 7,719 limit)"
+            subtext = f"Safe for Mammouth AI Chat (~{est:,} / 7,719 limit)"
 
         if hasattr(self, "lbl_schema_gauge"):
             self.lbl_schema_gauge.configure(text=badge_text, text_color=color)
@@ -5995,6 +6013,19 @@ class MammouthControlCenter(ctk.CTk):
         )
         self.opt_endpoint_path.set(self.config_data.get("server", {}).get("endpoint_path", "/sse"))
         self.opt_endpoint_path.pack(side="left")
+
+        f_auto = ctk.CTkFrame(net_group, fg_color="transparent")
+        f_auto.pack(fill="x", padx=15, pady=5)
+        self.var_auto_tunnel = ctk.BooleanVar(value=bool(self.config_data.get("server", {}).get("auto_tunnel", False)))
+        sw_auto = ctk.CTkSwitch(
+            f_auto,
+            text="Auto-start Public Tunnel on Server Start (Tailscale/Cloudflare/Serveo)",
+            variable=self.var_auto_tunnel,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#10B981"
+        )
+        sw_auto.pack(side="left")
 
         # Cloudflare Binary Path
         f_cf = ctk.CTkFrame(net_group, fg_color="transparent")
@@ -6567,6 +6598,8 @@ class MammouthControlCenter(ctk.CTk):
         self.config_data["server"]["host"] = self.opt_host.get().strip() or "127.0.0.1"
         self.config_data["server"]["tunnel_mode"] = self.opt_tunnel_mode.get()
         self.config_data["server"]["endpoint_path"] = self.opt_endpoint_path.get()
+        if hasattr(self, "var_auto_tunnel"):
+            self.config_data["server"]["auto_tunnel"] = self.var_auto_tunnel.get()
         self.config_data["server"]["enforce_auth"] = self.var_enforce_auth.get()
         raw_tok = self.entry_token.get().strip()
         if raw_tok.startswith("dpapi:"):

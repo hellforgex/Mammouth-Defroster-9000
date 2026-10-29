@@ -171,12 +171,13 @@ TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
     "mammouth_safe": {
         "id": "mammouth_safe",
         "name": "Mammouth Chat Safe",
-        "label": "🛡️ Mammouth Chat Safe (10 Tools - Recommended)",
-        "description": "Recommended for Mammouth AI Chat. Curated core tools (~2,485 tokens) guaranteed to fit within platform session limits.",
+        "label": "🛡️ Mammouth Chat Safe (12 Tools - Recommended)",
+        "description": "Recommended for Mammouth AI Chat. Core file, directory listing, browser, shell and system tools (~2,700 tokens) guaranteed within platform session limits.",
         "icon": "🛡️",
-        "token_estimate": 2485,
+        "token_estimate": 2700,
         "tools": [
             "defroster_catalog",
+            "directory_list",
             "file_read",
             "file_write",
             "command_run",
