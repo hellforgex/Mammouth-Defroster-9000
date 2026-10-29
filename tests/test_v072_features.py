@@ -132,5 +132,40 @@ class TestV072SecurityAndFeatures(unittest.TestCase):
         mock_gui._log.assert_called_with("[UPDATER] Daily update check skipped (last checked less than 24 hours ago).")
 
 
+    def test_tasks_tab_right_first_geometry_and_wraplength(self):
+        """Verify Tasks & Automation tab packs btn_box right-first and wraps subtitle."""
+        import inspect
+        from gui import MammouthControlCenter
+        source = inspect.getsource(MammouthControlCenter._setup_tasks_tab)
+        # Verify btn_box packed right before title_box
+        btn_pos = source.find('btn_box.pack(side="right"')
+        title_pos = source.find('title_box.pack(side="left"')
+        self.assertNotEqual(btn_pos, -1, "btn_box.pack(side='right') not found")
+        self.assertNotEqual(title_pos, -1, "title_box.pack(side='left') not found")
+        self.assertLess(btn_pos, title_pos, "btn_box must be packed before title_box to prevent button clipping")
+        self.assertIn("wraplength=480", source, "wraplength=480 must be configured on subtitle")
+
+    def test_task_card_action_buttons_right_first(self):
+        """Verify task card items pack right_actions before left_box to prevent clipping."""
+        import inspect
+        from gui import MammouthControlCenter
+        source = inspect.getsource(MammouthControlCenter._refresh_task_cards)
+        right_pos = source.find('right_actions.pack(side="right"')
+        left_pos = source.find('left_box.pack(side="left"')
+        self.assertNotEqual(right_pos, -1, "right_actions.pack(side='right') not found")
+        self.assertNotEqual(left_pos, -1, "left_box.pack(side='left') not found")
+        self.assertLess(right_pos, left_pos, "right_actions must be packed before left_box")
+
+    def test_send_chat_prompt_multi_tier_submission(self):
+        """Verify send_chat_prompt includes React tracker reset and intelligent send button resolver."""
+        import inspect
+        from modules.embedded_browser import MammouthBrowserFrame
+        source = inspect.getsource(MammouthBrowserFrame.send_chat_prompt)
+        self.assertIn("_valueTracker", source, "React _valueTracker reset must be present")
+        self.assertIn("findSendBtn", source, "findSendBtn helper must be present")
+        self.assertIn("envoyer", source, "French language support for envoyer must be present")
+        self.assertIn("VK_RETURN", source, "Win32 VK_RETURN fallback must be present")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2834,8 +2834,11 @@ class MammouthControlCenter(ctk.CTk):
         top_bar = ctk.CTkFrame(self.tab_memory, fg_color="transparent")
         top_bar.pack(fill="x", padx=15, pady=(12, 8))
 
+        right_btns = ctk.CTkFrame(top_bar, fg_color="transparent")
+        right_btns.pack(side="right", padx=(10, 0))
+
         title_box = ctk.CTkFrame(top_bar, fg_color="transparent")
-        title_box.pack(side="left")
+        title_box.pack(side="left", fill="x", expand=True)
         ctk.CTkLabel(
             title_box,
             text="🧠 Persistent Memory & Knowledge Vault",
@@ -2846,11 +2849,10 @@ class MammouthControlCenter(ctk.CTk):
             title_box,
             text="Cross-session long-term memory for Mammouth.ai. Persistent SQLite backend with real-time indexing.",
             font=ctk.CTkFont(size=12),
-            text_color=THEME_TEXT_MUTED
+            text_color=THEME_TEXT_MUTED,
+            wraplength=480,
+            justify="left"
         ).pack(anchor="w")
-
-        right_btns = ctk.CTkFrame(top_bar, fg_color="transparent")
-        right_btns.pack(side="right")
 
         btn_refresh = ctk.CTkButton(
             right_btns,
@@ -3423,23 +3425,9 @@ class MammouthControlCenter(ctk.CTk):
         top_bar = ctk.CTkFrame(self.tab_tasks, fg_color="transparent")
         top_bar.pack(fill="x", padx=15, pady=(12, 10))
 
-        title_box = ctk.CTkFrame(top_bar, fg_color="transparent")
-        title_box.pack(side="left")
-        ctk.CTkLabel(
-            title_box,
-            text="⏱️ Tasks & Automation (Task Scheduler)",
-            font=ctk.CTkFont(size=17, weight="bold"),
-            text_color=THEME_TEXT_PRIMARY
-        ).pack(anchor="w")
-        ctk.CTkLabel(
-            title_box,
-            text="Trigger recurring tasks automatically in Mammouth AI Chat, Code CLI, or system (e.g., Live football ticker every 5 min).",
-            font=ctk.CTkFont(size=12),
-            text_color=THEME_TEXT_MUTED
-        ).pack(anchor="w")
-
+        # Pack action buttons to the right FIRST so they are never clipped
         btn_box = ctk.CTkFrame(top_bar, fg_color="transparent")
-        btn_box.pack(side="right")
+        btn_box.pack(side="right", padx=(10, 0))
 
         ctk.CTkButton(
             btn_box,
@@ -3476,6 +3464,24 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(weight="bold"),
             command=self._refresh_task_cards
         ).pack(side="left")
+
+        # Title box fills remaining left space with wrapping support
+        title_box = ctk.CTkFrame(top_bar, fg_color="transparent")
+        title_box.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(
+            title_box,
+            text="⏱️ Tasks & Automation (Task Scheduler)",
+            font=ctk.CTkFont(size=17, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            title_box,
+            text="Trigger recurring tasks in Mammouth AI Chat, Code CLI, or system.",
+            font=ctk.CTkFont(size=12),
+            text_color=THEME_TEXT_MUTED,
+            wraplength=480,
+            justify="left"
+        ).pack(anchor="w")
 
         # KPI Metrics Row
         self.task_kpi_frame = ctk.CTkFrame(self.tab_tasks, fg_color="transparent")
@@ -3614,6 +3620,10 @@ class MammouthControlCenter(ctk.CTk):
             top_row = ctk.CTkFrame(inner, fg_color="transparent")
             top_row.pack(fill="x", pady=(0, 6))
 
+            # Right action buttons packed FIRST to prevent clipping from long task names
+            right_actions = ctk.CTkFrame(top_row, fg_color="transparent")
+            right_actions.pack(side="right", padx=(8, 0))
+
             left_box = ctk.CTkFrame(top_row, fg_color="transparent")
             left_box.pack(side="left", fill="x", expand=True)
 
@@ -3649,10 +3659,6 @@ class MammouthControlCenter(ctk.CTk):
             s_badge = ctk.CTkFrame(left_box, fg_color=st_bg, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=5)
             s_badge.pack(side="left")
             ctk.CTkLabel(s_badge, text=f" {st_text} ", font=ctk.CTkFont(size=10, weight="bold"), text_color=st_fg).pack(padx=3, pady=1)
-
-            # Right action buttons
-            right_actions = ctk.CTkFrame(top_row, fg_color="transparent")
-            right_actions.pack(side="right")
 
             # 1. Trigger Now
             btn_run_now = ctk.CTkButton(
@@ -4556,8 +4562,11 @@ class MammouthControlCenter(ctk.CTk):
         top_bar = ctk.CTkFrame(self.tab_mammouth_code, fg_color="transparent")
         top_bar.pack(fill="x", padx=15, pady=(10, 10))
 
+        btn_box = ctk.CTkFrame(top_bar, fg_color="transparent")
+        btn_box.pack(side="right", padx=(10, 0))
+
         title_box = ctk.CTkFrame(top_bar, fg_color="transparent")
-        title_box.pack(side="left")
+        title_box.pack(side="left", fill="x", expand=True)
         ctk.CTkLabel(
             title_box,
             text="💻 Mammouth Code Terminal Agent",
@@ -4568,11 +4577,10 @@ class MammouthControlCenter(ctk.CTk):
             title_box,
             text="Official terminal-based AI coding agent by Mammouth AI (fork of OpenCode)",
             font=ctk.CTkFont(size=12),
-            text_color=THEME_TEXT_MUTED
+            text_color=THEME_TEXT_MUTED,
+            wraplength=480,
+            justify="left"
         ).pack(anchor="w")
-
-        btn_box = ctk.CTkFrame(top_bar, fg_color="transparent")
-        btn_box.pack(side="right")
 
         self.btn_mc_refresh = ctk.CTkButton(
             btn_box,
@@ -4969,13 +4977,13 @@ class MammouthControlCenter(ctk.CTk):
         top_bar = ctk.CTkFrame(self.tab_skills, fg_color="transparent")
         top_bar.pack(fill="x", padx=15, pady=(10, 10))
 
-        title_box = ctk.CTkFrame(top_bar, fg_color="transparent")
-        title_box.pack(side="left")
-        ctk.CTkLabel(title_box, text="⚡ Modular Defroster Capabilities", font=ctk.CTkFont(size=17, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w")
-        ctk.CTkLabel(title_box, text="Toggle individual tools dynamically exposed to Mammouth AI / connected models", font=ctk.CTkFont(size=12), text_color=("#475569", "#9CA3AF")).pack(anchor="w")
-
         btn_box = ctk.CTkFrame(top_bar, fg_color="transparent")
-        btn_box.pack(side="right")
+        btn_box.pack(side="right", padx=(10, 0))
+
+        title_box = ctk.CTkFrame(top_bar, fg_color="transparent")
+        title_box.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(title_box, text="⚡ Modular Defroster Capabilities", font=ctk.CTkFont(size=17, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w")
+        ctk.CTkLabel(title_box, text="Toggle individual tools dynamically exposed to Mammouth AI / connected models", font=ctk.CTkFont(size=12), text_color=("#475569", "#9CA3AF"), wraplength=480, justify="left").pack(anchor="w")
 
         btn_enable_safe = ctk.CTkButton(
             btn_box,

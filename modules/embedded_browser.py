@@ -1074,48 +1074,107 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
                                 el.focus();
                                 if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{
-                                    var proto = Object.getPrototypeOf(el);
-                                    var setter = Object.getOwnPropertyDescriptor(proto, 'value');
-                                    if (setter && setter.set) {{
-                                        setter.set.call(el, text);
+                                    var proto = window.HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : Object.getPrototypeOf(el);
+                                    var desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value');
+                                    if (desc && desc.set) {{
+                                        desc.set.call(el, text);
                                     }} else {{
                                         el.value = text;
                                     }}
-                                    el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true }}));
-                                    el.dispatchEvent(new Event('change', {{ bubbles: true, cancelable: true }}));
+                                    if (el._valueTracker) {{
+                                        el._valueTracker.setValue('');
+                                    }}
+                                    el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true, composed: true }}));
+                                    el.dispatchEvent(new Event('change', {{ bubbles: true, cancelable: true, composed: true }}));
                                 }} else if (el.isContentEditable) {{
-                                    el.innerText = text;
-                                    el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true }}));
+                                    el.focus();
+                                    try {{
+                                        document.execCommand('selectAll', false, null);
+                                        document.execCommand('insertText', false, text);
+                                    }} catch(e) {{
+                                        el.innerText = text;
+                                    }}
+                                    el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true, composed: true }}));
                                 }}
 
-                                if (autoSubmit) {{
-                                    setTimeout(function() {{
-                                        var form = el.closest('form');
-                                        var btn = form ? (form.querySelector('button[type="submit"]') || form.querySelector('button:not([disabled])')) : null;
-                                        if (!btn) {{
-                                            var buttons = Array.from(document.querySelectorAll('button:not([disabled])'));
-                                            for (var i = 0; i < buttons.length; i++) {{
-                                                var b = buttons[i];
-                                                var aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                                                var title = (b.getAttribute('title') || '').toLowerCase();
-                                                if (aria.includes('send') || aria.includes('submit') || title.includes('send') || b.querySelector('svg')) {{
-                                                    if (b.offsetWidth > 0 && b.offsetHeight > 0) {{
-                                                        btn = b;
-                                                        break;
-                                                    }}
-                                                }}
+                                if (!autoSubmit) return true;
+
+                                function findSendBtn() {{
+                                    var container = el.closest('form') || el.closest('[class*="chat"]') || el.closest('[class*="input"]') || (el.parentElement ? el.parentElement.parentElement : null);
+                                    var searchRoot = container || document;
+
+                                    // Priority 1: Explicit submit button
+                                    var sub = searchRoot.querySelector('button[type="submit"]:not([disabled])') || searchRoot.querySelector('button[type="submit"]');
+                                    if (sub) return sub;
+
+                                    // Priority 2: Buttons with send / submit / envoyer aria-label, title or testid
+                                    var sendWords = ['send', 'envoyer', 'submit', 'prompt', 'valider', 'transmettre'];
+                                    var allBtns = Array.from(searchRoot.querySelectorAll('button'));
+                                    for (var i = 0; i < allBtns.length; i++) {{
+                                        var b = allBtns[i];
+                                        var aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                                        var title = (b.getAttribute('title') || '').toLowerCase();
+                                        var tid = (b.getAttribute('data-testid') || '').toLowerCase();
+                                        for (var j = 0; j < sendWords.length; j++) {{
+                                            var w = sendWords[j];
+                                            if (aria.includes(w) || title.includes(w) || tid.includes(w)) {{
+                                                return b;
                                             }}
                                         }}
-                                        if (btn) {{
-                                            btn.click();
-                                        }} else {{
-                                            var ev = new KeyboardEvent('keydown', {{
-                                                key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
-                                            }});
-                                            el.dispatchEvent(ev);
+                                    }}
+
+                                    // Priority 3: Within container, find action button that is NOT an attachment / file / tool button
+                                    if (container) {{
+                                        var cBtns = Array.from(container.querySelectorAll('button'));
+                                        var filtered = cBtns.filter(function(b) {{
+                                            var a = (b.getAttribute('aria-label') || '').toLowerCase();
+                                            var t = (b.getAttribute('title') || '').toLowerCase();
+                                            var c = (b.className || '').toLowerCase();
+                                            var bad = ['attach', 'file', 'upload', 'joint', 'fichier', 'plus', 'audio', 'mic', 'search', 'model'];
+                                            for (var k = 0; k < bad.length; k++) {{
+                                                if (a.includes(bad[k]) || t.includes(bad[k]) || c.includes(bad[k])) return false;
+                                            }}
+                                            return b.offsetWidth > 0 && b.offsetHeight > 0;
+                                        }});
+                                        if (filtered.length > 0) {{
+                                            return filtered[filtered.length - 1];
                                         }}
-                                    }}, 150);
+                                    }}
+                                    return null;
                                 }}
+
+                                var attempts = 0;
+                                function trySubmit() {{
+                                    attempts++;
+                                    var btn = findSendBtn();
+                                    if (btn) {{
+                                        if (btn.disabled && attempts < 8) {{
+                                            setTimeout(trySubmit, 100);
+                                            return;
+                                        }}
+                                        btn.removeAttribute('disabled');
+                                        btn.click();
+                                        return;
+                                    }}
+
+                                    if (attempts < 6) {{
+                                        setTimeout(trySubmit, 120);
+                                        return;
+                                    }}
+
+                                    // Fallback: Dispatch synthetic KeyboardEvents for Enter
+                                    var kOpts = {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, charCode: 13, bubbles: true, cancelable: true, composed: true }};
+                                    el.dispatchEvent(new KeyboardEvent('keydown', kOpts));
+                                    el.dispatchEvent(new KeyboardEvent('keypress', kOpts));
+                                    el.dispatchEvent(new KeyboardEvent('keyup', kOpts));
+
+                                    var form = el.closest('form');
+                                    if (form && typeof form.requestSubmit === 'function') {{
+                                        try {{ form.requestSubmit(); }} catch(err) {{}}
+                                    }}
+                                }}
+
+                                setTimeout(trySubmit, 120);
                                 return true;
                             }} catch (e) {{
                                 return false;
@@ -1123,6 +1182,20 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                         }})();
                         """
                         target_wv.CoreWebView2.ExecuteScriptAsync(js_send)
+
+                # 4. If auto_submit, schedule a native Win32 VK_RETURN keypress fallback after delay
+                if auto_submit and self.hwnd:
+                    def _send_enter_native():
+                        try:
+                            if self.hwnd and self.is_embedded:
+                                user32.SetFocus(self.hwnd)
+                                VK_RETURN = 0x0D
+                                KEYEVENTF_KEYUP = 0x0002
+                                user32.keybd_event(VK_RETURN, 0, 0, 0)
+                                user32.keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0)
+                        except Exception:
+                            pass
+                    self.after(max(600, delay_ms + 400), _send_enter_native)
             except Exception:
                 pass
 

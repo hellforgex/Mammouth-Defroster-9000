@@ -18,6 +18,10 @@
 - **Package Supply Chain & Dependency Upgrades (C-05):** Fully upgraded all locked dependencies in `uv.lock` via `uv lock --upgrade` (`fastmcp` 4.1.4, `mcp` 2.3.0, `authlib` 1.9.1, `pillow` 13.0.0, `pyjwt` 2.15.1, `certifi`, etc.).
 - **Update Verification & Zip-Slip Defense (C-01):** Added archive traversal checks (`_verify_zip_slip_safe`) to updater and `install.ps1` to prevent Zip-Slip vulnerabilities. Added support for release signature verification.
 
+### 🐛 UI & Automation Fixes
+- **Tasks UI Header Layout & Anti-Clipping:** Reordered Tkinter pack geometry across `tab_tasks`, `tab_memory`, `tab_mammouth_code`, `tab_skills`, and individual task cards so action buttons (`➕ New Task`, `🔄 Refresh`, etc.) are packed right-first (`side="right"`), preventing clipping against the window edge regardless of screen resolution. Added `wraplength=480` and streamlined subtitles.
+- **Task Execution Web Chat Prompt Submission:** Enhanced `send_chat_prompt` in `embedded_browser.py` to reset React synthetic value tracker (`_valueTracker`), accurately resolve the send button across English and French locales while filtering out attachment/upload buttons, poll for React disabled-state resolution, dispatch synthetic keyboard events, and provide a native Win32 hardware `VK_RETURN` fallback for 100% reliable automated prompt delivery.
+
 ### ⚡ Features
 - **Daily Startup Auto-Update Check:** Added 1x daily rate-limiting to automatic startup update checks (throttled to 24-hour intervals) while preserving immediate checks on manual button clicks.
 
