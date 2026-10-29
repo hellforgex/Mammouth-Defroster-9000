@@ -46,6 +46,8 @@ def _sanitize_param(val: Optional[str], name: str) -> str:
     if not val:
         return ""
     clean = str(val).strip()
+    if clean.startswith("-"):
+        raise ValueError(f"Invalid parameter '{name}': leading '-' option switches are prohibited.")
     if any(c in clean for c in [";", "&", "|", "`", "$", "\n", "\r", "\"", "'", "<", ">"]):
         raise ValueError(f"Invalid characters detected in '{name}'. Parameter must not contain shell control characters.")
     return clean
@@ -202,6 +204,19 @@ def ssh_exec_command(
 ) -> Dict[str, Any]:
     """Execute a remote shell command on any SSH server via PuTTY plink."""
     try:
+        from config import load_config
+        cfg = load_config()
+        allow_admin = bool(cfg.get("server", {}).get("allow_admin_shell", False))
+    except Exception:
+        allow_admin = False
+
+    if not allow_admin:
+        raise PermissionError(
+            "Admin shell required: Remote SSH command execution is blocked in Read-Only mode. "
+            "Enable 'server.allow_admin_shell=true' in configuration to execute remote commands."
+        )
+
+    try:
         clean_command = _validate_remote_command(command)
         target_host = _sanitize_param(host, "host")
         target_user = _sanitize_param(username, "username") if username else None
@@ -348,6 +363,24 @@ def ssh_transfer_file(
     port: Optional[int] = None
 ) -> Dict[str, Any]:
     """Securely upload or download files via pscp."""
+    try:
+        from config import load_config
+        cfg = load_config()
+        allow_admin = bool(cfg.get("server", {}).get("allow_admin_shell", False))
+    except Exception:
+        allow_admin = False
+
+    if not allow_admin:
+        raise PermissionError(
+            "Admin shell required: Remote file transfer via SCP is blocked in Read-Only mode. "
+            "Enable 'server.allow_admin_shell=true' in configuration."
+        )
+
+    clean_remote = str(remote_path).strip()
+    if clean_remote.startswith("-"):
+        return {"success": False, "error": "Invalid remote_path: leading '-' option switches are prohibited."}
+    if any(c in clean_remote for c in [";", "&", "|", "`", "$", "\n", "\r", "\"", "'", "<", ">"]):
+        return {"success": False, "error": "Invalid remote_path: contains illegal shell control characters."}
     pscp_bin = shutil.which("pscp") or r"C:\Program Files\PuTTY\pscp.exe"
     if not os.path.exists(pscp_bin) and not shutil.which("pscp"):
         return {"error": "PuTTY pscp.exe not found on system."}

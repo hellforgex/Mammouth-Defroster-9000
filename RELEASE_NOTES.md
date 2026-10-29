@@ -2,7 +2,29 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.7.1**
+> **Current Version:** **v0.7.2**
+
+---
+
+## 🚀 What's New in v0.7.2 — `v0.7.2 - Mammouth Defroster 9000`
+
+### 🔒 Security Audit Remediation & Hardening
+- **Autonomous CLI Agent Sandboxing (A-01):** Disabled `mammouth_code` by default. Enforced strict admin shell gate on `mammouth_code_run_task`, blocking autonomous file modifications and command execution in Read-Only mode. Defaulted `auto_approve` to `False`.
+- **Public Tunnel Safe Defaults (A-03):** Gated Tailscale Funnel in `start_server.bat`, `start_server.ps1`, and GUI server startup behind `server.auto_tunnel: true` and the configured server port.
+- **Universal Path Guard & PSDrive Isolation (B-01, B-02, B-03):**
+  - Normalized parameter colon syntax (`-Path:C:\...`) to ensure containment within the workspace.
+  - Expanded path inspection across all read cmdlets (`Select-String`, `Get-FileHash`, `Get-ItemProperty`, etc.).
+  - Blocked access to PowerShell PSDrives (`env:`, `HKCU:`, `HKLM:`, `cert:`), `$env:` expansion, tilde (`~`), and `Get-Clipboard`.
+  - Blocked UNC network paths (`//` and `\\`) in Read-Only mode.
+  - Added credentials and database files (`credentials.json`, `oauth.db`, `gdrive_token.json`, `tasks.db`, `memory.db`, `.env`) to sensitive denylist.
+- **Security Shield Blacklist Expansion (B-07):** Added `curl.exe`, `wget.exe`, `Start-Process`, `pwsh.exe -c`, `python.exe -c`, and `Invoke-Command -ScriptBlock` to `BLOCKED_COMMAND_PATTERNS`.
+- **Desktop Open Execution Gate (B-08):** Prohibited launching executable files and passing command-line arguments via `desktop_open` in Read-Only mode.
+- **PuTTY & SSH Management Hardening (B-09):** Disabled `putty_ssh` by default in configuration. Gated remote command execution on admin permissions, and rejected leading `-` option switches on all parameters.
+- **Dependency Upgrades (C-05):** Fully upgraded dependencies in `uv.lock` (`fastmcp` 4.1.4, `mcp` 2.3.0, `authlib` 1.9.1, `pillow` 13.0.0, `pyjwt` 2.15.1, `certifi`, etc.).
+- **Zip-Slip & Integrity Verification (C-01):** Hardened package extraction against directory traversal in updater and installer.
+
+### ⚡ Features
+- **Daily Startup Auto-Update Check:** Rate-limited background startup update checks to once per 24 hours while allowing instant manual checks from Settings.
 
 ---
 

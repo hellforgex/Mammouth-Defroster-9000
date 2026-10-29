@@ -50,7 +50,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "registration_token": "",          # Optional: If set, only clients with this token in Authorization header can register OAuth clients
         "ssl_certfile": "",
         "ssl_keyfile": "",
-        "auto_check_updates": True,        # Automatically check for updates on startup
+        "auto_check_updates": True,        # Automatically check for updates on startup (once a day)
+        "last_update_check_time": 0.0,     # Timestamp of the last update check to limit to 1x daily        # Automatically check for updates on startup
         "start_in_web_tab": False,         # Chat-First Mode: Auto switch to Mammouth AI tab on startup
         "global_hotkey_enabled": True,     # Global hotkey (Ctrl+Shift+M) to summon/toggle Mammouth Defroster
         "global_hotkey": "Ctrl+Shift+M",
@@ -87,7 +88,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "description": "Execute synchronous commands and manage long-running background tasks. (High Privilege)"
         },
         "putty_ssh": {
-            "enabled": True,
+            "enabled": False,  # Disabled by default for security
             "name": "PuTTY & SSH Host Manager (DPAPI Encrypted)",
             "description": "Remote shell execution, PuTTY GUI launch, SCP file transfers, and host manager."
         },
@@ -108,7 +109,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "description": "Multi-monitor screenshot capture, downscaling for multimodal LLMs, and workspace saving."
         },
         "mammouth_code": {
-            "enabled": True,
+            "enabled": False,  # Disabled by default for security
             "name": "Mammouth Code CLI Agent",
             "description": "Terminal coding agent integration: 1-click install, interactive launcher, headless task execution, and dual-bridge MCP sync."
         },

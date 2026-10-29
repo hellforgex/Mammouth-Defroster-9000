@@ -8,6 +8,28 @@ from modules.putty_ssh import ssh_exec_command, ssh_open_putty_window, ssh_trans
 
 
 class TestPuttySecurity(unittest.TestCase):
+    def setUp(self):
+        self.admin_patcher = patch("config.load_config", return_value={"server": {"allow_admin_shell": True}})
+        self.admin_patcher.start()
+
+    def tearDown(self):
+        self.admin_patcher.stop()
+
+    def test_ssh_exec_blocked_in_readonly_mode(self):
+        with patch("config.load_config", return_value={"server": {"allow_admin_shell": False}}):
+            with self.assertRaises(PermissionError):
+                ssh_exec_command("192.168.1.50", "uptime")
+
+    def test_ssh_transfer_blocked_in_readonly_mode(self):
+        with patch("config.load_config", return_value={"server": {"allow_admin_shell": False}}):
+            with self.assertRaises(PermissionError):
+                ssh_transfer_file("192.168.1.50", "local.txt", "/tmp/remote.txt")
+
+    def test_ssh_transfer_remote_path_injection_blocked(self):
+        res = ssh_transfer_file("192.168.1.50", "local.txt", "-load session_name")
+        self.assertFalse(res.get("success", False))
+        self.assertIn("prohibited", res.get("error", "").lower())
+
     @patch("modules.putty_ssh.shutil.which", return_value="plink.exe")
     def test_ssh_exec_pwfile_usage_and_cleanup(self, mock_which):
         pw_file_seen = []

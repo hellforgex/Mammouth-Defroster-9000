@@ -63,6 +63,11 @@ BLOCKED_COMMAND_PATTERNS = [
     r'\bsc(\.exe)?\s+(config|create|delete|start|stop)\b',
     r'\bwevtutil(\.exe)?\s+(cl|clear-log)\b',
     r'\bschtasks(\.exe)?\s+/(create|delete|change|run)\b',
+    r'\b(curl|wget)(\.exe)?\b',
+    r'\b(Start-Process|saps)\b',
+    r'\b(powershell|pwsh)(\.exe)?\s+.*-(File|Command|c)\b',
+    r'\b(python|python3|py)(\.exe)?\s+.*-(c|m)\b',
+    r'\bInvoke-Command\b.*-ScriptBlock\b',
 ]
 
 
@@ -72,7 +77,12 @@ SENSITIVE_PATH_DENYLIST_PATTERNS = [
     r'\.(pem|key|pfx|p12|kdbx)\b',
     r'\b(SAM|NTDS\.dit)\b',
     r'\\system32\\config\\(system|security|sam)',
-    r'\b(config\.json|hosts\.json)\b',
+    r'\b(config|conf.?g)\.json\b',
+    r'\b(hosts|host.?)\.json\b',
+    r'\b(credentials|credent.?als)\.json\b',
+    r'\b(oauth|tasks|memory)\.db\b',
+    r'\bgdrive_token\.json\b',
+    r'(^|[\\/])\.env\b',
 ]
 
 
@@ -80,7 +90,13 @@ READONLY_FILE_COMMANDS = {
     "get-content", "gc", "cat", "type",
     "get-item", "gi",
     "get-childitem", "gci", "dir", "ls",
-    "get-acl", "findstr"
+    "get-acl", "findstr",
+    "select-string", "sls",
+    "get-filehash",
+    "get-authenticodesignature",
+    "get-winevent",
+    "get-itemproperty", "gp",
+    "test-path"
 }
 
 
@@ -167,36 +183,60 @@ def _check_readonly_path_guard(raw_cmd: str, cwd: Optional[str] = None) -> None:
         if re.search(pat, raw_cmd, re.IGNORECASE):
             raise PermissionError(f"Path Guard: Access to sensitive credential store or configuration file matching '{pat}' is blocked in Read-Only mode.")
 
+    # Normalize colon/equals parameter syntax: e.g. -Path:C:\... -> -Path C:\...
+    norm_cmd = re.sub(r'-(Path|LiteralPath|FilePath|Filter)[:=]', r'-\1 ', raw_cmd, flags=re.IGNORECASE)
+
     # 2. R7-N2: Root-Recurse check with lookahead (blocking drive/system root recursive scans)
-    if (re.search(r'\b(get-childitem|gci|dir|ls)\b.*-[rR](ecurse)?\s+[a-zA-Z]:[\\/](?=[\s"\'\\/a-zA-Z0-9_-]|$)', raw_cmd, re.IGNORECASE) or
-        re.search(r'\b(get-childitem|gci|dir|ls)\b\s+[a-zA-Z]:[\\/][^\s|;]*\s+-[rR](ecurse)?(?=[\s"\']|$)', raw_cmd, re.IGNORECASE) or
-        re.search(r'\b(get-childitem|gci|dir|ls)\b.*-[rR](ecurse)?\s+[cC]:\\?(windows)?(?=[\s"\'\\]|$)', raw_cmd, re.IGNORECASE) or
-        re.search(r'\bdir\s+[a-zA-Z]:[\\/]\s*/[sS](?=[\s"\']|$)', raw_cmd, re.IGNORECASE) or
-        re.search(r'\bdir\s+/[sS]\s+[a-zA-Z]:[\\/](?=[\s"\']|$)', raw_cmd, re.IGNORECASE)):
+    recurse_patterns = [
+        r"\b(get-childitem|gci|dir|ls)\b.*-[rR](ecurse)?\s+[a-zA-Z]:[\\/]",
+        r"\b(get-childitem|gci|dir|ls)\b\s+[a-zA-Z]:[\\/][^\s|;]*\s+-[rR](ecurse)?",
+        r"\b(get-childitem|gci|dir|ls)\b.*-[rR](ecurse)?\s+[cC]:\\?(windows)?",
+        r"\b(get-childitem|gci|dir|ls)\b.*-[rR](ecurse)?.*[a-zA-Z]:[\\/]",
+        r"\bdir\s+[a-zA-Z]:[\\/]\s*/[sS]",
+        r"\bdir\s+/[sS]\s+[a-zA-Z]:[\\/]",
+    ]
+    if any(re.search(p, norm_cmd, re.IGNORECASE) for p in recurse_patterns):
         raise PermissionError("Path Guard: Recursive directory traversal of root or non-workspace drive path is blocked in Read-Only mode.")
 
     # 3. R7-N1: Path Argument Extraction & Resolution against workspace
     workspace_root = _get_workspace_root_resolved()
-    segments = re.split(r'\||;|&|[\r\n]+', raw_cmd)
+    segments = re.split(r'\||;|&|&&|\|\||[\r\n]+', norm_cmd)
     for seg in segments:
         seg = seg.strip()
         if not seg:
             continue
-        tokens = re.findall(r'--?[a-zA-Z0-9_-]+|"[^"]*"|\'[^\']*\'|[^\s]+', seg)
+        tokens = re.findall(r"""--?[a-zA-Z0-9_-]+|"[^"]*"|'[^']*'|[^\s]+""", seg)
         if not tokens:
             continue
         first_token = tokens[0].lower().strip("&.").removesuffix(".exe")
         if first_token in READONLY_FILE_COMMANDS:
             for tok in tokens[1:]:
-                # Ignore parameter switches (e.g. -Path, -Filter, -Recurse, /s, /a)
-                if tok.startswith("-") or tok.startswith("/"):
+                # UNC paths are strictly prohibited in read-only mode
+                if tok.startswith("//") or tok.startswith("\\\\"):
+                    raise PermissionError("Path Guard: UNC network paths ('//' or '\\\\') are blocked in Read-Only mode.")
+
+                # Ignore parameter switches (e.g. -Path, -Filter, -Recurse)
+                if tok.startswith("-"):
                     continue
-                arg_val = tok.strip('\'"')
+
+                # Ignore short cmd switches (e.g. /s, /a, /q, /w), but do NOT ignore path tokens starting with /
+                if tok.startswith("/"):
+                    if re.match(r'^/[a-zA-Z0-9_-]{1,2}(?::.*)?$', tok) and "/" not in tok[1:]:
+                        continue
+
+                arg_val = tok.strip("'\"")
                 if not arg_val:
                     continue
+                # Strip leading colon if left over from colon parameter syntax
+                if arg_val.startswith(":"):
+                    arg_val = arg_val[1:]
+                if not arg_val:
+                    continue
+
                 # Resolve relative paths against the directory the command will actually run in
                 base_dir = cwd or str(BASE_DIR)
-                candidate = arg_val if os.path.isabs(arg_val) or (len(arg_val) >= 2 and arg_val[1] == ":") else os.path.join(base_dir, arg_val)
+                is_abs = os.path.isabs(arg_val) or (len(arg_val) >= 2 and arg_val[1] == ":") or arg_val.startswith(("/", "\\\\"))
+                candidate = arg_val if is_abs else os.path.join(base_dir, arg_val)
                 resolved = os.path.realpath(os.path.abspath(candidate)).casefold()
 
                 # Denylist check on resolved path
@@ -314,6 +354,17 @@ def _validate_shell_command(command: str, allow_admin: Optional[bool] = None, cw
                     f"Read-Only Shell: {construct_name} are not allowed in Read-Only mode because they can execute nested commands. "
                     f"Enable 'server.allow_admin_shell=true' in configuration for full PowerShell syntax."
                 )
+
+        # Block PowerShell PSDrives, environment variable expansion, registry hives, and home directory expansion
+        psdrive_guards = [
+            (r'\b(env:|hkcu:|hklm:|cert:|variable:|wsman:)', "PowerShell PSDrives (env:, registry, cert:, variable:)"),
+            (r'\$env:\w+', "Environment variable expansion ($env:)"),
+            (r'\bGet-Clipboard\b', "Clipboard reading cmdlet (Get-Clipboard)"),
+            (r"""(^|[\s"'\\/])~([\\/\s"'$]|$)""", "Home directory expansion (~)"),
+        ]
+        for pat, desc in psdrive_guards:
+            if re.search(pat, clean, re.IGNORECASE) or re.search(pat, s_no_quotes, re.IGNORECASE):
+                raise PermissionError(f"Read-Only Shell: Access to {desc} is blocked in Read-Only mode to prevent host enumeration and credential exposure.")
         pipeline_segments = re.split(r'\||;|&&|\|\||&|[\r\n]+', s_no_quotes)
         for seg in pipeline_segments:
             seg_tokens = seg.strip().split()
@@ -325,6 +376,19 @@ def _validate_shell_command(command: str, allow_admin: Optional[bool] = None, cw
                 if subcmd != "query":
                     raise PermissionError("Admin shell required: 'reg' command is only allowed with 'query' in Read-Only mode.")
                 continue
+
+            if first_token in ("route", "route.exe"):
+                # Only 'route print' is permitted in Read-Only mode
+                has_modifying = any(tok.lower() in ("add", "delete", "change") for tok in seg_tokens[1:])
+                if has_modifying:
+                    raise PermissionError("Admin shell required: 'route' command with state-modifying arguments (add, delete, change) is blocked in Read-Only mode.")
+
+            if first_token in ("ipconfig", "ipconfig.exe"):
+                # Block release, renew, and flushdns in Read-Only mode
+                for tok in seg_tokens[1:]:
+                    low = tok.lower()
+                    if low.startswith(("/release", "/renew", "/flushdns", "-release", "-renew", "-flushdns")):
+                        raise PermissionError(f"Admin shell required: 'ipconfig' with network-reset switches ({tok}) is blocked in Read-Only mode.")
 
             if first_token in ("out-file", "tee-object", "tee"):
                 raise PermissionError(f"Admin shell required: '{first_token}' modifies disk and is blocked in Read-Only mode.")
@@ -635,6 +699,39 @@ def desktop_open(target: str, arguments: Optional[str] = None) -> Dict[str, Any]
     dangerous_schemes = ("javascript:", "data:", "vbscript:", "ms-msdt:", "search-ms:")
     if any(lower_target.startswith(ds) for ds in dangerous_schemes):
         return {"status": "error", "error": f"Blocked potentially hazardous target scheme: '{clean_target}'"}
+
+    # B-08: Check admin mode permissions
+    admin_allowed = _is_admin_shell_allowed()
+    if not admin_allowed:
+        clean_args = str(arguments).strip() if arguments else ""
+        if clean_args:
+            raise PermissionError("Admin shell required: Passing command-line arguments to desktop_open is blocked in Read-Only mode. Enable 'server.allow_admin_shell=true' in configuration.")
+
+        if lower_target.startswith(("http://", "https://", "mailto:")):
+            # Safe browser web link, permitted in Read-Only mode
+            pass
+        else:
+            # Executables and script files are strictly blocked in Read-Only mode
+            blocked_exts = (
+                ".exe", ".bat", ".cmd", ".ps1", ".vbs", ".vbe", ".js", ".jse",
+                ".wsf", ".wsh", ".msc", ".cpl", ".com", ".scr", ".pif", ".hta",
+                ".reg", ".lnk", ".bin", ".jar", ".py"
+            )
+            if any(lower_target.endswith(ext) for ext in blocked_exts):
+                raise PermissionError(
+                    f"Admin shell required: Launching executables or scripts ('{clean_target}') via desktop_open is blocked in Read-Only mode. "
+                    f"Enable 'server.allow_admin_shell=true' in configuration."
+                )
+
+            # For non-executable documents, enforce workspace boundary containment
+            ws_root = _get_workspace_root_resolved()
+            cand = clean_target if os.path.isabs(clean_target) else os.path.join(str(BASE_DIR), clean_target)
+            res_path = os.path.realpath(os.path.abspath(cand)).casefold()
+            is_in_ws = res_path == ws_root or res_path.startswith(ws_root + os.sep) or res_path.startswith(ws_root + "/")
+            if not is_in_ws:
+                raise PermissionError(
+                    f"Admin shell required: Opening file '{clean_target}' outside the workspace sandbox is blocked in Read-Only mode."
+                )
 
     try:
         clean_args = str(arguments).strip() if arguments else ""

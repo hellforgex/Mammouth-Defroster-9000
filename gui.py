@@ -262,7 +262,7 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.7.1"
+APP_VERSION = "v0.7.2"
 
 
 
@@ -2259,17 +2259,38 @@ class MammouthControlCenter(ctk.CTk):
                 self.mammouth_browser.set_tab_visible(False)
 
     def _check_updates_async(self, manual: bool = False):
+        server_cfg = self.config_data.get("server", {})
+        if not manual:
+            last_check = float(server_cfg.get("last_update_check_time", 0.0))
+            now = time.time()
+            # 86400 seconds = 24 hours (once a day on startup)
+            if (now - last_check) < 86400:
+                self._log("[UPDATER] Daily update check skipped (last checked less than 24 hours ago).")
+                return
+
         def worker():
             try:
                 update_info = check_for_update(APP_VERSION)
+                # Persist last update check timestamp
+                now_ts = time.time()
+                self.config_data.setdefault("server", {})["last_update_check_time"] = now_ts
+                try:
+                    save_config(self.config_data)
+                except Exception:
+                    pass
+
                 if update_info:
                     self.after(0, self._on_update_found, update_info)
                 elif manual:
                     self.after(0, lambda: messagebox.showinfo("Up to Date", f"Mammouth Defroster 9000 is up to date ({APP_VERSION})!", parent=self))
+                else:
+                    self._log(f"[UPDATER] Daily startup check completed: Defroster is up to date ({APP_VERSION}).")
             except Exception as e:
                 if manual:
                     # Bind e now: Python deletes the except variable when the block ends
                     self.after(0, lambda err=e: messagebox.showwarning("Update Check", f"Update check failed: {err}", parent=self))
+                else:
+                    self._log(f"[UPDATER] Daily update check error: {e}")
 
         t = threading.Thread(target=worker, daemon=True)
         t.start()
@@ -6564,11 +6585,13 @@ class MammouthControlCenter(ctk.CTk):
 
         self._log(f"Starting in-process FastMCP server on {host}:{port}...")
 
-        # Activate public tunnel in background if selected
+        # Activate public tunnel in background only if auto_tunnel is enabled
         server_cfg = self.config_data.get("server", {})
-        tunnel_choice = server_cfg.get("tunnel_mode")
-
-        self._start_tunnel_for_mode(tunnel_choice, port)
+        if server_cfg.get("auto_tunnel", False):
+            tunnel_choice = server_cfg.get("tunnel_mode")
+            self._start_tunnel_for_mode(tunnel_choice, port)
+        else:
+            self._log("[NETWORK] Public exposure tunnel inactive (auto_tunnel=false). Local access only.")
 
         try:
             import uvicorn

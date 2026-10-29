@@ -222,6 +222,18 @@ def get_mammouth_code_status() -> Dict[str, Any]:
 
 def install_or_update_mammouth_code() -> Dict[str, Any]:
     """Execute official PowerShell installer for Mammouth Code."""
+    try:
+        from config import load_config
+        cfg = load_config()
+        allow_admin = bool(cfg.get("server", {}).get("allow_admin_shell", False))
+    except Exception:
+        allow_admin = False
+
+    if not allow_admin:
+        raise PermissionError(
+            "Admin shell required: Installing or upgrading Mammouth Code downloads and executes external scripts, "
+            "which is blocked in Read-Only mode. Enable 'server.allow_admin_shell=true' in configuration."
+        )
     exe = get_mammouth_executable()
     start_time = time.time()
 
@@ -303,6 +315,18 @@ def launch_mammouth_terminal(
     preferred_terminal: Optional[str] = None
 ) -> Dict[str, Any]:
     """Launch an interactive Mammouth Code terminal session in a new desktop window."""
+    try:
+        from config import load_config
+        cfg = load_config()
+        allow_admin = bool(cfg.get("server", {}).get("allow_admin_shell", False))
+    except Exception:
+        allow_admin = False
+
+    if not allow_admin:
+        raise PermissionError(
+            "Admin shell required: Launching an interactive Mammouth Code terminal session is blocked in Read-Only mode. "
+            "Enable 'server.allow_admin_shell=true' in configuration."
+        )
     exe = get_mammouth_executable()
     if not exe:
         return {
@@ -408,13 +432,25 @@ def run_mammouth_task(
     prompt: str,
     workspace_path: Optional[str] = None,
     timeout_seconds: int = 180,
-    auto_approve: bool = True
+    auto_approve: bool = False
 ) -> Dict[str, Any]:
     """Execute a multi-turn autonomous coding task headless via Mammouth Code CLI ('mammouth run').
     
     NOTE: This invokes an external autonomous LLM agent loop which consumes API budget quota.
     To execute existing local Python or PowerShell scripts (e.g. skills/*.py, *.ps1), ALWAYS use powershell_exec or command_run instead ($0 cost, local).
     """
+    try:
+        from config import load_config
+        cfg = load_config()
+        allow_admin = bool(cfg.get("server", {}).get("allow_admin_shell", False))
+    except Exception:
+        allow_admin = False
+
+    if not allow_admin:
+        raise PermissionError(
+            "Admin shell required: 'mammouth_code_run_task' can modify files and execute commands on the host, "
+            "which is blocked in Read-Only mode. Enable 'server.allow_admin_shell=true' in configuration to allow autonomous task execution."
+        )
     exe = get_mammouth_executable()
     if not exe:
         return {

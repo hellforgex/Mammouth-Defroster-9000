@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.2] - 2026-10-29
+
+### 🔒 Security Hardening & Remediation
+- **Autonomous CLI Agent Sandboxing (A-01):** Disabled `mammouth_code` by default in configuration. Enforced strict admin shell permission check on `mammouth_code_run_task`, `launch_mammouth_terminal`, and installer tools, preventing arbitrary command and code execution when `allow_admin_shell=false`. Defaulted `auto_approve` to `False`.
+- **Public Exposure Tunnel Gating (A-03):** Gated Tailscale Funnel in `start_server.bat`, `start_server.ps1`, and GUI server startup behind `server.auto_tunnel: true` and the configured port, preventing unwanted external port exposure.
+- **Universal Path Guard Hardening (B-01, B-02, B-03):** 
+  - Normalized parameter colon syntax (e.g. `-Path:C:\...`, `-LiteralPath:C:\...`) so parameters are properly inspected against the workspace boundary.
+  - Expanded read-only inspection to all file-reading cmdlets (`Select-String`, `Get-FileHash`, `Get-ItemProperty`, `Get-WinEvent`, `Get-AuthenticodeSignature`, etc.).
+  - Hardened root recursion detection against drive root traversal variants.
+  - Blocked access to PowerShell PSDrives (`env:`, `HKLM:`, `HKCU:`, `cert:`, `variable:`, `wsman:`), `$env:` expansion, tilde (`~`) home directory expansion, and `Get-Clipboard`.
+  - Prohibited UNC network paths (`//` and `\\`) in Read-Only mode.
+  - Expanded sensitive credentials denylist to include `credentials.json`, `oauth.db`, `gdrive_token.json`, `tasks.db`, `memory.db`, `.env`, and wildcard variants.
+- **Security Shield Blacklist Expansion (B-07):** Added `curl.exe`, `wget.exe`, `Start-Process`/`saps`, `pwsh.exe -c`, `python.exe -c`/`-m`, and `Invoke-Command -ScriptBlock` to `BLOCKED_COMMAND_PATTERNS` across all modes.
+- **Desktop Open Execution Gate (B-08):** Restricted `desktop_open` when `allow_admin_shell=false`: prohibited command-line arguments and execution of desktop binaries/scripts (`.exe`, `.bat`, `.cmd`, `.ps1`, etc.), permitting only safe web URLs (`http://`, `https://`, `mailto:`) and workspace documents.
+- **PuTTY & SSH Management Hardening (B-09):** Disabled `putty_ssh` by default in configuration. Gated remote command execution and SCP file transfers behind admin shell permissions. Prohibited leading `-` in all parameter values and validated `remote_path`.
+- **Package Supply Chain & Dependency Upgrades (C-05):** Fully upgraded all locked dependencies in `uv.lock` via `uv lock --upgrade` (`fastmcp` 4.1.4, `mcp` 2.3.0, `authlib` 1.9.1, `pillow` 13.0.0, `pyjwt` 2.15.1, `certifi`, etc.).
+- **Update Verification & Zip-Slip Defense (C-01):** Added archive traversal checks (`_verify_zip_slip_safe`) to updater and `install.ps1` to prevent Zip-Slip vulnerabilities. Added support for release signature verification.
+
+### ⚡ Features
+- **Daily Startup Auto-Update Check:** Added 1x daily rate-limiting to automatic startup update checks (throttled to 24-hour intervals) while preserving immediate checks on manual button clicks.
+
 ## [0.7.1] - 2026-10-28
 
 ### 🐛 Fixes & Stability

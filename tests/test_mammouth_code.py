@@ -24,9 +24,22 @@ class TestMammouthCodeModule(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.ws_path = Path(self.temp_dir.name)
+        self.admin_patcher = patch("config.load_config", return_value={"server": {"allow_admin_shell": True, "workspace_root": str(self.ws_path)}})
+        self.admin_patcher.start()
 
     def tearDown(self):
+        self.admin_patcher.stop()
         self.temp_dir.cleanup()
+
+    def test_run_task_blocked_in_readonly_mode(self):
+        with patch("config.load_config", return_value={"server": {"allow_admin_shell": False}}):
+            with self.assertRaises(PermissionError):
+                run_mammouth_task("test prompt", workspace_path=str(self.ws_path))
+
+    def test_launch_terminal_blocked_in_readonly_mode(self):
+        with patch("config.load_config", return_value={"server": {"allow_admin_shell": False}}):
+            with self.assertRaises(PermissionError):
+                launch_mammouth_terminal(workspace_path=str(self.ws_path))
 
     @patch("modules.mammouth_code.shutil.which")
     @patch("os.path.isfile")

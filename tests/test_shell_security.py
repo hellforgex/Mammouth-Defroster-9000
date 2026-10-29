@@ -1,3 +1,4 @@
+from unittest.mock import patch
 import unittest
 import os
 import sys
@@ -216,13 +217,89 @@ class TestShellSecurity(unittest.TestCase):
         self.assertIn("MCP Background Log Capture Test", out["lines"])
 
     def test_start_process_admin_control(self):
-        """Test Start-Process is allowed when allow_admin=True and blocked when allow_admin=False."""
-        valid_cmd = "Start-Process notepad"
-        res = _validate_shell_command(valid_cmd, allow_admin=True)
-        self.assertEqual(res, valid_cmd)
-
+        """Test Start-Process is blocked by Security Shield across both admin and readonly modes."""
+        cmd = "Start-Process notepad"
         with self.assertRaises(PermissionError):
-            _validate_shell_command(valid_cmd, allow_admin=False)
+            _validate_shell_command(cmd, allow_admin=True)
+        with self.assertRaises(PermissionError):
+            _validate_shell_command(cmd, allow_admin=False)
+
+    def test_path_guard_colon_syntax_blocked(self):
+        """B-01: Parameter colon syntax (-Path:C:\...) must be caught and blocked outside workspace."""
+        cmd = "Get-Content -Path:C:\\Windows\\win.ini"
+        with self.assertRaises(PermissionError):
+            _validate_shell_command(cmd, allow_admin=False)
+
+    def test_path_guard_forward_slash_and_unc_blocked(self):
+        """B-01/B-03/B-Addendum: Forward slash paths and UNC paths must be blocked in read-only mode."""
+        with self.assertRaises(PermissionError):
+            _validate_shell_command("Get-Content /etc/hostname", allow_admin=False)
+        with self.assertRaises(PermissionError):
+            _validate_shell_command("Get-Content //host/share/secret.txt", allow_admin=False)
+        with self.assertRaises(PermissionError):
+            _validate_shell_command(r"Get-Content \\server\share\secret.txt", allow_admin=False)
+
+    def test_path_guard_select_string_blocked(self):
+        """B-02: Select-String outside workspace must be blocked in read-only mode."""
+        cmd = "Select-String -Path C:\\Windows\\win.ini -Pattern test"
+        with self.assertRaises(PermissionError):
+            _validate_shell_command(cmd, allow_admin=False)
+
+    def test_psdrive_and_env_guards_blocked(self):
+        """B-Addendum: PSDrives, env vars, tilde, and clipboard reading must be blocked in read-only mode."""
+        blocked_cmds = [
+            "Get-ChildItem env:",
+            "Get-ChildItem HKLM:\\Software",
+            "Get-ChildItem HKCU:\\Software",
+            "Get-Clipboard",
+            "Get-Content ~/.ssh/id_rsa",
+            "Get-ChildItem $env:USERPROFILE",
+        ]
+        for cmd in blocked_cmds:
+            with self.assertRaises(PermissionError, msg=f"Expected PermissionError for '{cmd}'"):
+                _validate_shell_command(cmd, allow_admin=False)
+
+    def test_root_recurse_colon_syntax_blocked(self):
+        """B-03: Root recurse with -Path: must be blocked in read-only mode."""
+        cmd = "Get-ChildItem -Path:C:\\ -Recurse"
+        with self.assertRaises(PermissionError):
+            _validate_shell_command(cmd, allow_admin=False)
+
+    def test_state_changing_binaries_blocked(self):
+        """B-Addendum: Modifying route and ipconfig switches must be blocked in read-only mode."""
+        with self.assertRaises(PermissionError):
+            _validate_shell_command("route add 10.0.0.0 mask 255.0.0.0 192.168.1.1", allow_admin=False)
+        with self.assertRaises(PermissionError):
+            _validate_shell_command("ipconfig /release", allow_admin=False)
+        # Querying is permitted
+        res = _validate_shell_command("route print", allow_admin=False)
+        self.assertIn("route", res)
+
+    def test_admin_blacklist_defense_in_depth(self):
+        """B-07: Verify curl, wget, pwsh -c, and python -c are blocked even in admin mode."""
+        patterns = [
+            "curl.exe https://malicious.site",
+            "wget https://malicious.site",
+            'pwsh.exe -c "Write-Host test"',
+            'python.exe -c "import os"',
+            'Invoke-Command -ScriptBlock { Get-Process }'
+        ]
+        for cmd in patterns:
+            with self.assertRaises(PermissionError, msg=f"Expected PermissionError for '{cmd}'"):
+                _validate_shell_command(cmd, allow_admin=True)
+
+    def test_desktop_open_admin_gate(self):
+        """B-08: desktop_open must reject arguments and executable launches when admin shell is disabled."""
+        from modules.shell_processes import desktop_open
+        with patch("config.load_config", return_value={"server": {"allow_admin_shell": False}}):
+            with self.assertRaises(PermissionError):
+                desktop_open("cmd.exe", arguments="/c dir")
+            with self.assertRaises(PermissionError):
+                desktop_open("calc.exe")
+            # URLs are permitted in read-only mode
+            with patch("os.startfile"):
+                res = desktop_open("https://mammouth.ai")
+                self.assertEqual(res["status"], "success")
 
     def test_powershell_wrapper_unwrapping(self):
         """Test powershell -Command outer wrapper is cleanly unwrapped without security false positive."""

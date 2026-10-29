@@ -10,6 +10,7 @@
     "ssl_keyfile": "",
     "registration_token": "",
     "auto_check_updates": true,
+    "last_update_check_time": 0.0,
     "tunnel_mode": "Tailscale Funnel",
     "endpoint_path": "/sse",
     "auto_tunnel": false,
@@ -56,7 +57,7 @@
       "enabled": false
     },
     "putty_ssh": {
-      "enabled": true
+      "enabled": false
     },
     "system_monitor": {
       "enabled": true
@@ -69,7 +70,7 @@
       "require_consent": true
     },
     "mammouth_code": {
-      "enabled": true
+      "enabled": false
     },
     "desktop_input": {
       "enabled": true

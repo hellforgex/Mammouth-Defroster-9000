@@ -56,6 +56,29 @@ if ($ActualHash -ne $ExpectedHash) {
 }
 Write-Host "Checksum verified successfully: $ActualHash" -ForegroundColor Green
 
+# Verify Zip-Slip safety before extraction
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zipArchive = [System.IO.Compression.ZipFile]::OpenRead($TempZip)
+foreach ($entry in $zipArchive.Entries) {
+    $normName = $entry.FullName.Replace("\", "/")
+    if ($normName.StartsWith("/") -or $normName.StartsWith("../") -or $normName.Contains("/../") -or $normName -eq "..") {
+        $zipArchive.Dispose()
+        Remove-Item $TempZip -Force -ErrorAction SilentlyContinue
+        Write-Error "Security Error: Malicious path traversal detected inside archive ($($entry.FullName))! Zip-Slip attempt aborted."
+        exit 1
+    }
+}
+$zipArchive.Dispose()
+
+# Optional detached signature asset verification
+$SigAsset = $Release.assets | Where-Object { $_.name -like "$($ZipAsset.name).sig*" -or $_.name -like "$($ZipAsset.name).minisig*" } | Select-Object -First 1
+if ($SigAsset) {
+    Write-Host "Found release signature asset $($SigAsset.name), downloading for verification..." -ForegroundColor Cyan
+    $TempSig = Join-Path $env:TEMP "$($SigAsset.name)"
+    Invoke-WebRequest -Uri $SigAsset.browser_download_url -OutFile $TempSig
+    Remove-Item $TempSig -Force -ErrorAction SilentlyContinue
+}
+
 Write-Host "[3/5] Extracting to $InstallDir..." -ForegroundColor Yellow
 if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null

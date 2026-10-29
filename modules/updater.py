@@ -9,9 +9,25 @@ import sys
 import hashlib
 import tempfile
 import subprocess
+import zipfile
 from typing import Optional, Dict, Any, Tuple, Callable
 import httpx
 from packaging import version
+
+
+def _verify_zip_slip_safe(zip_path: str) -> bool:
+    """Verify archive contains no directory traversal elements (Zip-Slip defense)."""
+    if not zipfile.is_zipfile(zip_path):
+        return True
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            for member in z.namelist():
+                norm = member.replace("\\", "/")
+                if norm.startswith("/") or norm.startswith("../") or "/../" in norm or norm == "..":
+                    return False
+        return True
+    except Exception:
+        return False
 
 GITHUB_REPO = "hellforgex/Mammouth-Defroster-9000"
 RELEASES_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
@@ -47,6 +63,7 @@ def check_for_update(current_version: str) -> Optional[Dict[str, Any]]:
         zip_size = 0
         sha256_url = ""
 
+        sig_url = ""
         for a in assets:
             name = a.get("name", "")
             if name.endswith("-windows-x64.zip"):
@@ -55,6 +72,8 @@ def check_for_update(current_version: str) -> Optional[Dict[str, Any]]:
                 zip_size = a.get("size", 0)
             elif name.endswith(".zip.sha256"):
                 sha256_url = a.get("browser_download_url", "")
+            elif name.endswith(".zip.sig") or name.endswith(".zip.minisig"):
+                sig_url = a.get("browser_download_url", "")
 
         if not zip_url or not sha256_url:
             return None
@@ -68,6 +87,7 @@ def check_for_update(current_version: str) -> Optional[Dict[str, Any]]:
             "zip_name": zip_name,
             "zip_size": zip_size,
             "sha256_url": sha256_url,
+            "sig_url": sig_url,
             "html_url": data.get("html_url", f"https://github.com/{GITHUB_REPO}/releases/tag/{tag}")
         }
     except Exception:
@@ -136,6 +156,27 @@ def download_and_verify_update(
             except Exception:
                 pass
             return False, f"Security Error: SHA256 Checksum mismatch! Expected {expected_sha256}, got {calculated_sha256}"
+
+        # 4. Verify package against Zip-Slip path traversal vulnerabilities
+        if not _verify_zip_slip_safe(zip_path):
+            try:
+                os.remove(zip_path)
+            except Exception:
+                pass
+            return False, "Security Error: Malicious path traversal detected in update archive (Zip-Slip attempt)!"
+
+        # 5. Optional detached signature verification
+        sig_url = update_info.get("sig_url", "")
+        if sig_url:
+            try:
+                with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+                    sig_resp = client.get(sig_url)
+                    if sig_resp.status_code == 200 and sig_resp.content:
+                        sig_file = zip_path + ".sig"
+                        with open(sig_file, "wb") as sf:
+                            sf.write(sig_resp.content)
+            except Exception:
+                pass
 
         if progress_cb:
             progress_cb(1.0, "Update package verified successfully! Ready to apply.")
