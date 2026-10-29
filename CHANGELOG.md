@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.3] - 2026-10-29
+
+### 🐛 Web Chat Automation & In-App Browser Fixes
+- **Automated Task Prompt Submission Engine Overhaul:**
+  - **Asynchronous Input Polling (`pollAndInject`):** Eliminated prompt dropouts during scheduled background tasks where script injection would immediately return false if the chat textarea was still mounting. The submission engine now polls asynchronously (up to 25 attempts / 3.0 seconds) until the input element is ready in the DOM.
+  - **Multilingual Button Resolver:** Added German action verbs (`senden`, `absenden`, `abschicken`) alongside English and French (`send`, `envoyer`, `submit`, `prompt`, `valider`, `transmettre`), with comprehensive exclusion of auxiliary buttons (`attach`, `file`, `upload`, `mic`, `audio`, `voice`, `camera`, `settings`).
+  - **Full Pointer & Mouse Event Sequence:** Replaced naked `.click()` with a standard event chain (`pointerdown`, `mousedown`, `pointerup`, `mouseup`, `click`), ensuring full compatibility with React 18 synthetic event dispatchers and Tailwind UI components.
+  - **Ancestor Walk for Action Buttons:** Added recursive ancestor tree traversal from the input field to discover icon-only and SVG action buttons within nested layout containers.
+  - **React Disabled-State Synchronization:** Implemented a polling retry loop (up to 12 attempts / 1.2s) to gracefully wait for React state updates to clear the button disabled state.
+  - **Dual Redundancy Submission:** Dispatches both button pointer events and synthetic `Enter` KeyboardEvents (`keydown`, `keypress`, `keyup` with keyCode 13) plus `form.requestSubmit()`, guaranteeing prompt dispatch even when windows run in the background.
+
+### ⚡ Updater & Automation Hardening
+- **In-App Updater Robocopy Engine:** Refactored `apply_update_and_restart` to use Microsoft Robocopy with retry parameters (`/R:5 /W:1`), explicit process termination wait (`WaitForExit(15000)`), SmartScreen `Unblock-File` unblocking, and verified working directory preservation.
+- **Version Alignment:** Synchronized project version to `v0.7.3` across `pyproject.toml`, `server.py`, `gui.py`, and test suites.
+
 ## [0.7.2] - 2026-10-29
 
 ### ⚡ Features & MCP Tool Promotion Architecture

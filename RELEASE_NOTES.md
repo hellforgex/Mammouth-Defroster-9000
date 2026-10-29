@@ -2,7 +2,24 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.7.2**
+> **Current Version:** **v0.7.3**
+
+---
+
+## 🚀 What's New in v0.7.3 — `v0.7.3 - Mammouth Defroster 9000`
+
+### 🐛 Web Chat Automation & In-App Browser Fixes
+- **Autonomous Task Prompt Submission Engine Overhaul:**
+  - **Asynchronous Input Polling (`pollAndInject`):** Resolved intermittent task execution drops where prompt injection failed if the web chat textarea was still rendering upon tab activation. The engine now retries asynchronously for up to 3.0 seconds (25 attempts @ 120ms intervals) until the input container is mounted.
+  - **Multilingual Button Detection:** Extended dictionary matching to include German verbs (`senden`, `absenden`, `abschicken`) alongside English and French (`send`, `envoyer`, `submit`, `prompt`, `valider`, `transmettre`), with comprehensive exclusion of auxiliary buttons (`attach`, `file`, `upload`, `mic`, `audio`, `voice`, `camera`, `settings`).
+  - **Full Pointer & Mouse Event Chain:** Upgraded button activation from simple DOM `.click()` to a complete event chain (`pointerdown`, `mousedown`, `pointerup`, `mouseup`, `click`), guaranteeing execution in React 18 and Tailwind UI event systems.
+  - **DOM Tree Ancestor Traversal:** Added upward tree traversal from the input field to accurately detect icon-only and SVG action buttons within nested layout wrappers.
+  - **React Disabled-State Synchronization:** Implemented a polling retry loop (up to 12 attempts / 1.2s) to smoothly wait for React state updates to clear the button disabled state.
+  - **Dual Redundancy Submission:** Triggers both button pointer events and synthetic `Enter` KeyboardEvents (`keydown`, `keypress`, `keyup` with keyCode 13) plus `form.requestSubmit()`, guaranteeing prompt dispatch even when running in the background without stealing OS focus.
+
+### ⚡ Updater & Automation Hardening
+- **In-App Updater Robocopy Engine:** Refactored `apply_update_and_restart` to use Microsoft Robocopy with retry parameters (`/R:5 /W:1`), explicit process termination wait (`WaitForExit(15000)`), SmartScreen `Unblock-File` unblocking, and verified working directory preservation.
+- **Version Alignment:** Synchronized project version to `v0.7.3` across `pyproject.toml`, `server.py`, `gui.py`, `build.bat`, and test suites.
 
 ---
 

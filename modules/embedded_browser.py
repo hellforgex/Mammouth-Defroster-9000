@@ -1123,113 +1123,167 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                             try {{
                                 var text = {clean_text};
                                 var autoSubmit = {submit_flag};
-                                var el = document.querySelector('textarea, div[contenteditable="true"], [role="textbox"], input[type="text"]');
-                                if (!el) return false;
 
-                                el.focus();
-                                if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{
-                                    var proto = window.HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : Object.getPrototypeOf(el);
-                                    var desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value');
-                                    if (desc && desc.set) {{
-                                        desc.set.call(el, text);
-                                    }} else {{
-                                        el.value = text;
+                                var inputPollAttempts = 0;
+                                function pollAndInject() {{
+                                    inputPollAttempts++;
+                                    var el = document.querySelector('textarea, div[contenteditable="true"], [role="textbox"], input[type="text"]');
+                                    if (!el) {{
+                                        if (inputPollAttempts < 25) {{
+                                            setTimeout(pollAndInject, 120);
+                                        }}
+                                        return false;
                                     }}
-                                    if (el._valueTracker) {{
-                                        el._valueTracker.setValue('');
-                                    }}
-                                    el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true, composed: true }}));
-                                    el.dispatchEvent(new Event('change', {{ bubbles: true, cancelable: true, composed: true }}));
-                                }} else if (el.isContentEditable) {{
-                                    el.focus();
-                                    try {{
-                                        document.execCommand('selectAll', false, null);
-                                        document.execCommand('insertText', false, text);
-                                    }} catch(e) {{
-                                        el.innerText = text;
-                                    }}
-                                    el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true, composed: true }}));
-                                }}
 
-                                if (!autoSubmit) return true;
-
-                                function findSendBtn() {{
-                                    var container = el.closest('form') || el.closest('[class*="chat"]') || el.closest('[class*="input"]') || (el.parentElement ? el.parentElement.parentElement : null);
-                                    var searchRoot = container || document;
-
-                                    // Priority 1: Explicit submit button
-                                    var sub = searchRoot.querySelector('button[type="submit"]:not([disabled])') || searchRoot.querySelector('button[type="submit"]');
-                                    if (sub) return sub;
-
-                                    // Priority 2: Buttons with send / submit / envoyer aria-label, title or testid
-                                    var sendWords = ['send', 'envoyer', 'submit', 'prompt', 'valider', 'transmettre'];
-                                    var allBtns = Array.from(searchRoot.querySelectorAll('button'));
-                                    for (var i = 0; i < allBtns.length; i++) {{
-                                        var b = allBtns[i];
-                                        var aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                                        var title = (b.getAttribute('title') || '').toLowerCase();
-                                        var tid = (b.getAttribute('data-testid') || '').toLowerCase();
-                                        for (var j = 0; j < sendWords.length; j++) {{
-                                            var w = sendWords[j];
-                                            if (aria.includes(w) || title.includes(w) || tid.includes(w)) {{
-                                                return b;
-                                            }}
+                                    // 1. Focus and inject text into the input element
+                                    try {{ el.focus(); }} catch(e) {{}}
+                                    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{
+                                        var proto = window.HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : Object.getPrototypeOf(el);
+                                        var desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value');
+                                        if (desc && desc.set) {{
+                                            desc.set.call(el, text);
+                                        }} else {{
+                                            el.value = text;
+                                        }}
+                                        if (el._valueTracker) {{
+                                            el._valueTracker.setValue('');
+                                        }}
+                                        el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true, composed: true }}));
+                                        el.dispatchEvent(new Event('change', {{ bubbles: true, cancelable: true, composed: true }}));
+                                    }} else if (el.isContentEditable) {{
+                                        try {{
+                                            document.execCommand('selectAll', false, null);
+                                            document.execCommand('insertText', false, text);
+                                        }} catch(e) {{
+                                            el.innerText = text;
+                                        }}
+                                        try {{
+                                            el.dispatchEvent(new InputEvent('input', {{ inputType: 'insertText', data: text, bubbles: true, cancelable: true }}));
+                                        }} catch(e) {{
+                                            el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true, composed: true }}));
                                         }}
                                     }}
 
-                                    // Priority 3: Within container, find action button that is NOT an attachment / file / tool button
-                                    if (container) {{
-                                        var cBtns = Array.from(container.querySelectorAll('button'));
-                                        var filtered = cBtns.filter(function(b) {{
+                                    if (!autoSubmit) return true;
+
+                                    // 2. Dispatch Helpers for synthetic clicks and Enter keys
+                                    function triggerPointerClick(btn) {{
+                                        if (!btn) return;
+                                        try {{
+                                            btn.focus();
+                                            var pOpts = {{ bubbles: true, cancelable: true, view: window, buttons: 1 }};
+                                            btn.dispatchEvent(new PointerEvent('pointerdown', pOpts));
+                                            btn.dispatchEvent(new MouseEvent('mousedown', pOpts));
+                                            btn.dispatchEvent(new PointerEvent('pointerup', pOpts));
+                                            btn.dispatchEvent(new MouseEvent('mouseup', pOpts));
+                                            btn.click();
+                                        }} catch(e) {{
+                                            try {{ btn.click(); }} catch(e2) {{}}
+                                        }}
+                                    }}
+
+                                    function triggerEnterKey(targetEl) {{
+                                        if (!targetEl) return;
+                                        try {{
+                                            targetEl.focus();
+                                            var kOpts = {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, charCode: 13, bubbles: true, cancelable: true, composed: true }};
+                                            targetEl.dispatchEvent(new KeyboardEvent('keydown', kOpts));
+                                            targetEl.dispatchEvent(new KeyboardEvent('keypress', kOpts));
+                                            targetEl.dispatchEvent(new KeyboardEvent('keyup', kOpts));
+                                        }} catch(e) {{}}
+                                    }}
+
+                                    // 3. Robust multilingual and SVG send button finder
+                                    function findSendBtn() {{
+                                        var badWords = ['attach', 'file', 'upload', 'joint', 'fichier', 'plus', 'audio', 'mic', 'micro', 'search', 'model', 'settings', 'voice', 'camera'];
+                                        function isNotBad(b) {{
                                             var a = (b.getAttribute('aria-label') || '').toLowerCase();
                                             var t = (b.getAttribute('title') || '').toLowerCase();
                                             var c = (b.className || '').toLowerCase();
-                                            var bad = ['attach', 'file', 'upload', 'joint', 'fichier', 'plus', 'audio', 'mic', 'search', 'model'];
-                                            for (var k = 0; k < bad.length; k++) {{
-                                                if (a.includes(bad[k]) || t.includes(bad[k]) || c.includes(bad[k])) return false;
+                                            var tid = (b.getAttribute('data-testid') || '').toLowerCase();
+                                            for (var k = 0; k < badWords.length; k++) {{
+                                                var bw = badWords[k];
+                                                if (a.includes(bw) || t.includes(bw) || c.includes(bw) || tid.includes(bw)) return false;
                                             }}
-                                            return b.offsetWidth > 0 && b.offsetHeight > 0;
-                                        }});
-                                        if (filtered.length > 0) {{
-                                            return filtered[filtered.length - 1];
+                                            return true;
                                         }}
-                                    }}
-                                    return null;
-                                }}
 
-                                var attempts = 0;
-                                function trySubmit() {{
-                                    attempts++;
-                                    var btn = findSendBtn();
-                                    if (btn) {{
-                                        if (btn.disabled && attempts < 8) {{
+                                        // Priority 1: High confidence testid or submit type
+                                        var p1 = document.querySelector('button[data-testid*="send"], button[data-testid*="submit"], button[type="submit"]');
+                                        if (p1 && isNotBad(p1)) return p1;
+
+                                        // Priority 2: Multilingual label search across entire document (EN, FR, DE)
+                                        var sendWords = ['send', 'envoyer', 'submit', 'prompt', 'valider', 'transmettre', 'senden', 'absenden', 'abschicken'];
+                                        var allBtns = Array.from(document.querySelectorAll('button'));
+                                        for (var i = 0; i < allBtns.length; i++) {{
+                                            var b = allBtns[i];
+                                            if (!isNotBad(b)) continue;
+                                            var aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                                            var title = (b.getAttribute('title') || '').toLowerCase();
+                                            var tid = (b.getAttribute('data-testid') || '').toLowerCase();
+                                            for (var j = 0; j < sendWords.length; j++) {{
+                                                var w = sendWords[j];
+                                                if (aria.includes(w) || title.includes(w) || tid.includes(w)) {{
+                                                    return b;
+                                                }}
+                                            }}
+                                        }}
+
+                                        // Priority 3: Ancestor walk from el - find closest container holding valid action buttons (SVG/icon buttons)
+                                        var cur = el.parentElement;
+                                        while (cur && cur !== document.body) {{
+                                            var cBtns = Array.from(cur.querySelectorAll('button')).filter(function(b) {{
+                                                return isNotBad(b) && (b.querySelector('svg') || b.textContent.trim().length > 0) && b.offsetWidth > 0;
+                                            }});
+                                            if (cBtns.length > 0) {{
+                                                return cBtns[cBtns.length - 1];
+                                            }}
+                                            cur = cur.parentElement;
+                                        }}
+                                        return null;
+                                    }}
+
+                                    // 4. Polling submission loop
+                                    var submitAttempts = 0;
+                                    function trySubmit() {{
+                                        submitAttempts++;
+                                        var btn = findSendBtn();
+
+                                        if (btn) {{
+                                            var isDis = btn.disabled || btn.getAttribute('aria-disabled') === 'true' || (btn.className && btn.className.includes('disabled'));
+                                            if (isDis && submitAttempts < 12) {{
+                                                setTimeout(trySubmit, 100);
+                                                return;
+                                            }}
+
+                                            // Unset disabled attributes and click with full pointer/mouse sequence
+                                            try {{ btn.removeAttribute('disabled'); }} catch(e) {{}}
+                                            try {{ btn.setAttribute('aria-disabled', 'false'); }} catch(e) {{}}
+                                            triggerPointerClick(btn);
+
+                                            // Dual redundancy: also send Enter keypress to input field
+                                            setTimeout(function() {{ triggerEnterKey(el); }}, 60);
+                                            return;
+                                        }}
+
+                                        if (submitAttempts < 10) {{
                                             setTimeout(trySubmit, 100);
                                             return;
                                         }}
-                                        btn.removeAttribute('disabled');
-                                        btn.click();
-                                        return;
+
+                                        // Final Fallback: Enter keyboard events + form.requestSubmit()
+                                        triggerEnterKey(el);
+                                        var form = el.closest('form');
+                                        if (form && typeof form.requestSubmit === 'function') {{
+                                            try {{ form.requestSubmit(); }} catch(err) {{}}
+                                        }}
                                     }}
 
-                                    if (attempts < 6) {{
-                                        setTimeout(trySubmit, 120);
-                                        return;
-                                    }}
-
-                                    // Fallback: Dispatch synthetic KeyboardEvents for Enter
-                                    var kOpts = {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, charCode: 13, bubbles: true, cancelable: true, composed: true }};
-                                    el.dispatchEvent(new KeyboardEvent('keydown', kOpts));
-                                    el.dispatchEvent(new KeyboardEvent('keypress', kOpts));
-                                    el.dispatchEvent(new KeyboardEvent('keyup', kOpts));
-
-                                    var form = el.closest('form');
-                                    if (form && typeof form.requestSubmit === 'function') {{
-                                        try {{ form.requestSubmit(); }} catch(err) {{}}
-                                    }}
+                                    setTimeout(trySubmit, 80);
+                                    return true;
                                 }}
 
-                                setTimeout(trySubmit, 120);
-                                return true;
+                                return pollAndInject();
                             }} catch (e) {{
                                 return false;
                             }}

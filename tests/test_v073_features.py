@@ -12,9 +12,9 @@ from modules.updater import apply_update_and_restart
 
 class TestV073Features(unittest.TestCase):
     def test_version_bump_v073(self):
-        """Verify version strings are properly aligned to v0.7.2."""
-        self.assertEqual(gui.APP_VERSION, "v0.7.2")
-        self.assertIn("v0.7.2", server.mcp.instructions or "")
+        """Verify version strings are properly aligned to v0.7.3."""
+        self.assertEqual(gui.APP_VERSION, "v0.7.3")
+        self.assertIn("v0.7.3", server.mcp.instructions or "")
 
     def test_apply_update_and_restart_script_robustness(self):
         """Verify apply_update_and_restart generates robust robocopy batch script with process wait and logging."""
@@ -32,7 +32,8 @@ class TestV073Features(unittest.TestCase):
             # Read the generated batch script
             bat_path = os.path.join(tmpdir, "apply_update.bat")
             self.assertTrue(os.path.exists(bat_path), "apply_update.bat should be created")
-            script = open(bat_path, "r", encoding="utf-8").read()
+            with open(bat_path, "r", encoding="utf-8") as f:
+                script = f.read()
 
             self.assertIn("WaitForExit(15000)", script, "Must wait cleanly for process PID to exit")
             self.assertIn("taskkill /f /im MammouthDefroster9000-server.exe", script, "Must terminate background server")
@@ -40,7 +41,7 @@ class TestV073Features(unittest.TestCase):
             self.assertIn("/R:5 /W:1", script, "Robocopy must configure retries on locked files")
             self.assertIn("/XF config.json oauth.db tasks.db memory.db hosts.json credentials.json", script, "Must exclude user databases")
             self.assertIn("Unblock-File", script, "Must unblock binaries to prevent SmartScreen issues")
-            self.assertIn('start "" /D "%~2"', script, "Must set working directory explicitly on relaunch")
+            self.assertIn("start \"\" /D \"%~2\"", script, "Must set working directory explicitly on relaunch")
             self.assertIn("updater.log", script, "Must log execution output")
 
     def test_check_updates_async_manual_opens_dialog(self):
@@ -62,6 +63,31 @@ class TestV073Features(unittest.TestCase):
 
             # Verify dialog opened
             mock_gui.after.assert_any_call(0, mock_gui._show_update_dialog)
+
+    def test_send_chat_prompt_script_robustness(self):
+        """Verify send_chat_prompt in embedded_browser generates resilient multi-tiered submission script."""
+        from modules.embedded_browser import MammouthBrowserFrame
+        import inspect
+
+        source = inspect.getsource(MammouthBrowserFrame.send_chat_prompt)
+        # 1. Asynchronous polling for textarea
+        self.assertIn("pollAndInject", source)
+        self.assertIn("inputPollAttempts", source)
+
+        # 2. Multilingual button words (EN, FR, DE)
+        self.assertIn("senden", source)
+        self.assertIn("absenden", source)
+        self.assertIn("envoyer", source)
+
+        # 3. PointerEvent sequence and Enter fallback
+        self.assertIn("triggerPointerClick", source)
+        self.assertIn("triggerEnterKey", source)
+        self.assertIn("pointerdown", source)
+        self.assertIn("requestSubmit", source)
+
+        # 4. Ancestor walk for action buttons
+        self.assertIn("badWords", source)
+        self.assertIn("cur = el.parentElement", source)
 
 
 if __name__ == "__main__":
