@@ -20,6 +20,16 @@
   - **GUI Modular Capabilities Overhaul:** Added an Active Tool Exposure Profile dropdown, live Schema Token Budget meter (`Estimated Schema Budget: ~2,485 tokens / 7,719 limit (Safe ✅)`), and 1-click `🛡️ Mammouth Chat Safe` preset button. Dashboard KPI tile displays `⚡ 10 Promoted (86 Total)`.
 
 ### 🐛 UI & Desktop Automation Fixes
+- **Embedded Mammouth AI Browser Initialization & Anti-Shrink Guards:**
+  - Resolved an issue where the embedded Mammouth AI WebView2 control would not appear or shrank to 1x1 pixels upon tab switching:
+    - Added `update_idletasks()` and enforced minimum bounds (`max(self.viewport.winfo_width(), 400x300)`) in `set_tab_visible`.
+    - Added dual deferred layout synchronizations (at 50ms and 150ms) to recalculate and expand the Win32 window to the fully rendered viewport dimensions.
+    - Added deferred layout synchronizations in `ensure_initialized` (at 60ms and 200ms).
+  - Packed the `"💬 Mammouth AI"` shortcut button in the top header bar (`right_box`) next to the Screenshot button for instant 1-click tab switching from any screen.
+  - Added a primary accent `"💬 Mammouth AI"` button to the Dashboard quick actions bar for rapid navigation.
+  - Updated startup lifecycle so that `auto_open_on_server_start: true` reliably brings the Mammouth AI tab into view.
+  - Hardened `send_chat_prompt` with automatic `ensure_initialized()` and asynchronous polling for `CoreWebView2` initialization (up to 20 retries), preventing lost prompts during background tasks.
+  - Added foreground window activation (`deiconify`, `lift`, `focus_force`) when automated tasks trigger.
 - **Tasks & Automation Header Anti-Clipping:** Reordered Tkinter pack geometry across `tab_tasks`, `tab_memory`, `tab_mammouth_code`, `tab_skills`, and individual task cards so action buttons (`➕ New Task`, `🔄 Refresh`) are packed right-first (`side="right"`), preventing clipping against the window edge at all display resolutions. Subtitle labels now wrap gracefully via `wraplength=480`.
 - **Web Chat Prompt Submission Engine:** Overhauled `send_chat_prompt` in `embedded_browser.py`:
   - Reset React synthetic value tracker (`el._valueTracker.setValue('')`), prompting React to recognize injected text and enable the Send button.

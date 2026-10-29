@@ -1206,22 +1206,26 @@ class MammouthControlCenter(ctk.CTk):
                     self.deiconify()
                     self.lift()
                     self.focus_force()
-                    if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", False):
+                    if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", True):
                         self.after(200, self._start_server)
                     if self.config_data.get("server", {}).get("auto_check_updates", True):
                         self.after(2500, self._check_updates_async)
                     if self.config_data.get("server", {}).get("start_in_web_tab", False) or self.config_data.get("embedded_browser", {}).get("zen_mode", False):
                         self.after(400, lambda: self.toggle_zen_mode(True))
+                    elif self.config_data.get("embedded_browser", {}).get("auto_open_on_server_start", True):
+                        self.after(550, self._switch_to_mammouth_tab)
 
                 self.after(350, finish_loading)
             else:
                 self.deiconify()
-                if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", False):
+                if "--autostart" in sys.argv or self.config_data.get("server", {}).get("auto_start_server", True):
                     self.after(200, self._start_server)
                 if self.config_data.get("server", {}).get("auto_check_updates", True):
                     self.after(2500, self._check_updates_async)
                 if self.config_data.get("server", {}).get("start_in_web_tab", False) or self.config_data.get("embedded_browser", {}).get("zen_mode", False):
                     self.after(400, lambda: self.toggle_zen_mode(True))
+                elif self.config_data.get("embedded_browser", {}).get("auto_open_on_server_start", True):
+                    self.after(550, self._switch_to_mammouth_tab)
 
             # Safety fallback: unmask/close splash if still open after timeout
             def _splash_safety_timeout():
@@ -1386,7 +1390,7 @@ class MammouthControlCenter(ctk.CTk):
         self.btn_screen_target.pack(side="left", padx=(0, 8))
         self.btn_screen_target.bind("<Button-3>", self._show_screen_target_menu)
 
-        # Retain self.btn_open_mammouth for API/test compatibility without redundant packing in top bar
+        # Quick Mammouth.ai Connect Button
         self.btn_open_mammouth = ctk.CTkButton(
             right_box,
             text="💬 Mammouth AI",
@@ -1400,6 +1404,7 @@ class MammouthControlCenter(ctk.CTk):
             border_color=THEME_BTN_SEC_BORDER,
             command=self._switch_to_mammouth_tab
         )
+        self.btn_open_mammouth.pack(side="left", padx=(0, 8))
 
         # Theme Switcher
         theme_box = ctk.CTkFrame(right_box, fg_color="transparent")
@@ -2716,6 +2721,19 @@ class MammouthControlCenter(ctk.CTk):
         actions_bar = ctk.CTkFrame(self.tab_dashboard, fg_color="transparent")
         actions_bar.pack(fill="x", padx=15, pady=(0, 8))
 
+        btn_open_mammouth_dash = ctk.CTkButton(
+            actions_bar,
+            text="💬 Mammouth AI",
+            width=140,
+            height=30,
+            fg_color=THEME_ACCENT,
+            hover_color=THEME_ACCENT_HOVER,
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._switch_to_mammouth_tab
+        )
+        btn_open_mammouth_dash.pack(side="left", padx=(0, 8))
+
         btn_screen = ctk.CTkButton(
             actions_bar,
             text="📸 Capture Desktop",
@@ -3375,10 +3393,17 @@ class MammouthControlCenter(ctk.CTk):
 
         def _do_web_trigger():
             try:
+                try:
+                    self.deiconify()
+                    self.lift()
+                    self.focus_force()
+                except Exception:
+                    pass
+
                 if switch_tab:
                     self._switch_to_mammouth_tab()
                 if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "send_chat_prompt"):
-                    self.mammouth_browser.send_chat_prompt(prompt, auto_submit=auto_submit, delay_ms=350 if switch_tab else 50)
+                    self.mammouth_browser.send_chat_prompt(prompt, auto_submit=auto_submit, delay_ms=450 if switch_tab else 50)
             except Exception as ex:
                 self._log(f"[TASK WARNING] Web trigger error: {ex}")
 

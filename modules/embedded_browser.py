@@ -682,6 +682,16 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 pass
 
             self.is_embedded = True
+
+            # Deferred layout sync: ensure viewport rendered width/height are applied once Tk renders
+            def _deferred_ensure_resize():
+                if self.hwnd and self.is_embedded and self._is_visible:
+                    vw = self.viewport.winfo_width()
+                    vh = self.viewport.winfo_height()
+                    if vw > 10 and vh > 10:
+                        user32.MoveWindow(self.hwnd, 0, 0, vw, vh, True)
+            self.after(60, _deferred_ensure_resize)
+            self.after(200, _deferred_ensure_resize)
         except Exception as e:
             global _INIT_ERROR
             _INIT_ERROR = str(e)
@@ -826,10 +836,24 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             cmd = 5 if visible else 0  # SW_SHOW vs SW_HIDE
             user32.ShowWindow(self.hwnd, cmd)
             if visible:
-                w = self.viewport.winfo_width()
-                h = self.viewport.winfo_height()
+                try:
+                    self.update_idletasks()
+                except Exception:
+                    pass
+                w = max(self.viewport.winfo_width(), self.winfo_width(), 400)
+                h = max(self.viewport.winfo_height(), self.winfo_height(), 300)
                 user32.MoveWindow(self.hwnd, 0, 0, w, h, True)
                 self.focus_browser()
+
+                # Deferred layout sync: ensure viewport rendered width/height are applied once Tk renders
+                def _deferred_resize():
+                    if self.hwnd and self.is_embedded and self._is_visible:
+                        vw = self.viewport.winfo_width()
+                        vh = self.viewport.winfo_height()
+                        if vw > 10 and vh > 10:
+                            user32.MoveWindow(self.hwnd, 0, 0, vw, vh, True)
+                self.after(50, _deferred_resize)
+                self.after(150, _deferred_resize)
 
     def go_back(self):
         if self.edge and hasattr(self.edge, "webview"):
@@ -1038,10 +1062,13 @@ class MammouthBrowserFrame(ctk.CTkFrame):
     def send_chat_prompt(self, prompt: str, auto_submit: bool = True, delay_ms: int = 200) -> bool:
         """Injects a text prompt into Mammouth.ai chat input and optionally submits it.
         Uses native WebView2 script execution + DOM events on the UI thread."""
-        if not HAS_WEBVIEW2 or not self.hwnd:
+        if not HAS_WEBVIEW2:
             return False
 
-        def _do_send_ui():
+        if not self.hwnd or not self.is_embedded:
+            self.ensure_initialized()
+
+        def _do_send_ui(retries_left=20):
             try:
                 # 1. Bring top-level window to foreground
                 try:
@@ -1061,9 +1088,15 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 submit_flag = "true" if auto_submit else "false"
 
                 # 3. Inject text and simulate submit in WebView2 CoreWebView2
-                if self.edge and hasattr(self.edge, "webview"):
-                    target_wv = self.edge.webview
-                    if hasattr(target_wv, "CoreWebView2") and target_wv.CoreWebView2:
+                if not self.edge or not hasattr(self.edge, "webview"):
+                    return
+                target_wv = self.edge.webview
+                if not hasattr(target_wv, "CoreWebView2") or not target_wv.CoreWebView2:
+                    if retries_left > 0:
+                        self.after(150, lambda: _do_send_ui(retries_left - 1))
+                    return
+
+                if True:
                         js_send = f"""
                         (function() {{
                             try {{
