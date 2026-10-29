@@ -193,30 +193,52 @@ def apply_update_and_restart(zip_path: str, target_dir: str, current_pid: int) -
         batch_script = os.path.join(update_dir, "apply_update.bat")
 
         script_content = """@echo off
-title Mammouth Defroster 9000 - Auto-Updater
-echo ========================================================
-echo   Mammouth Defroster 9000 - Applying Update...
-echo ========================================================
+setlocal EnableDelayedExpansion
+title Mammouth Defroster 9000 - In-App Updater
+echo ============================================================
+echo   Mammouth Defroster 9000 - In-App Update Engine
+echo ============================================================
+echo.
+
+set LOG_FILE=%TEMP%\\MammouthDefroster9000_Update\\updater.log
+echo [%DATE% %TIME%] Update started. Target: %~2, Zip: %~3 > "%LOG_FILE%"
+
+echo [1/4] Waiting for Cockpit process (PID %1) to exit...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = Get-Process -Id %1 -ErrorAction SilentlyContinue; if ($p) { $p.WaitForExit(15000) }" >> "%LOG_FILE%" 2>&1
 timeout /t 2 /nobreak >nul
 
-:wait_loop
-tasklist /fi "PID eq %1" 2>nul | findstr /i "%1" >nul
-if not errorlevel 1 (
-    timeout /t 1 /nobreak >nul
-    goto wait_loop
+:: Terminate any lingering server process or child tasks in target directory
+taskkill /f /im MammouthDefroster9000-server.exe >nul 2>&1
+
+echo [2/4] Extracting update package...
+set STAGING_DIR=%TEMP%\\MDefStaging_%RANDOM%
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory($env:MDEF_UPDATE_ZIP, '%STAGING_DIR%')" >> "%LOG_FILE%" 2>&1
+if errorlevel 1 (
+    echo [ERROR] Archive extraction failed! Check %LOG_FILE%
+    pause
+    exit /b 1
 )
 
-echo Extracting update package...
-powershell -NoProfile -Command "$tmp = Join-Path $env:TEMP ('MDefUpd_' + (Get-Random)); Expand-Archive -LiteralPath $env:MDEF_UPDATE_ZIP -DestinationPath $tmp -Force; Get-ChildItem -Path $tmp -Recurse | Unblock-File; $exclude = @('config.json', 'oauth.db', 'tasks.db', 'memory.db', 'hosts.json', 'credentials.json', 'data', 'workspace'); Get-ChildItem -Path $tmp | ForEach-Object { if ($_.Name -notin $exclude -or -not (Test-Path -LiteralPath (Join-Path $env:MDEF_TARGET_DIR $_.Name))) { Copy-Item -LiteralPath $_.FullName -Destination $env:MDEF_TARGET_DIR -Recurse -Force } }; Remove-Item $tmp -Recurse -Force"
+echo [3/4] Unblocking binaries (removing Mark-of-the-Web)...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%STAGING_DIR%' -Recurse | Unblock-File -ErrorAction SilentlyContinue" >> "%LOG_FILE%" 2>&1
+
+echo [4/4] Applying update to %~2...
+robocopy "%STAGING_DIR%" "%~2" /E /NP /NFL /NDL /R:5 /W:1 /XF config.json oauth.db tasks.db memory.db hosts.json credentials.json /XD data workspace >> "%LOG_FILE%" 2>&1
+if %ERRORLEVEL% GTR 7 (
+    echo [ERROR] Robocopy file transfer failed with exit code %ERRORLEVEL%! Check %LOG_FILE%
+    pause
+    exit /b %ERRORLEVEL%
+)
 
 echo Launching updated Mammouth Defroster 9000...
-start "" "%~2\\MammouthDefroster9000.exe"
+cd /d "%~2"
+start "" /D "%~2" "%~2\\MammouthDefroster9000.exe"
 
 echo Cleaning up temporary update files and reclaiming disk space...
-del "%~3" 2>nul
-powershell -NoProfile -Command "Get-ChildItem -Path $env:TEMP -Filter 'MDefUpd_*' -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue" 2>nul
+rmdir /s /q "%STAGING_DIR%" >nul 2>&1
+del /f /q "%~3" >nul 2>&1
 cd /d "%TEMP%"
-start /b "" cmd /c "timeout /t 2 /nobreak >nul & rmdir /s /q \"%~dp0\" 2>nul"
+start /b "" cmd /c "timeout /t 3 /nobreak >nul & rmdir /s /q \"%~dp0\" 2>nul"
 exit
 """
         with open(batch_script, "w", encoding="utf-8") as f:

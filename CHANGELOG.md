@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.3] - 2026-10-29
+
+### 🐛 UI & Desktop Automation Fixes
+- **Tasks & Automation Header Anti-Clipping:** Reordered Tkinter pack geometry across `tab_tasks`, `tab_memory`, `tab_mammouth_code`, `tab_skills`, and individual task cards. Action buttons (`➕ New Task`, `🔄 Refresh`) are now packed right-first (`side="right"`), preventing clipping against the window edge at all display resolutions. Subtitle labels now wrap gracefully via `wraplength=480`.
+- **Web Chat Prompt Submission Engine:** Overhauled `send_chat_prompt` in `embedded_browser.py`:
+  - Reset React synthetic value tracker (`el._valueTracker.setValue('')`), prompting React to recognize injected text and enable the Send button.
+  - Implemented an intelligent multilingual send button resolver (`send`, `envoyer`, `submit`, `prompt`, `valider`) that strictly filters out file attachment, mic, and tool buttons, selecting the true action submit button.
+  - Added an asynchronous polling retry loop (every 100ms up to 800ms) for React state synchronization.
+  - Added native Win32 hardware keystroke fallback (`user32.keybd_event(VK_RETURN)`) with `isTrusted: true` on the UI thread for 100% reliable prompt dispatch.
+- **In-App Updater & Auto-Update Overhaul:**
+  - **Immediate Manual Feedback:** Clicking "Check for Updates Now" in Settings now opens the update dialog immediately upon finding an update, displaying release notes and download progress.
+  - **Robocopy Engine (`apply_update.bat`):** Replaced fragile PowerShell file copying with Microsoft Robocopy (`/E /R:5 /W:1 /XF config.json oauth.db tasks.db memory.db hosts.json credentials.json /XD data workspace`), guaranteeing automatic retries on locked files and zero directory nesting bugs while fully preserving user configurations and databases.
+  - **Process Lifecycle & Lock Management:** Added exact PID wait via PowerShell `$p.WaitForExit(15000)` and terminated lingering background server processes before file copying.
+  - **SmartScreen Mark-of-the-Web Unblocking:** Automatically unblocks all extracted binaries via `Unblock-File`.
+  - **Execution Working Directory:** Relaunches `MammouthDefroster9000.exe` with explicit working directory (`/D "%~2"`), preventing crashes caused by temporary directory cleanup.
+  - **Dev-Mode Protection:** Gracefully informs users running from Python source to use `git pull` rather than attempting self-replacement of the git workspace.
+
 ## [0.7.2] - 2026-10-29
 
 ### 🔒 Security Hardening & Remediation

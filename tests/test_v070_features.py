@@ -38,8 +38,8 @@ class TestV070MultiBrowserFeatures(unittest.TestCase):
 
     def test_version_bump_consistency(self):
         """Verify APP_VERSION in gui.py and server.py are properly bumped to v0.7.0."""
-        self.assertIn(gui.APP_VERSION, ["v0.7.0", "v0.7.1", "v0.7.2"])
-        self.assertTrue("v0.7.0" in (server.mcp.instructions or "") or "v0.7.1" in (server.mcp.instructions or "") or "v0.7.2" in (server.mcp.instructions or ""))
+        self.assertIn(gui.APP_VERSION, ["v0.7.0", "v0.7.1", "v0.7.2", "v0.7.3"])
+        self.assertTrue("v0.7.0" in (server.mcp.instructions or "") or "v0.7.1" in (server.mcp.instructions or "") or "v0.7.2" in (server.mcp.instructions or "") or "v0.7.3" in (server.mcp.instructions or ""))
 
     def test_playwright_native_channels_contains_firefox_and_webkit(self):
         """Ensure native channels set includes both firefox and webkit."""

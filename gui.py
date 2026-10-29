@@ -262,7 +262,7 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.7.2"
+APP_VERSION = "v0.7.3"
 
 
 
@@ -2281,6 +2281,8 @@ class MammouthControlCenter(ctk.CTk):
 
                 if update_info:
                     self.after(0, self._on_update_found, update_info)
+                    if manual:
+                        self.after(0, self._show_update_dialog)
                 elif manual:
                     self.after(0, lambda: messagebox.showinfo("Up to Date", f"Mammouth Defroster 9000 is up to date ({APP_VERSION})!", parent=self))
                 else:
@@ -2299,7 +2301,10 @@ class MammouthControlCenter(ctk.CTk):
         self.available_update = update_info
         ver = update_info.get("version", "vNew")
         self.btn_update_badge.configure(text=f"🔄 Update: {ver}")
-        self.btn_update_badge.pack(side="left", padx=(0, 8))
+        try:
+            self.btn_update_badge.pack(side="left", padx=(0, 8), before=self.btn_zen_header)
+        except Exception:
+            self.btn_update_badge.pack(side="left", padx=(0, 8))
         self._log(f"[UPDATER] A newer version is available: {ver} (Current: {APP_VERSION})")
         if hasattr(self, "update_banner") and hasattr(self, "lbl_update_banner_text") and hasattr(self, "endpoint_card"):
             self.lbl_update_banner_text.configure(
@@ -2318,9 +2323,10 @@ class MammouthControlCenter(ctk.CTk):
         notes = upd.get("body", "No release notes available.")
         size_mb = round(upd.get("zip_size", 0) / (1024 * 1024), 1)
 
+        is_frozen = getattr(sys, "frozen", False)
         dlg = ctk.CTkToplevel(self)
         dlg.title("Update Available")
-        dlg.geometry("520x480")
+        dlg.geometry("520x510")
         dlg.resizable(False, False)
         dlg.configure(fg_color=THEME_BG)
         dlg.transient(self)
@@ -2381,16 +2387,32 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_cancel.pack(side="left")
 
+        if not is_frozen:
+            lbl_dev = ctk.CTkLabel(dlg, text="ℹ️ Dev Mode: Running from source code. In-app update disabled to preserve git workspace.\nUse 'git pull' or download release binary from GitHub.", font=ctk.CTkFont(size=11), text_color=("#D97706", "#FBBF24"), wraplength=470, justify="center")
+            lbl_dev.pack(pady=(2, 6))
+
         btn_install = ctk.CTkButton(
             btn_box,
-            text="⬇️ Download & Install Now",
+            text="⬇️ Download & Install Now" if is_frozen else "Dev Mode (Use git pull)",
             font=ctk.CTkFont(weight="bold"),
-            fg_color=("#059669", "#10B981"),
-            hover_color=("#047857", "#059669"),
-            text_color="#FFFFFF",
-            command=start_download
+            fg_color=("#059669", "#10B981") if is_frozen else THEME_BTN_SEC_BG,
+            hover_color=("#047857", "#059669") if is_frozen else THEME_BTN_SEC_HOVER,
+            text_color="#FFFFFF" if is_frozen else THEME_TEXT_MUTED,
+            command=start_download if is_frozen else (lambda: None),
+            state="normal" if is_frozen else "disabled"
         )
         btn_install.pack(side="right")
+
+        btn_gh = ctk.CTkButton(
+            btn_box,
+            text="🌐 View on GitHub",
+            width=130,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            command=lambda: os.startfile(upd.get("html_url", "https://github.com/hellforgex/Mammouth-Defroster-9000/releases"))
+        )
+        btn_gh.pack(side="left", padx=(10, 0))
 
 
     def _on_theme_changed(self, choice: str):

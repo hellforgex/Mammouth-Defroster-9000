@@ -2,7 +2,22 @@
 
 > **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.7.2**
+> **Current Version:** **v0.7.3**
+
+---
+
+## 🚀 What's New in v0.7.3 — `v0.7.3 - Mammouth Defroster 9000`
+
+### 🐛 UI & Desktop Automation Fixes
+- **Tasks & Automation Header Anti-Clipping:** Reordered Tkinter pack geometry across `tab_tasks`, `tab_memory`, `tab_mammouth_code`, `tab_skills`, and individual task cards so action buttons (`➕ New Task`, `🔄 Refresh`) are packed right-first (`side="right"`), preventing clipping against the window edge at all display resolutions. Subtitle labels now wrap gracefully via `wraplength=480`.
+- **Web Chat Prompt Submission Engine:** Overhauled `send_chat_prompt` in `embedded_browser.py` with React `_valueTracker` reset, intelligent multilingual send button resolver (`send`, `envoyer`, `submit`, `prompt`, `valider`) that filters out attachment buttons, asynchronous polling retry loop for React state synchronization, and native Win32 hardware keystroke fallback (`user32.keybd_event(VK_RETURN)`) on the UI thread for 100% reliable prompt dispatch.
+- **In-App Updater & Auto-Update Overhaul:**
+  - **Immediate Manual Feedback:** Clicking "Check for Updates Now" in Settings now opens the update dialog immediately upon finding an update.
+  - **Robocopy Engine (`apply_update.bat`):** Replaced fragile PowerShell file copying with Microsoft Robocopy (`/E /R:5 /W:1 /XF config.json oauth.db tasks.db memory.db hosts.json credentials.json /XD data workspace`), guaranteeing automatic retries on locked files while fully preserving user configurations and databases.
+  - **Process Lifecycle & Lock Management:** Added exact PID wait via PowerShell `$p.WaitForExit(15000)` and terminated lingering background server processes before file copying.
+  - **SmartScreen Mark-of-the-Web Unblocking:** Automatically unblocks all extracted binaries via `Unblock-File`.
+  - **Execution Working Directory:** Relaunches `MammouthDefroster9000.exe` with explicit working directory (`/D "%~2"`), preventing crashes caused by temporary directory cleanup.
+  - **Dev-Mode Protection:** Informs developers running from source to use `git pull` rather than self-replacing the git workspace.
 
 ---
 
