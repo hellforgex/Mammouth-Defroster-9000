@@ -20,6 +20,7 @@ logger = logging.getLogger("mammouth.server")
 import urllib.parse
 from urllib.parse import parse_qs, urlencode, quote
 import subprocess
+import threading
 import uvicorn
 from contextlib import asynccontextmanager
 from starlette.applications import Starlette
@@ -27,8 +28,10 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, HTMLResponse, RedirectResponse
-from starlette.routing import Route
+from starlette.routing import Route, Mount
 from starlette.types import ASGIApp, Receive, Scope, Send
+from mcp.server.sse import SseServerTransport
+from mcp.server.transport_security import TransportSecuritySettings
 
 # Fix sys.path and application root for standalone bundled environment
 if getattr(sys, "frozen", False):
@@ -899,7 +902,7 @@ def _sanitize_mcp_tool_schema(tool: Any) -> None:
     if hasattr(tool, "parameters") and isinstance(tool.parameters, dict):
         _sanitize_schema_dict(tool.parameters)
     # Clear non-standard draft fields for strict MCP 2024-11-05 client compatibility
-    for attr in ("output_schema", "meta", "_meta"):
+    for attr in ("output_schema", "meta", "_meta", "title", "icons", "annotations", "execution"):
         if hasattr(tool, attr):
             try:
                 setattr(tool, attr, None)
@@ -977,6 +980,30 @@ if hasattr(mcp, "_list_tools_mcp"):
 
 _ACTIVE_MCP_SESSIONS = set()
 _SERVER_EVENT_LOOP: Optional[asyncio.AbstractEventLoop] = None
+_AUTHENTICATED_SSE_SESSIONS: Dict[str, float] = {}
+_SSE_SESSION_LOCK = threading.Lock()
+
+def record_authenticated_sse_session(session_id: str, ttl_seconds: float = 86400.0) -> None:
+    if not session_id:
+        return
+    with _SSE_SESSION_LOCK:
+        now = time.time()
+        expired = [sid for sid, exp in _AUTHENTICATED_SSE_SESSIONS.items() if exp < now]
+        for sid in expired:
+            del _AUTHENTICATED_SSE_SESSIONS[sid]
+        _AUTHENTICATED_SSE_SESSIONS[session_id] = now + ttl_seconds
+
+def is_sse_session_authenticated(session_id: str) -> bool:
+    if not session_id:
+        return False
+    with _SSE_SESSION_LOCK:
+        exp = _AUTHENTICATED_SSE_SESSIONS.get(session_id)
+        if exp is not None:
+            if time.time() < exp:
+                return True
+            else:
+                del _AUTHENTICATED_SSE_SESSIONS[session_id]
+        return False
 
 def register_active_mcp_session(session: Any):
     """Register an active MCP ServerSession to broadcast tool list updates."""
@@ -1016,7 +1043,47 @@ def broadcast_tool_list_changed():
             name="BroadcastToolListChangedFallback"
         ).start()
 
-# Wrap FastMCP 4.x / MCP SDK 2.x protocol handler in _mcp_server if present
+# Wrap MCP server ListToolsRequest handler for strict schema cleanliness and tool profile filtering
+import mcp.types as mcp_types
+if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "request_handlers"):
+    _orig_mcp_list_tools_handler = mcp._mcp_server.request_handlers.get(mcp_types.ListToolsRequest)
+    if _orig_mcp_list_tools_handler:
+        async def _sanitizing_list_tools_handler(req: mcp_types.ListToolsRequest) -> Any:
+            res = await _orig_mcp_list_tools_handler(req)
+            cfg = load_config()
+            profile_key = str(cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+            tools_list = getattr(res.root, "tools", []) if hasattr(res, "root") else getattr(res, "tools", [])
+            if profile_key != "all":
+                if profile_key == "custom":
+                    mods = cfg.get("modules", {})
+                    filtered = [
+                        t for t in tools_list
+                        if t.name == "defroster_catalog" or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(t.name, ""), {}).get("enabled", True)
+                    ]
+                else:
+                    profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
+                    allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog"}
+                    filtered = [t for t in tools_list if t.name in allowed_names]
+            else:
+                filtered = list(tools_list)
+            for tool in filtered:
+                _sanitize_mcp_tool_schema(tool)
+            if hasattr(res, "root") and hasattr(res.root, "tools"):
+                res.root.tools = filtered
+            elif hasattr(res, "tools"):
+                res.tools = filtered
+            return res
+
+        mcp._mcp_server.request_handlers[mcp_types.ListToolsRequest] = _sanitizing_list_tools_handler
+
+if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_handle_message"):
+    _orig_handle_message = mcp._mcp_server._handle_message
+    async def _tracking_handle_message(message, session, lifespan_context, raise_exceptions=False):
+        register_active_mcp_session(session)
+        return await _orig_handle_message(message, session, lifespan_context, raise_exceptions)
+    mcp._mcp_server._handle_message = _tracking_handle_message
+
+# Also wrap older FastMCP / MCP SDK string-keyed _request_handlers if present
 if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_request_handlers"):
     _orig_tools_entry = mcp._mcp_server._request_handlers.get("tools/list")
     if _orig_tools_entry:
@@ -2050,6 +2117,14 @@ class SecurityAndAuthMiddleware:
                     elif _is_valid_oauth_token(provided_token):
                         is_valid = True
 
+                # Check active authenticated SSE session for POST /messages from verified SSE clients
+                if not is_valid and clean_path.rstrip("/") == "/messages":
+                    query_string = scope.get("query_string", b"").decode("latin1")
+                    params = urllib.parse.parse_qs(query_string)
+                    sid = params.get("session_id", [""])[0]
+                    if sid and is_sse_session_authenticated(sid):
+                        is_valid = True
+
                 if not is_valid:
                     # The lockout only applies to bad tokens: every tunnelled client shares one IP
                     # bucket, so one stale MCP entry retrying an expired token must not block the
@@ -2112,12 +2187,49 @@ def build_app(token: Optional[str] = None):
         effective_token = f"mc_{secrets.token_urlsafe(32)}"
 
     streamable_http_app = StreamableHTTPASGIApp(None)
-    
+
+    sse_transport = SseServerTransport(
+        "/messages",
+        security_settings=TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    )
+
+    class _SSERouteHandler:
+        def __init__(self, transport: SseServerTransport, fallback_app: ASGIApp):
+            self.transport = transport
+            self.fallback_app = fallback_app
+
+        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+            if scope["type"] == "http" and scope["method"] == "GET":
+                async with self.transport.connect_sse(scope, receive, send) as streams:
+                    for sid_uuid in list(self.transport._read_stream_writers.keys()):
+                        record_authenticated_sse_session(sid_uuid.hex)
+                        record_authenticated_sse_session(str(sid_uuid))
+                    await mcp._mcp_server.run(
+                        streams[0],
+                        streams[1],
+                        mcp._mcp_server.create_initialization_options(),
+                    )
+            else:
+                await self.fallback_app(scope, receive, send)
+
+    class _MessagesRouteHandler:
+        def __init__(self, transport: SseServerTransport, fallback_app: ASGIApp):
+            self.transport = transport
+            self.fallback_app = fallback_app
+
+        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+            if scope["type"] == "http" and scope["method"] == "POST":
+                qs = scope.get("query_string", b"").decode("latin1")
+                if "session_id=" in qs:
+                    await self.transport.handle_post_message(scope, receive, send)
+                    return
+            await self.fallback_app(scope, receive, send)
+
     routes = [
         Route("/", endpoint=streamable_http_app, methods=["GET", "POST", "DELETE", "OPTIONS"]),
         Route("/mcp", endpoint=streamable_http_app, methods=["GET", "POST", "DELETE", "OPTIONS"]),
-        Route("/sse", endpoint=streamable_http_app, methods=["GET", "POST", "DELETE", "OPTIONS"]),
-        Route("/messages", endpoint=streamable_http_app, methods=["GET", "POST", "DELETE", "OPTIONS"]),
+        Route("/sse", endpoint=_SSERouteHandler(sse_transport, streamable_http_app), methods=["GET", "POST", "DELETE", "OPTIONS"]),
+        Route("/messages", endpoint=_MessagesRouteHandler(sse_transport, streamable_http_app), methods=["GET", "POST", "DELETE", "OPTIONS"]),
         Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
         Route("/.well-known/oauth-protected-resource/{subpath:path}", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
         Route("/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server, methods=["GET", "OPTIONS"]),

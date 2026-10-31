@@ -28,6 +28,10 @@ from config import TOOL_PROFILES, load_config, save_config
 
 
 class TestV074FeaturesAndFixes(unittest.TestCase):
+    def tearDown(self):
+        import gc
+        gc.collect()
+
     def test_version_alignment_v074(self):
         """Verify APP_VERSION in gui.py, server.py, and pyproject.toml are aligned to v0.7.4."""
         self.assertEqual(gui.APP_VERSION, "v0.7.4")
@@ -38,6 +42,7 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
         content = pyproject_path.read_text(encoding="utf-8")
         self.assertIn('version = "0.7.4"', content)
 
+    @patch.object(gui.MammouthControlCenter, "_start_server", lambda self: None)
     def test_gui_init_curr_prof_id_not_raising_name_error(self):
         """Regression test: verify MammouthControlCenter initializes without NameError on curr_prof_id."""
         app = gui.MammouthControlCenter()
@@ -57,6 +62,7 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
         finally:
             app.destroy()
 
+    @patch.object(gui.MammouthControlCenter, "_start_server", lambda self: None)
     def test_gui_tool_profile_switch_sync(self):
         """Verify switching tool profile in GUI updates curr_tool_profile_id, config, badges, and stats."""
         app = gui.MammouthControlCenter()
@@ -84,6 +90,7 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
         finally:
             app.destroy()
 
+    @patch.object(gui.MammouthControlCenter, "_start_server", lambda self: None)
     def test_gui_dashboard_hero_card_no_clipping(self):
         """Verify that security badges in Hero Card mode_bar are not clipped or hidden."""
         app = gui.MammouthControlCenter()
@@ -164,6 +171,156 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
         wv = TOOL_PROFILES["web_vision"]
         tool_cnt = len(wv["tools"])
         self.assertIn(f"({tool_cnt} Tools)", wv["label"])
+
+    def test_mcp_tool_schema_sanitization_removes_draft_fields(self):
+        """Verify _sanitize_mcp_tool_schema strips draft fields (title, output_schema, meta) for MCP 2024-11-05."""
+        class MockMcpTool:
+            def __init__(self):
+                self.name = "test_tool"
+                self.description = "A test tool"
+                self.input_schema = {"type": "object", "properties": {}}
+                self.title = "Test Tool Draft Title"
+                self.output_schema = {"type": "object"}
+                self.meta = {"fastmcp": {"tags": []}}
+                self._meta = {"internal": True}
+                self.icons = ["icon.png"]
+                self.annotations = {"audience": "user"}
+                self.execution = {"mode": "auto"}
+
+        tool = MockMcpTool()
+        server._sanitize_mcp_tool_schema(tool)
+
+        self.assertIsNone(tool.title)
+        self.assertIsNone(tool.output_schema)
+        self.assertIsNone(tool.meta)
+        self.assertIsNone(tool._meta)
+        self.assertIsNone(tool.icons)
+        self.assertIsNone(tool.annotations)
+        self.assertIsNone(tool.execution)
+
+    def test_authenticated_sse_session_lifecycle(self):
+        """Verify SSE session tokens are recorded, validated, and expired."""
+        test_sid = "test_sse_session_uuid_12345"
+        self.assertFalse(server.is_sse_session_authenticated(test_sid))
+
+        server.record_authenticated_sse_session(test_sid, ttl_seconds=10.0)
+        self.assertTrue(server.is_sse_session_authenticated(test_sid))
+
+        # Test expiration
+        server.record_authenticated_sse_session("expired_sid", ttl_seconds=-1.0)
+        self.assertFalse(server.is_sse_session_authenticated("expired_sid"))
+
+    def test_sse_endpoint_and_tool_discovery_e2e(self):
+        """End-to-end test: GET /sse returns endpoint, POST /messages performs initialize & tools/list."""
+        import json
+        import httpx
+        import uvicorn
+        import socket
+        import threading
+        import time
+        import gc
+        gc.collect()
+
+        test_token = "mc_test_sse_token_1234567890abcdef"
+        app = server.build_app(token=test_token)
+
+        config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error")
+        srv = uvicorn.Server(config)
+        errs = []
+        def _run_srv():
+            try:
+                srv.run()
+            except Exception as e:
+                errs.append(e)
+
+        srv_thread = threading.Thread(target=_run_srv, daemon=True)
+        srv_thread.start()
+        for _ in range(100):
+            if getattr(srv, "started", False) or errs:
+                break
+            time.sleep(0.1)
+        if errs:
+            raise RuntimeError(f"Server thread failed to start: {errs}")
+        self.assertTrue(getattr(srv, "started", False), f"Uvicorn server failed to start within 10s (alive={srv_thread.is_alive()})")
+
+        test_port = None
+        for s in srv.servers:
+            for sock in s.sockets:
+                test_port = sock.getsockname()[1]
+                break
+            if test_port:
+                break
+        self.assertIsNotNone(test_port, "Could not determine uvicorn bound port")
+
+        try:
+            headers = {"Authorization": f"Bearer {test_token}"}
+            with httpx.Client(timeout=10.0) as client:
+                with client.stream("GET", f"http://127.0.0.1:{test_port}/sse", headers=headers) as stream:
+                    self.assertEqual(stream.status_code, 200)
+                    lines = stream.iter_lines()
+
+                    # Read endpoint event
+                    event_l = next(lines)
+                    data_l = next(lines)
+                    sep_l = next(lines)
+                    self.assertIn("endpoint", event_l)
+                    self.assertIn("/messages?session_id=", data_l)
+
+                    endpoint_rel = data_l.replace("data: ", "").strip()
+                    post_url = f"http://127.0.0.1:{test_port}{endpoint_rel}"
+
+                    # Post initialize without auth header (authenticated via SSE session)
+                    init_body = {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {},
+                            "clientInfo": {"name": "mammouth.ai", "version": "1.0"}
+                        }
+                    }
+                    res = client.post(post_url, json=init_body)
+                    self.assertEqual(res.status_code, 202)
+
+                    # Wait for initialize response on SSE
+                    while True:
+                        l = next(lines)
+                        if l.startswith("data: "):
+                            data = json.loads(l[6:])
+                            if data.get("id") == 1:
+                                break
+
+                    # Initialized notification
+                    res = client.post(post_url, json={"jsonrpc": "2.0", "method": "notifications/initialized"})
+                    self.assertEqual(res.status_code, 202)
+
+                    # List tools
+                    list_body = {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "tools/list",
+                        "params": {}
+                    }
+                    res = client.post(post_url, json=list_body)
+                    self.assertEqual(res.status_code, 202)
+
+                    # Read tools/list on SSE
+                    while True:
+                        l = next(lines)
+                        if l.startswith("data: "):
+                            data = json.loads(l[6:])
+                            if data.get("id") == 2:
+                                tools = data["result"]["tools"]
+                                self.assertGreater(len(tools), 0)
+                                for t in tools:
+                                    tname = t.get("name")
+                                    self.assertNotIn("title", t, f"Forbidden title field in tool {tname}")
+                                    self.assertNotIn("outputSchema", t, f"Forbidden outputSchema field in tool {tname}")
+                                    self.assertNotIn("meta", t, f"Forbidden meta field in tool {tname}")
+                                break
+        finally:
+            srv.should_exit = True
 
 
 if __name__ == "__main__":
