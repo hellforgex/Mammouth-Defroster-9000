@@ -5375,9 +5375,17 @@ class MammouthControlCenter(ctk.CTk):
         self.clipboard_clear()
         self.clipboard_append(url)
         self._log(f"[CLAUDE] Copied Claude.ai Connector URL to clipboard: {url}")
+        
+        warn = ""
+        if not url.startswith("https://") or "127.0.0.1" in url or "localhost" in url:
+            warn = (
+                "\n\n⚠️ Notice: The copied URL points to a local address. Claude.ai web connectors "
+                "require a public HTTPS endpoint to connect from the cloud. To connect Claude.ai, start a Cloudflare Tunnel "
+                "or Tailscale Funnel in Cockpit first."
+            )
         messagebox.showinfo(
             "Claude.ai Connector URL Copied",
-            f"Copied MCP Endpoint URL to clipboard:\n\n{url}\n\n"
+            f"Copied MCP Endpoint URL to clipboard:\n\n{url}{warn}\n\n"
             "In Claude.ai:\n"
             "1. Open Settings -> Connectors -> Add MCP Connector\n"
             "2. Paste this URL and save\n"

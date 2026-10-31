@@ -32,6 +32,7 @@ from server import (
     _get_oauth_client,
     _is_valid_oauth_token,
     _token_hash,
+    _render_consent_page,
     SecurityAndAuthMiddleware,
 )
 from modules.claude_code import (
@@ -50,7 +51,13 @@ class TestClaudeOAuthIntegration(unittest.TestCase):
         self.assertTrue(_is_trusted_oauth_redirect_uri("https://claude.ai/api/mcp/auth_callback"))
         self.assertTrue(_is_trusted_oauth_redirect_uri("https://app.claude.ai/callback"))
         self.assertTrue(_is_trusted_oauth_redirect_uri("https://code.claude.ai/oauth/callback"))
+        self.assertTrue(_is_trusted_oauth_redirect_uri("https://claude.com/oauth/callback"))
+        self.assertTrue(_is_trusted_oauth_redirect_uri("https://app.claude.com/callback"))
         self.assertTrue(_is_trusted_oauth_redirect_uri("https://console.anthropic.com/mcp/callback"))
+
+        # Native client custom schemes
+        self.assertTrue(_is_trusted_oauth_redirect_uri("claude://oauth/callback"))
+        self.assertTrue(_is_trusted_oauth_redirect_uri("anthropic://callback"))
 
         # Mammouth AI domains (must be HTTPS)
         self.assertTrue(_is_trusted_oauth_redirect_uri("https://mammouth.ai/api/mcp/oauth/callback"))
@@ -325,7 +332,25 @@ class TestClaudeOAuthIntegration(unittest.TestCase):
             headers = dict(start_msg["headers"])
             www_auth = headers.get(b"www-authenticate", b"").decode("latin1")
             self.assertIn("realm=\"MammouthDefroster9000\"", www_auth)
-            self.assertIn("resource_metadata=\"https://tunnel.ts.net/.well-known/oauth-protected-resource\"", www_auth)
+            self.assertIn("resource_metadata=\"https://tunnel.ts.net/.well-known/oauth-protected-resource/mcp\"", www_auth)
+
+            # Check root path WWW-Authenticate points to root metadata
+            sent_root = []
+            async def send_root_cap(msg):
+                sent_root.append(msg)
+            scope_root = {
+                "type": "http",
+                "method": "POST",
+                "path": "/",
+                "headers": [(b"host", b"tunnel.ts.net"), (b"x-forwarded-proto", b"https")],
+                "client": ("192.168.1.50", 50000)
+            }
+            await middleware(scope_root, None, send_root_cap)
+            start_root = [m for m in sent_root if m.get("type") == "http.response.start"][0]
+            self.assertEqual(start_root["status"], 401)
+            headers_root = dict(start_root["headers"])
+            www_auth_root = headers_root.get(b"www-authenticate", b"").decode("latin1")
+            self.assertIn("resource_metadata=\"https://tunnel.ts.net/.well-known/oauth-protected-resource\"", www_auth_root)
 
             # 2. Subpath discovery bypasses authentication without credentials
             subpaths = [
@@ -358,6 +383,7 @@ class TestClaudeOAuthIntegration(unittest.TestCase):
                 # Anti-clickjacking check: allows Claude and Mammouth AI framing
                 self.assertIn("frame-ancestors 'self' https://mammouth.ai", csp)
                 self.assertIn("https://claude.ai", csp)
+                self.assertIn("https://claude.com", csp)
 
         asyncio.run(run_middleware_tests())
 
@@ -392,6 +418,205 @@ class TestClaudeOAuthIntegration(unittest.TestCase):
             self.assertTrue(st["cloud_ready"])
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_consent_page_button_order_and_enter_key_submission(self):
+        """Verify consent HTML places Allow button first in DOM order and defaults empty action to allow."""
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/oauth/authorize",
+            "headers": [(b"host", b"localhost:8000")],
+        }
+        req = Request(scope)
+        params = {
+            "response_type": "code",
+            "client_id": "test_client",
+            "redirect_uri": "https://claude.ai/api/mcp/auth_callback",
+            "state": "xyz",
+            "scope": "mcp",
+        }
+        resp = _render_consent_page(req, "Claude", params)
+        html_str = resp.body.decode("utf-8")
+        # Ensure Allow button appears before Deny in DOM order
+        allow_pos = html_str.find('value="allow"')
+        deny_pos = html_str.find('value="deny"')
+        self.assertNotEqual(allow_pos, -1)
+        self.assertNotEqual(deny_pos, -1)
+        self.assertLess(allow_pos, deny_pos, "Allow button must come before Deny button in DOM order for Enter key submit")
+
+    def test_mcp_request_handler_tool_schema_sanitization(self):
+        """Verify request_handlers[ListToolsRequest] sanitizes tools for Anthropic strict schema."""
+        import asyncio
+        import mcp.types as mcp_types
+        from server import mcp as mcp_instance
+
+        handlers = getattr(mcp_instance._mcp_server, "request_handlers", getattr(mcp_instance._mcp_server, "_request_handlers", {}))
+        list_handler_entry = handlers.get(mcp_types.ListToolsRequest) or handlers.get("tools/list")
+        self.assertIsNotNone(list_handler_entry, "tools/list request handler must be registered")
+
+        handler_fn = getattr(list_handler_entry, "handler", list_handler_entry)
+
+        async def run_list():
+            req = mcp_types.ListToolsRequest()
+            res = await handler_fn(req)
+            tools = getattr(res, "tools", None)
+            if tools is None and hasattr(res, "root"):
+                tools = getattr(res.root, "tools", None)
+            self.assertIsNotNone(tools)
+            self.assertGreater(len(tools), 0)
+            for tool in tools:
+                # Anthropic strict schema checks: no draft / extra fields
+                self.assertIsNone(getattr(tool, "_meta", None))
+                self.assertIsNone(getattr(tool, "meta", None))
+                if not hasattr(tool, "output_schema") and (
+                    "outputSchema" in getattr(tool, "__dict__", {}) or "outputSchema" in getattr(type(tool), "model_fields", {})
+                ):
+                    self.assertIsNone(getattr(tool, "outputSchema", None))
+                self.assertIsNone(getattr(tool, "output_schema", None))
+                self.assertIsNone(getattr(tool, "title", None))
+
+        asyncio.run(run_list())
+
+    def test_sanitize_mcp_tool_schema_no_deprecation_warning(self):
+        """Verify _sanitize_mcp_tool_schema never triggers FastMCPDeprecationWarning or property getter warnings."""
+        import warnings
+        from server import _sanitize_mcp_tool_schema
+
+        class DeprecatedShimTool:
+            def __init__(self):
+                self.name = "shim_tool"
+                self.input_schema = {"type": "object", "properties": {}}
+                self.output_schema = None
+
+            @property
+            def outputSchema(self):
+                warnings.warn("Accessing Tool.outputSchema is deprecated", DeprecationWarning, stacklevel=2)
+                return self.output_schema
+
+            @property
+            def inputSchema(self):
+                warnings.warn("Accessing Tool.inputSchema is deprecated", DeprecationWarning, stacklevel=2)
+                return self.input_schema
+
+        class DeprecatedShimToolNoSnake:
+            def __init__(self):
+                self.name = "shim_tool_no_snake"
+
+            @property
+            def outputSchema(self):
+                warnings.warn("Accessing Tool.outputSchema is deprecated", DeprecationWarning, stacklevel=2)
+                return None
+
+        for cls in (DeprecatedShimTool, DeprecatedShimToolNoSnake):
+            tool = cls()
+            with warnings.catch_warnings(record=True) as recorded_warnings:
+                warnings.simplefilter("always")
+                _sanitize_mcp_tool_schema(tool)
+                self.assertEqual(len(recorded_warnings), 0, f"Unexpected deprecation warnings triggered on {cls.__name__}: {recorded_warnings}")
+
+        # Also verify dictionary input sanitization
+        dict_tool = {
+            "name": "dict_tool",
+            "input_schema": {"type": "object", "properties": {"q": {}}},
+            "output_schema": {"type": "string"},
+            "title": "Old Title",
+            "meta": {"test": 1}
+        }
+        _sanitize_mcp_tool_schema(dict_tool)
+        self.assertNotIn("output_schema", dict_tool)
+        self.assertNotIn("outputSchema", dict_tool)
+        self.assertNotIn("title", dict_tool)
+        self.assertNotIn("meta", dict_tool)
+        self.assertIn("type", dict_tool["input_schema"]["properties"]["q"])
+
+    def test_full_claude_oauth_and_mcp_e2e_flow(self):
+        """End-to-end integration test simulating the entire Claude.ai connector authorization and tool discovery flow."""
+        import re
+        import server
+        from starlette.testclient import TestClient
+
+        with TestClient(server.app) as client:
+            # Step 1: Discover protected resource
+            r = client.get("/.well-known/oauth-protected-resource")
+            self.assertEqual(r.status_code, 200)
+
+            # Step 2: Discover auth server
+            r = client.get("/.well-known/oauth-authorization-server")
+            self.assertEqual(r.status_code, 200)
+
+            # Step 3: Register client
+            r = client.post("/oauth/register", json={
+                "client_name": "Claude",
+                "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"],
+                "token_endpoint_auth_method": "none"
+            })
+            self.assertEqual(r.status_code, 201)
+            cid = r.json()["client_id"]
+
+            # Step 4: Authorize GET (consent page)
+            verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+            challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).decode("ascii").rstrip("=")
+            state = "random_state_123"
+            r = client.get(f"/oauth/authorize?response_type=code&client_id={cid}&redirect_uri=https://claude.ai/api/mcp/auth_callback&state={state}&code_challenge={challenge}&code_challenge_method=S256")
+            self.assertEqual(r.status_code, 200)
+            m = re.search(r'name="csrf_token" value="([^"]+)"', r.text)
+            self.assertIsNotNone(m, "csrf_token not found in consent form")
+            csrf_token = m.group(1)
+
+            # Step 5: Authorize POST (User submits consent)
+            cfg = server.load_config()
+            tok = cfg.get("server", {}).get("api_token", "")
+            r = client.post("/oauth/authorize", data={
+                "action": "allow",
+                "csrf_token": csrf_token,
+                "owner_token": tok
+            }, follow_redirects=False)
+            self.assertEqual(r.status_code, 302)
+            loc = r.headers["location"]
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(loc).query)
+            code = qs["code"][0]
+
+            # Step 6: Token exchange
+            r = client.post("/oauth/token", data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": "https://claude.ai/api/mcp/auth_callback",
+                "client_id": cid,
+                "code_verifier": verifier
+            })
+            self.assertEqual(r.status_code, 200)
+            token_data = r.json()
+            at = token_data["access_token"]
+
+            # Step 7: MCP initialize
+            init_payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "Claude", "version": "1.0"}
+                }
+            }
+            r = client.post("/mcp", headers={"Authorization": f"Bearer {at}"}, json=init_payload)
+            self.assertEqual(r.status_code, 200)
+
+            # Step 8: MCP tools/list
+            list_payload = {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/list",
+                "params": {}
+            }
+            r = client.post("/mcp", headers={"Authorization": f"Bearer {at}"}, json=list_payload)
+            self.assertEqual(r.status_code, 200)
+            tools = r.json().get("result", {}).get("tools", [])
+            self.assertGreater(len(tools), 0)
+            for tool in tools:
+                self.assertNotIn("_meta", tool)
+                self.assertNotIn("outputSchema", tool)
+                self.assertNotIn("title", tool)
 
 
 if __name__ == "__main__":

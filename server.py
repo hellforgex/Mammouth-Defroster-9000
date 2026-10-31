@@ -930,7 +930,25 @@ _MULTILINGUAL_TOOL_HINTS: Dict[str, str] = {
 
 def _sanitize_mcp_tool_schema(tool: Any) -> None:
     """Sanitize and repair OpenAPI / JSON schema constructs on mcp.types.Tool or FastMCP Tool."""
-    schema = getattr(tool, "input_schema", None) or getattr(tool, "inputSchema", None)
+    if isinstance(tool, dict):
+        schema = tool.get("input_schema") or tool.get("inputSchema")
+        if isinstance(schema, dict):
+            _sanitize_schema_dict(schema)
+        for k in ("output_schema", "outputSchema", "meta", "_meta", "title", "icons", "annotations", "execution"):
+            tool.pop(k, None)
+        t_name = tool.get("name")
+        if t_name and t_name in _MULTILINGUAL_TOOL_HINTS:
+            hint = _MULTILINGUAL_TOOL_HINTS[t_name]
+            desc = tool.get("description", "") or ""
+            marker = "[Keywords/Mots-clés:"
+            if marker not in desc:
+                tool["description"] = f"{desc}\n{marker} {hint}]" if desc else f"{marker} {hint}]"
+        return
+
+    schema = getattr(tool, "input_schema", None)
+    if schema is None and not hasattr(tool, "input_schema"):
+        if "inputSchema" in getattr(tool, "__dict__", {}) or "inputSchema" in getattr(type(tool), "model_fields", {}):
+            schema = getattr(tool, "inputSchema", None)
     if isinstance(schema, dict):
         _sanitize_schema_dict(schema)
     if hasattr(tool, "parameters") and isinstance(tool.parameters, dict):
@@ -940,6 +958,13 @@ def _sanitize_mcp_tool_schema(tool: Any) -> None:
         if hasattr(tool, attr):
             try:
                 setattr(tool, attr, None)
+            except Exception:
+                pass
+    # Avoid triggering FastMCPDeprecationWarning for outputSchema shim if output_schema is already handled
+    if not hasattr(tool, "output_schema"):
+        if "outputSchema" in getattr(tool, "__dict__", {}) or "outputSchema" in getattr(type(tool), "model_fields", {}):
+            try:
+                setattr(tool, "outputSchema", None)
             except Exception:
                 pass
     # Multilingual Keyword Enrichment (DE / FR / EN) for Mammouth AI and international clients
@@ -1077,65 +1102,125 @@ def broadcast_tool_list_changed():
             name="BroadcastToolListChangedFallback"
         ).start()
 
-# Wrap MCP server _request_handlers for strict schema cleanliness, session tracking, and tool profile filtering
+# Wrap MCP server request_handlers for strict schema cleanliness, session tracking, and tool profile filtering
 import mcp.types as mcp_types
-if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_request_handlers"):
-    _orig_tools_entry = mcp._mcp_server._request_handlers.get("tools/list")
-    if _orig_tools_entry:
-        _orig_on_list = _orig_tools_entry.handler
+if hasattr(mcp, "_mcp_server"):
+    _srv = mcp._mcp_server
+    _handlers_dict = getattr(_srv, "request_handlers", getattr(_srv, "_request_handlers", None))
+    if isinstance(_handlers_dict, dict):
+        # Locate ListTools handler (keyed by class mcp_types.ListToolsRequest or string "tools/list")
+        _list_key = None
+        for _k in (mcp_types.ListToolsRequest, "tools/list"):
+            if _k in _handlers_dict:
+                _list_key = _k
+                break
 
-        async def _profile_filtered_on_list_handler(*args, **kwargs):
-            if args:
+        if _list_key is not None:
+            _orig_tools_entry = _handlers_dict[_list_key]
+            _orig_on_list = getattr(_orig_tools_entry, "handler", _orig_tools_entry)
+
+            async def _profile_filtered_on_list_handler(req=None, *args, **kwargs):
+                # Context-based session registration
+                try:
+                    from mcp.server.lowlevel.server import request_ctx
+                    ctx = request_ctx.get()
+                    if ctx and hasattr(ctx, "session") and ctx.session:
+                        register_active_mcp_session(ctx.session)
+                except Exception:
+                    pass
+                if req and hasattr(req, "session") and req.session:
+                    register_active_mcp_session(req.session)
                 for arg in args:
                     if hasattr(arg, "session") and arg.session:
                         register_active_mcp_session(arg.session)
-            result = await _orig_on_list(*args, **kwargs)
-            cfg = load_config()
-            profile_key = str(cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
-            tools_list = getattr(result, "tools", None)
-            if tools_list is None and hasattr(result, "root"):
-                tools_list = getattr(result.root, "tools", None)
-            if tools_list is not None:
-                if profile_key == "all":
-                    filtered = list(tools_list)
-                elif profile_key == "custom":
-                    mods = cfg.get("modules", {})
-                    filtered = [
-                        t for t in tools_list
-                        if getattr(t, "name", "") == "defroster_catalog" or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(getattr(t, "name", ""), ""), {}).get("enabled", True)
-                    ]
+
+                try:
+                    if hasattr(_orig_tools_entry, "handler"):
+                        result = await _orig_on_list(req, *args, **kwargs) if req is not None else await _orig_on_list(*args, **kwargs)
+                    else:
+                        result = await _orig_tools_entry(req, *args, **kwargs) if req is not None else await _orig_tools_entry(*args, **kwargs)
+                except (TypeError, AttributeError):
+                    raw_tools = await mcp.list_tools()
+                    sdk_tools = [tool.to_mcp_tool(name=tool.name) if hasattr(tool, "to_mcp_tool") else tool for tool in raw_tools]
+                    result = mcp_types.ListToolsResult(tools=sdk_tools)
+
+                cfg = load_config()
+                profile_key = str(cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+                target_obj = None
+                tools_list = None
+                if hasattr(result, "root") and hasattr(result.root, "tools"):
+                    target_obj = result.root
+                    tools_list = result.root.tools
+                elif hasattr(result, "tools"):
+                    target_obj = result
+                    tools_list = result.tools
+
+                if tools_list is not None and target_obj is not None:
+                    if profile_key == "all":
+                        filtered = list(tools_list)
+                    elif profile_key == "custom":
+                        mods = cfg.get("modules", {})
+                        filtered = [
+                            t for t in tools_list
+                            if getattr(t, "name", "") == "defroster_catalog" or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(getattr(t, "name", ""), ""), {}).get("enabled", True)
+                        ]
+                    else:
+                        profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
+                        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog"}
+                        filtered = [t for t in tools_list if getattr(t, "name", "") in allowed_names]
+
+                    for tool in filtered:
+                        _sanitize_mcp_tool_schema(tool)
+
+                    target_obj.tools = filtered
+                return result
+
+            if hasattr(_orig_tools_entry, "handler"):
+                _handlers_dict[_list_key] = _orig_tools_entry.__class__(
+                    params_type=_orig_tools_entry.params_type,
+                    handler=_profile_filtered_on_list_handler
+                )
+            else:
+                _handlers_dict[_list_key] = _profile_filtered_on_list_handler
+
+        # Locate CallTool handler
+        _call_key = None
+        for _k in (mcp_types.CallToolRequest, "tools/call"):
+            if _k in _handlers_dict:
+                _call_key = _k
+                break
+
+        if _call_key is not None:
+            _orig_call_entry = _handlers_dict[_call_key]
+            _orig_on_call = getattr(_orig_call_entry, "handler", _orig_call_entry)
+
+            async def _session_tracking_on_call_handler(req=None, *args, **kwargs):
+                try:
+                    from mcp.server.lowlevel.server import request_ctx
+                    ctx = request_ctx.get()
+                    if ctx and hasattr(ctx, "session") and ctx.session:
+                        register_active_mcp_session(ctx.session)
+                except Exception:
+                    pass
+                if req and hasattr(req, "session") and req.session:
+                    register_active_mcp_session(req.session)
+                for arg in args:
+                    if hasattr(arg, "session") and arg.session:
+                        register_active_mcp_session(arg.session)
+
+                if hasattr(_orig_call_entry, "handler"):
+                    return await _orig_on_call(req, *args, **kwargs) if req is not None else await _orig_on_call(*args, **kwargs)
                 else:
-                    profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
-                    allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog"}
-                    filtered = [t for t in tools_list if getattr(t, "name", "") in allowed_names]
-                for tool in filtered:
-                    _sanitize_mcp_tool_schema(tool)
-                if hasattr(result, "tools"):
-                    result.tools = filtered
-                elif hasattr(result, "root") and hasattr(result.root, "tools"):
-                    result.root.tools = filtered
-            return result
+                    return await _orig_call_entry(req, *args, **kwargs) if req is not None else await _orig_call_entry(*args, **kwargs)
 
-        mcp._mcp_server._request_handlers["tools/list"] = _orig_tools_entry.__class__(
-            params_type=_orig_tools_entry.params_type,
-            handler=_profile_filtered_on_list_handler
-        )
+            if hasattr(_orig_call_entry, "handler"):
+                _handlers_dict[_call_key] = _orig_call_entry.__class__(
+                    params_type=_orig_call_entry.params_type,
+                    handler=_session_tracking_on_call_handler
+                )
+            else:
+                _handlers_dict[_call_key] = _session_tracking_on_call_handler
 
-    _orig_call_entry = mcp._mcp_server._request_handlers.get("tools/call")
-    if _orig_call_entry:
-        _orig_on_call = _orig_call_entry.handler
-
-        async def _session_tracking_on_call_handler(*args, **kwargs):
-            if args:
-                for arg in args:
-                    if hasattr(arg, "session") and arg.session:
-                        register_active_mcp_session(arg.session)
-            return await _orig_on_call(*args, **kwargs)
-
-        mcp._mcp_server._request_handlers["tools/call"] = _orig_call_entry.__class__(
-            params_type=_orig_call_entry.params_type,
-            handler=_session_tracking_on_call_handler
-        )
 
 # ==========================================
 # AUTHENTICATION & SECURITY MIDDLEWARE
@@ -1596,14 +1681,23 @@ def _resolve_base_url(header_map: Dict[str, str], default_scheme: str = "http", 
     )
     if custom:
         return custom.rstrip("/")
-    host = header_map.get("x-forwarded-host", header_map.get("host", default_host))
-    proto = header_map.get("x-forwarded-proto", "")
+    raw_host = header_map.get("x-forwarded-host", header_map.get("host", default_host))
+    host = raw_host.split(",")[0].strip()
+    raw_proto = header_map.get("x-forwarded-proto", "")
+    proto = raw_proto.split(",")[0].strip() if raw_proto else ""
     if not proto:
-        if any(dom in host for dom in (".ts.net", ".trycloudflare.com", ".serveousercontent.com", "ngrok")):
+        if header_map.get("x-forwarded-ssl", "").lower() == "on" or header_map.get("front-end-https", "").lower() == "on":
+            proto = "https"
+        elif any(dom in host for dom in (".ts.net", ".trycloudflare.com", ".serveousercontent.com", "ngrok")):
             proto = "https"
         else:
             proto = default_scheme
+    if proto == "https" and host.endswith(":443"):
+        host = host[:-4]
+    elif proto == "http" and host.endswith(":80"):
+        host = host[:-3]
     return f"{proto}://{host}".rstrip("/")
+
 
 
 def _get_base_url(request: Request) -> str:
@@ -1665,13 +1759,15 @@ async def openid_configuration(request: Request):
 
 
 def _is_trusted_oauth_redirect_uri(uri: str) -> bool:
-    """Validate that redirect URI points strictly to trusted Mammouth AI, Claude/Anthropic, or localhost domains."""
+    """Validate that redirect URI points strictly to trusted Mammouth AI, Claude/Anthropic, or localhost domains/schemes."""
     if not uri:
         return False
     try:
         parsed = urllib.parse.urlparse(uri)
+        if parsed.scheme in ("claude", "anthropic"):
+            return True
         host = (parsed.hostname or "").lower()
-        if host in ("mammouth.ai", "claude.ai", "anthropic.com") or host.endswith((".mammouth.ai", ".claude.ai", ".anthropic.com")):
+        if host in ("mammouth.ai", "claude.ai", "anthropic.com", "claude.com") or host.endswith((".mammouth.ai", ".claude.ai", ".anthropic.com", ".claude.com")):
             return parsed.scheme == "https"
         if host in ("localhost", "127.0.0.1", "::1"):
             return parsed.scheme in ("http", "https")
@@ -1728,11 +1824,12 @@ async def oauth_register(request: Request):
             )
 
     auth_method = body.get("token_endpoint_auth_method", "client_secret_post")
-    client_id = f"mcp_{secrets.token_hex(16)}"
+    client_id = body.get("client_id") or f"mcp_{secrets.token_hex(16)}"
     client_secret = secrets.token_urlsafe(32) if auth_method != "none" else ""
     _save_oauth_client(client_id, client_secret, client_name, redirect_uris)
 
     now = time.time()
+    req_scope = str(body.get("scope", "mcp")).strip() or "mcp"
     resp_data: Dict[str, Any] = {
         "client_id": client_id,
         "client_id_issued_at": int(now),
@@ -1740,12 +1837,14 @@ async def oauth_register(request: Request):
         "redirect_uris": redirect_uris,
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
+        "scope": req_scope,
         "token_endpoint_auth_method": auth_method
     }
     if client_secret:
         resp_data["client_secret"] = client_secret
         resp_data["client_secret_expires_at"] = 0
     return JSONResponse(resp_data, status_code=201)
+
 
 
 def _render_consent_page(request: Request, client_name: str, params: Dict[str, str], error_msg: str = "") -> HTMLResponse:
@@ -1841,6 +1940,7 @@ def _render_consent_page(request: Request, client_name: str, params: Dict[str, s
             }}
             .buttons {{
                 display: flex;
+                flex-direction: row-reverse;
                 gap: 12px;
             }}
             button {{
@@ -1918,8 +2018,8 @@ def _render_consent_page(request: Request, client_name: str, params: Dict[str, s
                 <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}">
                 {token_field_html}
                 <div class="buttons">
-                    <button type="submit" name="action" value="deny" class="btn-deny">Deny</button>
                     <button type="submit" name="action" value="allow" class="btn-allow">Allow Access</button>
+                    <button type="submit" name="action" value="deny" class="btn-deny">Deny</button>
                 </div>
             </form>
         </div>
@@ -1947,7 +2047,7 @@ async def oauth_authorize(request: Request):
             # If client_id is not yet in oauth.db but points to trusted callback, auto-register
             if _is_trusted_oauth_redirect_uri(redirect_uri):
                 effective_cid = client_id or f"mcp_{secrets.token_hex(16)}"
-                is_claude = any(c in redirect_uri.lower() for c in ("claude", "anthropic"))
+                is_claude = any(c in redirect_uri.lower() or c in effective_cid.lower() for c in ("claude", "anthropic"))
                 client_name = "Claude" if is_claude else "Mammouth AI"
                 _save_oauth_client(effective_cid, "", client_name, [redirect_uri])
                 client_id = effective_cid
@@ -1968,7 +2068,7 @@ async def oauth_authorize(request: Request):
 
     elif request.method == "POST":
         form = await request.form()
-        action = form.get("action", "deny")
+        action = form.get("action", "allow")
         csrf_token = form.get("csrf_token", "")
 
         # F-01 Fix: Validate and consume CSRF token — retrieve server-side stored authorization params
@@ -2040,18 +2140,22 @@ async def oauth_authorize(request: Request):
 
 async def oauth_token(request: Request):
     content_type = request.headers.get("content-type", "")
+    body: Dict[str, Any] = {}
     if "application/json" in content_type:
         try:
             body = await request.json()
         except Exception:
             body = {}
     else:
-        form = await request.form()
-        body = dict(form)
+        try:
+            form = await request.form()
+            body = dict(form)
+        except Exception:
+            body = {}
 
     # Support HTTP Basic Auth for client credentials (RFC 6749 Section 2.3.1)
     auth_header = request.headers.get("authorization", "")
-    if auth_header.startswith("Basic "):
+    if auth_header[:6].lower() == "basic ":
         try:
             creds = base64.b64decode(auth_header[6:].strip()).decode("utf-8")
             if ":" in creds:
@@ -2062,6 +2166,7 @@ async def oauth_token(request: Request):
                     body["client_secret"] = basic_csec
         except Exception:
             pass
+
 
     grant_type = body.get("grant_type", "")
 
@@ -2176,7 +2281,7 @@ class SecurityAndAuthMiddleware:
                     )
                     if is_oauth_consent:
                         if b"content-security-policy" not in existing_keys:
-                            headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai https://*.mammouth.ai https://claude.ai https://*.claude.ai https://anthropic.com https://*.anthropic.com"))
+                            headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai https://*.mammouth.ai https://claude.ai https://*.claude.ai https://anthropic.com https://*.anthropic.com https://claude.com https://*.claude.com"))
                     else:
                         if b"x-frame-options" not in existing_keys:
                             headers.append((b"x-frame-options", b"DENY"))
@@ -2193,7 +2298,8 @@ class SecurityAndAuthMiddleware:
                         headers.append((b"access-control-allow-private-network", b"true"))
                     if message.get("status") == 401 and b"www-authenticate" not in existing_keys:
                         base_meta_url = _resolve_base_url(header_map)
-                        headers.append((b"www-authenticate", f'Bearer realm="MammouthDefroster9000", resource_metadata="{base_meta_url}/.well-known/oauth-protected-resource", scope="mcp"'.encode("latin1")))
+                        meta_subpath = f"/.well-known/oauth-protected-resource{clean_path}" if clean_path in ("/mcp", "/sse") else "/.well-known/oauth-protected-resource"
+                        headers.append((b"www-authenticate", f'Bearer realm="MammouthDefroster9000", resource_metadata="{base_meta_url}{meta_subpath}", scope="mcp"'.encode("latin1")))
                     message["headers"] = headers
                 await send(message)
 
@@ -2234,6 +2340,8 @@ class SecurityAndAuthMiddleware:
                 }
                 or clean_path.startswith("/.well-known/")
                 or "/.well-known/" in clean_path
+                or clean_path.startswith("/oauth/")
+                or "/oauth/" in clean_path
             )
             if is_oauth_public:
                 await self.app(scope, receive, send_with_security_headers)
@@ -2390,6 +2498,8 @@ def build_app(token: Optional[str] = None):
         Route("/mcp", endpoint=unified_handler, methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"]),
         Route("/sse", endpoint=unified_handler, methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"]),
         Route("/messages", endpoint=messages_handler, methods=["GET", "POST", "DELETE", "OPTIONS"]),
+        Route("/mcp/messages", endpoint=messages_handler, methods=["GET", "POST", "DELETE", "OPTIONS"]),
+        Route("/sse/messages", endpoint=messages_handler, methods=["GET", "POST", "DELETE", "OPTIONS"]),
 
         # RFC 9728 Protected Resource Metadata (root and subpaths)
         Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
@@ -2462,6 +2572,9 @@ def build_app(token: Optional[str] = None):
         "https://claude.ai",
         "https://code.claude.ai",
         "https://app.claude.ai",
+        "https://claude.com",
+        "https://www.claude.ai",
+        "https://www.claude.com",
         "https://console.anthropic.com",
         "http://localhost",
         "http://127.0.0.1",
@@ -2473,13 +2586,14 @@ def build_app(token: Optional[str] = None):
         Middleware(
             CORSMiddleware,
             allow_origins=configured_origins,
-            allow_origin_regex=r"^https://([a-zA-Z0-9.-]+\.)?(mammouth\.ai|claude\.ai|anthropic\.com)$|^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+            allow_origin_regex=r"^https://([a-zA-Z0-9.-]+\.)?(mammouth\.ai|claude\.ai|anthropic\.com|claude\.com)$|^http://(localhost|127\.0\.0\.1)(:\d+)?$",
             allow_methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"],
             allow_headers=["*"],
             expose_headers=["*"],
             allow_credentials=True,
             allow_private_network=True,
         ),
+
         Middleware(
             SecurityAndAuthMiddleware,
             token=effective_token or "",
