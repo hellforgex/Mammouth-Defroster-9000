@@ -262,7 +262,7 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.7.3"
+APP_VERSION = "v0.7.4"
 
 
 
@@ -1159,6 +1159,15 @@ class MammouthControlCenter(ctk.CTk):
             self.appearance_mode = self.config_data.get("server", {}).get("appearance_mode", "Dark")
             ctk.set_appearance_mode(self.appearance_mode)
 
+            from config import TOOL_PROFILES
+            self._profile_labels = [p["label"] for p in TOOL_PROFILES.values()]
+            self._profile_id_by_label = {p["label"]: p["id"] for p in TOOL_PROFILES.values()}
+            self._profile_label_by_id = {p["id"]: p["label"] for p in TOOL_PROFILES.values()}
+            curr_prof_id = str(self.config_data.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+            curr_prof_label = self._profile_label_by_id.get(curr_prof_id, TOOL_PROFILES["mammouth_safe"]["label"])
+            self.curr_tool_profile_id = curr_prof_id
+            self.var_tool_profile = ctk.StringVar(value=curr_prof_label)
+
             self.uvicorn_server = None
             self.server_thread: Optional[threading.Thread] = None
             self.is_server_running = False
@@ -1557,10 +1566,48 @@ class MammouthControlCenter(ctk.CTk):
             btn.pack(fill="x", padx=10, pady=3)
             self._nav_buttons[tab_key] = btn
 
-        # Bottom Mini Telemetry Card
+        # Bottom Mini Telemetry Card & Tool Profile
         bottom_box = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         bottom_box.pack(side="bottom", fill="x", padx=10, pady=12)
         self.quota_card = None
+
+        # Quick Tool Profile Selector (Sidebar - always visible across all tabs)
+        prof_box = ctk.CTkFrame(
+            bottom_box,
+            fg_color=THEME_CARD_BG,
+            border_width=1,
+            border_color=THEME_CARD_BORDER,
+            corner_radius=8
+        )
+        prof_box.pack(fill="x", pady=(0, 8))
+
+        inner_prof = ctk.CTkFrame(prof_box, fg_color="transparent")
+        inner_prof.pack(fill="x", padx=10, pady=(6, 8))
+
+        lbl_prof_hdr = ctk.CTkLabel(
+            inner_prof,
+            text="🎯 TOOL PROFILE",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=THEME_TEXT_MUTED
+        )
+        lbl_prof_hdr.pack(anchor="w", pady=(0, 4))
+
+        self.sidebar_profile_menu = ctk.CTkOptionMenu(
+            inner_prof,
+            variable=self.var_tool_profile,
+            values=self._profile_labels,
+            height=28,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color=THEME_BTN_SEC_BG,
+            button_color=THEME_BTN_SEC_HOVER,
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=THEME_TEXT_PRIMARY,
+            dropdown_fg_color=THEME_CARD_BG,
+            dropdown_text_color=THEME_TEXT_PRIMARY,
+            dropdown_hover_color=THEME_BTN_SEC_BG,
+            command=self._on_tool_profile_change
+        )
+        self.sidebar_profile_menu.pack(fill="x")
 
         self.mini_card = ctk.CTkFrame(
             bottom_box,
@@ -2480,48 +2527,9 @@ class MammouthControlCenter(ctk.CTk):
 
         # Mode Selection Bar inside Hero Card
         mode_bar = ctk.CTkFrame(card, fg_color="transparent")
-        mode_bar.pack(fill="x", padx=15, pady=(12, 8))
+        mode_bar.pack(fill="x", padx=15, pady=(12, 6))
 
-        ctk.CTkLabel(mode_bar, text="Exposure Mode:", font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
-        
-        tunnel_modes = ["Serveo (Public SSH Tunnel)", "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"]
-        current_mode = self.config_data.get("server", {}).get("tunnel_mode", "Tailscale Funnel")
-        self.dash_mode_menu = ctk.CTkOptionMenu(
-            mode_bar,
-            values=tunnel_modes,
-            width=170,
-            fg_color=THEME_BTN_SEC_BG,
-            button_color=THEME_BTN_SEC_HOVER,
-            button_hover_color=("#CBD5E1", "#42434B"),
-            text_color=THEME_TEXT_PRIMARY,
-            dropdown_fg_color=THEME_CARD_BG,
-            dropdown_text_color=THEME_TEXT_PRIMARY,
-            dropdown_hover_color=THEME_BTN_SEC_BG,
-            command=self._on_dash_mode_changed
-        )
-        self.dash_mode_menu.set(current_mode)
-        self.dash_mode_menu.pack(side="left", padx=10)
-
-        ctk.CTkLabel(mode_bar, text="Route Path:", font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left", padx=(10, 5))
-        paths = ["/sse", "/mcp", "/messages", "/"]
-        current_path = self.config_data.get("server", {}).get("endpoint_path", "/sse")
-        self.dash_path_menu = ctk.CTkOptionMenu(
-            mode_bar,
-            values=paths,
-            width=100,
-            fg_color=THEME_BTN_SEC_BG,
-            button_color=THEME_BTN_SEC_HOVER,
-            button_hover_color=("#CBD5E1", "#42434B"),
-            text_color=THEME_TEXT_PRIMARY,
-            dropdown_fg_color=THEME_CARD_BG,
-            dropdown_text_color=THEME_TEXT_PRIMARY,
-            dropdown_hover_color=THEME_BTN_SEC_BG,
-            command=self._on_dash_path_changed
-        )
-        self.dash_path_menu.set(current_path)
-        self.dash_path_menu.pack(side="left")
-
-        # Security Status Badges
+        # Security Status Badges - packed RIGHT first so they are NEVER clipped or squeezed
         pills_box = ctk.CTkFrame(mode_bar, fg_color="transparent")
         pills_box.pack(side="right")
 
@@ -2548,6 +2556,88 @@ class MammouthControlCenter(ctk.CTk):
             text_color=("#059669", "#10B981") if self.config_data.get("server", {}).get("enforce_workspace_sandbox", True) else "#EF4444"
         )
         self.lbl_sandbox_status.pack(side="left", padx=5)
+
+        ctk.CTkLabel(mode_bar, text="Exposure Mode:", font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        
+        tunnel_modes = ["Serveo (Public SSH Tunnel)", "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"]
+        current_mode = self.config_data.get("server", {}).get("tunnel_mode", "Tailscale Funnel")
+        self.dash_mode_menu = ctk.CTkOptionMenu(
+            mode_bar,
+            values=tunnel_modes,
+            width=170,
+            fg_color=THEME_BTN_SEC_BG,
+            button_color=THEME_BTN_SEC_HOVER,
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=THEME_TEXT_PRIMARY,
+            dropdown_fg_color=THEME_CARD_BG,
+            dropdown_text_color=THEME_TEXT_PRIMARY,
+            dropdown_hover_color=THEME_BTN_SEC_BG,
+            command=self._on_dash_mode_changed
+        )
+        self.dash_mode_menu.set(current_mode)
+        self.dash_mode_menu.pack(side="left", padx=(8, 12))
+
+        ctk.CTkLabel(mode_bar, text="Route Path:", font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left", padx=(0, 5))
+        paths = ["/sse", "/mcp", "/messages", "/"]
+        current_path = self.config_data.get("server", {}).get("endpoint_path", "/sse")
+        self.dash_path_menu = ctk.CTkOptionMenu(
+            mode_bar,
+            values=paths,
+            width=100,
+            fg_color=THEME_BTN_SEC_BG,
+            button_color=THEME_BTN_SEC_HOVER,
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=THEME_TEXT_PRIMARY,
+            dropdown_fg_color=THEME_CARD_BG,
+            dropdown_text_color=THEME_TEXT_PRIMARY,
+            dropdown_hover_color=THEME_BTN_SEC_BG,
+            command=self._on_dash_path_changed
+        )
+        self.dash_path_menu.set(current_path)
+        self.dash_path_menu.pack(side="left")
+
+        # Dedicated Tool Exposure Profile Row inside Hero Card
+        prof_row = ctk.CTkFrame(card, fg_color="transparent")
+        prof_row.pack(fill="x", padx=15, pady=(2, 8))
+
+        ctk.CTkLabel(prof_row, text="🎯 Active Tool Profile:", font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        self.dash_profile_menu = ctk.CTkOptionMenu(
+            prof_row,
+            variable=self.var_tool_profile,
+            values=self._profile_labels,
+            width=300,
+            fg_color=THEME_BTN_SEC_BG,
+            button_color=THEME_BTN_SEC_HOVER,
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=THEME_TEXT_PRIMARY,
+            dropdown_fg_color=THEME_CARD_BG,
+            dropdown_text_color=THEME_TEXT_PRIMARY,
+            dropdown_hover_color=THEME_BTN_SEC_BG,
+            command=self._on_tool_profile_change
+        )
+        self.dash_profile_menu.pack(side="left", padx=(10, 8))
+
+        curr_prof_id = str(self.config_data.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+        from config import TOOL_PROFILES
+        curr_p_info = TOOL_PROFILES.get(curr_prof_id, TOOL_PROFILES["mammouth_safe"])
+        curr_est = curr_p_info.get("token_estimate", 0)
+        self.dash_profile_badge = ctk.CTkLabel(
+            prof_row,
+            text=f"~{curr_est:,} tok" if curr_prof_id not in ("all", "custom") else ("⚠️ 16.5k tok" if curr_prof_id == "all" else "⚙️ Custom"),
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#10B981" if curr_prof_id != "all" else "#EF4444"
+        )
+        self.dash_profile_badge.pack(side="left", padx=(0, 10))
+
+        raw_desc = curr_p_info.get("description", "")
+        short_desc = raw_desc[:55] + "..." if len(raw_desc) > 55 else raw_desc
+        self.dash_profile_subtext = ctk.CTkLabel(
+            prof_row,
+            text=f"({short_desc})" if short_desc else "",
+            font=ctk.CTkFont(size=11),
+            text_color=THEME_TEXT_MUTED
+        )
+        self.dash_profile_subtext.pack(side="left")
 
         # Primary Public Endpoint Row
         row1 = ctk.CTkFrame(card, fg_color="transparent")
@@ -4324,11 +4414,26 @@ class MammouthControlCenter(ctk.CTk):
                 if hasattr(self, "bar_nav_ram"):
                     self.bar_nav_ram.set(ram / 100.0)
 
+                # Detect and sync external profile change (e.g. via defroster_catalog tool call)
+                try:
+                    disk_cfg = load_config()
+                    disk_prof_id = str(disk_cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+                    if disk_prof_id != getattr(self, "curr_tool_profile_id", None):
+                        self.config_data = disk_cfg
+                        self.curr_tool_profile_id = disk_prof_id
+                        from config import TOOL_PROFILES
+                        disk_label = self._profile_label_by_id.get(disk_prof_id, TOOL_PROFILES.get(disk_prof_id, {}).get("label", disk_prof_id))
+                        if hasattr(self, "var_tool_profile") and self.var_tool_profile.get() != disk_label:
+                            self.var_tool_profile.set(disk_label)
+                        self._update_schema_gauge(disk_prof_id)
+                except Exception:
+                    pass
+
                 active_cnt = self._count_active_tools()
                 if hasattr(self, "lbl_stat_tools"):
-                    self.lbl_stat_tools.configure(text=f"⚡ {self._count_active_tools()}")
+                    self.lbl_stat_tools.configure(text=f"⚡ {active_cnt}")
                 if hasattr(self, "lbl_nav_tools"):
-                    self.lbl_nav_tools.configure(text=f"⚡ {active_cnt} Tools active")
+                    self.lbl_nav_tools.configure(text=f"⚡ {active_cnt}")
 
                 if self.is_server_running and self.server_start_time:
                     elapsed = int(time.time() - self.server_start_time)
@@ -5080,19 +5185,10 @@ class MammouthControlCenter(ctk.CTk):
             text_color=THEME_TEXT_PRIMARY
         ).pack(anchor="w")
 
-        from config import TOOL_PROFILES
-        profile_labels = [p["label"] for p in TOOL_PROFILES.values()]
-        self._profile_id_by_label = {p["label"]: p["id"] for p in TOOL_PROFILES.values()}
-        self._profile_label_by_id = {p["id"]: p["label"] for p in TOOL_PROFILES.values()}
-
-        curr_prof_id = str(self.config_data.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
-        curr_prof_label = self._profile_label_by_id.get(curr_prof_id, TOOL_PROFILES["mammouth_safe"]["label"])
-        self.var_tool_profile = ctk.StringVar(value=curr_prof_label)
-
         opt_profile = ctk.CTkOptionMenu(
             prof_left,
             variable=self.var_tool_profile,
-            values=profile_labels,
+            values=self._profile_labels,
             width=380,
             height=30,
             fg_color=THEME_INPUT_BG,
@@ -5121,8 +5217,10 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(size=11),
             text_color=THEME_TEXT_MUTED
         )
-        self.lbl_schema_subtext.pack(anchor="e")
-
+        curr_prof_id = getattr(self, "curr_tool_profile_id", None) or getattr(self, "_profile_id_by_label", {}).get(
+            self.var_tool_profile.get() if hasattr(self, "var_tool_profile") else "",
+            str(self.config_data.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+        )
         self._update_schema_gauge(curr_prof_id)
 
         self.scroll_skills = ctk.CTkScrollableFrame(self.tab_skills, fg_color="transparent")
@@ -5557,22 +5655,30 @@ class MammouthControlCenter(ctk.CTk):
         return result[0]
 
     def _on_tool_profile_change(self, selected_label: str):
-        prof_id = getattr(self, "_profile_id_by_label", {}).get(selected_label, "mammouth_safe")
+        prof_id = getattr(self, "_profile_id_by_label", {}).get(selected_label)
+        if not prof_id:
+            if selected_label in getattr(self, "_profile_label_by_id", {}):
+                prof_id = selected_label
+            else:
+                prof_id = "mammouth_safe"
+
+        canonical_label = getattr(self, "_profile_label_by_id", {}).get(prof_id, selected_label)
+        if hasattr(self, "var_tool_profile") and self.var_tool_profile.get() != canonical_label:
+            self.var_tool_profile.set(canonical_label)
+
+        self.curr_tool_profile_id = prof_id
         self.config_data.setdefault("server", {})["tool_profile"] = prof_id
         save_config(self.config_data)
         self._update_schema_gauge(prof_id)
         if hasattr(self, "lbl_stat_tools"):
             self.lbl_stat_tools.configure(text=f"⚡ {self._count_active_tools()}")
-        self._log(f"[TOOLS] Active tool profile switched to '{prof_id}' ({selected_label}).")
+        if hasattr(self, "lbl_nav_tools"):
+            self.lbl_nav_tools.configure(text=f"⚡ {self._count_active_tools()}")
+        self._log(f"[TOOLS] Active tool profile switched to '{prof_id}' ({canonical_label}).")
         if self.is_server_running:
             try:
-                import asyncio
-                from server import notify_all_mcp_sessions_tools_changed
-                threading.Thread(
-                    target=lambda: asyncio.run(notify_all_mcp_sessions_tools_changed()),
-                    daemon=True,
-                    name="BroadcastToolListChanged"
-                ).start()
+                from server import broadcast_tool_list_changed
+                broadcast_tool_list_changed()
                 self._log("[TOOLS] Broadcasted tools/list_changed notification to connected MCP sessions.")
             except Exception as e:
                 self._log(f"[TOOLS WARNING] Could not broadcast tools changed: {e}")
@@ -5599,16 +5705,23 @@ class MammouthControlCenter(ctk.CTk):
             self.lbl_schema_gauge.configure(text=badge_text, text_color=color)
         if hasattr(self, "lbl_schema_subtext"):
             self.lbl_schema_subtext.configure(text=subtext)
+        if hasattr(self, "dash_profile_badge"):
+            if prof_id == "all":
+                self.dash_profile_badge.configure(text="⚠️ 16.5k tok", text_color="#EF4444")
+            elif prof_id == "custom":
+                self.dash_profile_badge.configure(text="⚙️ Custom", text_color="#10B981")
+            else:
+                self.dash_profile_badge.configure(text=f"~{est:,} tok", text_color="#10B981")
+        if hasattr(self, "dash_profile_subtext"):
+            raw_desc = p_info.get("description", "")
+            short_desc = raw_desc[:55] + "..." if len(raw_desc) > 55 else raw_desc
+            self.dash_profile_subtext.configure(text=f"({short_desc})" if short_desc else "")
 
     def _enable_safe_skills(self):
-        self.config_data.setdefault("server", {})["tool_profile"] = "mammouth_safe"
         from config import TOOL_PROFILES
         lbl = TOOL_PROFILES["mammouth_safe"]["label"]
-        if hasattr(self, "var_tool_profile"):
-            self.var_tool_profile.set(lbl)
-        self._update_schema_gauge("mammouth_safe")
-        self._save_skills()
-        self._log("[TOOLS] Preset 'Mammouth Chat Safe' activated: 10 core tools promoted under ~2,485 tokens.")
+        self._on_tool_profile_change(lbl)
+        self._log("[TOOLS] Preset 'Mammouth Chat Safe' activated: 12 core tools promoted under ~2,700 tokens.")
 
     def _save_skills(self):
         for key, var in self.module_switches.items():

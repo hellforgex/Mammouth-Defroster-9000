@@ -217,7 +217,7 @@ TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
     "web_vision": {
         "id": "web_vision",
         "name": "Web & Vision",
-        "label": "👁️ Web & Vision (12 Tools)",
+        "label": "👁️ Web & Vision (13 Tools)",
         "description": "Browser automation (navigate, snapshot, click, fill), multi-monitor screen capture, and desktop input (~3,300 tokens).",
         "icon": "👁️",
         "token_estimate": 3300,

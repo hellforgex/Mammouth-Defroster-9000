@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.7.4] - 2026-10-31
+
+### 🌍 Multilingual MCP Tool Search & Rapid Profile Switching
+- **Multilingual Tool Search Keyword Enrichment:**
+  - Added comprehensive `_MULTILINGUAL_TOOL_HINTS` across all Defroster tools (German, French, English).
+  - Search terms such as *"Browser-Automatisierung"*, *"Verzeichnis auflisten"*, *"Datei lesen"*, *"lister répertoire"*, *"lire fichier"* match tools directly with 100% precision.
+  - Idempotent schema sanitization ensures keywords are never duplicated across repeated requests.
+- **Persistent Tool Profile Quick Selectors in Cockpit GUI:**
+  - Added dedicated Tool Profile row on Dashboard Hero Card with full-width menu, token badge, and live description subtext.
+  - Added permanent Tool Profile card in Left Navigation Sidebar, making profile switching instantly accessible across all application tabs.
+  - Live bidirectional synchronization across Dashboard, Sidebar, and Skills tab, triggering immediate MCP `tools/list_changed` broadcast to connected clients upon profile change.
+  - Automatic background synchronization in GUI telemetry loop when profile is changed externally via MCP `defroster_catalog(switch_profile=...)`.
+- **Schema Token Optimization:**
+  - Streamlined `file_read` docstring and redundant schema overhead, reducing total advertised schema size to ~2,264 tokens (strictly within client 2,500 token search budgets) with concise entry point breadcrumbs.
+- **Critical Bugfixes & Stability:**
+  - **Resolved Dashboard Hero Card Security Badge Clipping:** Re-architected Hero Card packing geometry so `pills_box` (`⚡ OAuth 2.0 Ready`, `🔐 Bearer Token Active`, `🔒 Sandbox ON`) is packed right-first and Tool Profile is housed in a dedicated row, resolving complete clipping of security status badges on standard and minimum window widths.
+  - **Resolved Cross-Loop MCP Broadcast Exceptions:** Implemented `broadcast_tool_list_changed()` and server event loop tracking (`_SERVER_EVENT_LOOP`), ensuring `tools/list_changed` notifications are dispatched safely across threads without loop mismatch runtime errors.
+  - **Resolved `_enable_safe_skills` Desynchronization:** Bound "Mammouth Chat Safe" preset button directly to `_on_tool_profile_change`, correctly updating instance tracking, all 3 UI menus, and broadcasting to clients without intrusive modal restart alerts.
+  - **Resolved OptionMenu Profile ID vs. Label Resolution:** Added defensive resolution in `_on_tool_profile_change` to accept both human labels and raw profile IDs interchangeably.
+  - **Corrected Web & Vision Tool Count:** Aligned `TOOL_PROFILES["web_vision"]` label to 13 tools matching the tools array.
+  - **GUI Startup Crash (`NameError: curr_prof_id`):** Fixed unreferenced `curr_prof_id` variable in `_setup_skills_tab`, resolving immediate crash upon launching `MammouthDefroster9000.exe`.
+  - **Server Logger NameError:** Added module-level logger in `server.py` to prevent crash on MCP notification errors.
+- **Version Alignment:** Synchronized project version to `v0.7.4` across `pyproject.toml`, `server.py`, `gui.py`, build scripts, and test suites.
+
 ## [0.7.3] - 2026-10-29
 
 ### 🐛 Web Chat Automation & In-App Browser Fixes

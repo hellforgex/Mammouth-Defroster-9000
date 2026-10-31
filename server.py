@@ -11,8 +11,12 @@ import hashlib
 from pathlib import Path
 from typing import Optional, AsyncGenerator, Any, Dict, List
 
+import asyncio
 import base64
+import logging
 import sqlite3
+
+logger = logging.getLogger("mammouth.server")
 import urllib.parse
 from urllib.parse import parse_qs, urlencode, quote
 import subprocess
@@ -186,7 +190,7 @@ from modules.google_drive import (
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
     instructions="""
-    Mammouth Defroster 9000 (v0.7.3): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
+    Mammouth Defroster 9000 (v0.7.4): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
     Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, browser automation, Google Drive cloud integration, and Mammouth Code CLI agent automation exclusively for Mammouth.ai.
     Core Tool Hub: Use 'defroster_catalog' or 'file_read' to discover available tools across [files, shell, browser, screen, desktop, system, scheduler, gdrive, clipboard, memory].
     Dynamic Tooling: If a required capability is not available as a built-in MCP tool, write a custom Python or PowerShell script using 'file_write' and execute it locally via 'powershell_exec' or 'command_run' ($0 cost). Do NOT use 'mammouth_code_run_task' to run existing local scripts.
@@ -549,13 +553,7 @@ def defroster_catalog(
             if ctx and getattr(ctx, "session", None):
                 register_active_mcp_session(ctx.session)
             try:
-                import asyncio
-                import threading
-                threading.Thread(
-                    target=lambda: asyncio.run(notify_all_mcp_sessions_tools_changed()),
-                    daemon=True,
-                    name="BroadcastToolListChangedSync"
-                ).start()
+                broadcast_tool_list_changed()
                 tools_auto_refreshed = True
             except Exception as notif_err:
                 logger.debug(f"Tool list change broadcast notice: {notif_err}")
@@ -829,6 +827,70 @@ def _sanitize_schema_dict(schema: Dict[str, Any]) -> None:
             prop_val["type"] = "string"
 
 
+_MULTILINGUAL_TOOL_HINTS: Dict[str, str] = {
+    # Core & Catalog
+    "defroster_catalog": "Tool-Katalog, Werkzeuge auflisten, Profil wechseln, catalogue outils, list tools",
+    # File Operations
+    "directory_list": "Verzeichnis auflisten, Ordnerinhalt, Dateien anzeigen, Ordner durchsuchen, lister répertoire, list directory",
+    "directory_tree": "Verzeichnisbaum, Ordnerstruktur rekursiv auflisten, arborescence dossiers",
+    "file_read": "Datei lesen, Dateiinhalt anzeigen, Textdatei öffnen, Datei laden, lire fichier, read file",
+    "file_write": "Datei schreiben, Datei erstellen, Datei speichern, Inhalt sichern, écrire fichier, write file",
+    "file_replace_chunk": "Code-Block ersetzen, Datei bearbeiten, Text ersetzen, remplacer code",
+    "file_search_text": "Dateien durchsuchen, Textsuche, Grep, Code suchen, chercher texte, search files",
+    # Browser Automation (Edge / Chrome via Playwright)
+    "browser_navigate": "Browser-Automatisierung, Webseite öffnen, URL aufrufen, Browser steuern, naviguer page web, open url, launch browser",
+    "browser_snapshot": "Browser-Automatisierung, Webseite einlesen, interaktive Elemente erkennen, DOM Snapshot, instantané page",
+    "browser_click": "Browser-Automatisierung, Klick, Button anklicken, Link öffnen, Element klicken, cliquer bouton, click element",
+    "browser_fill": "Browser-Automatisierung, Formular ausfüllen, Text eingeben, Tippen, remplir formulaire, type input, form fill",
+    "browser_screenshot": "Browser Screenshot, Bildschirmfoto Webseite, Browser erfassen, capture page web",
+    "browser_press_key": "Taste drücken, Tastatur Eingabe, Enter Escape senden, appuyer touche",
+    "browser_hover": "Mauszeiger bewegen, Hover, Über Element schweben, survoler élément",
+    "browser_scroll": "Seite scrollen, nach unten scrollen, faire défiler page",
+    "browser_get_content": "HTML Quelltext auslesen, Text der Webseite abrufen, contenu page",
+    "browser_evaluate": "JavaScript ausführen, Skript im Browser starten, exécuter javascript",
+    "browser_tabs": "Browser Tabs auflisten, Tab wechseln, onglets navigateur",
+    "browser_status": "Browser Status prüfen, etat navigateur",
+    "browser_close": "Browser schließen, fermer navigateur",
+    "browser_restart": "Browser neu starten, redémarrer navigateur",
+    "browser_list_browsers": "Installierte Browser auflisten, Edge Chrome finden",
+    # Screen & Desktop Vision
+    "screen_capture": "Screenshot aufnehmen, Bildschirmfoto, Monitor erfassen, Desktop Vision, capture écran",
+    "screen_list_monitors": "Monitore auflisten, Bildschirme anzeigen",
+    "screen_list_windows": "Offene Fenster auflisten, Anwendungsfenster anzeigen, lister fenêtres",
+    "screen_capture_active_window": "Aktives Fenster fotografieren, Screenshot vom Fenster",
+    "screen_capture_window": "Fenster Screenshot aufnehmen",
+    "mouse_click": "Mausklick, Desktop Klick, Koordinate anklicken, clic souris",
+    "mouse_move": "Mauszeiger bewegen, Cursor bewegen, déplacer souris",
+    "mouse_drag": "Maus ziehen, Drag and Drop",
+    "mouse_scroll": "Mausrad scrollen",
+    "mouse_get_position": "Mausposition ermitteln",
+    "keyboard_type": "Tastatur tippen, Text schreiben, Tastatur-Eingabe, taper clavier",
+    "keyboard_press": "Taste drücken, Sondertaste senden",
+    "keyboard_hotkey": "Tastenkombination drücken, Hotkey ausführen",
+    # Shell & System
+    "command_run": "Befehl ausführen, Kommando starten, Shell CMD, Terminal, exécuter commande, run command",
+    "powershell_exec": "PowerShell ausführen, Skript starten, PS Befehl, execute powershell",
+    "local_exec_command": "Lokalen Befehl ausführen, Kommandozeile",
+    "system_get_specs": "System-Informationen, Hardware-Spezifikationen, CPU RAM Festplatte, spécifications système",
+    "system_get_processes": "Prozesse auflisten, Taskmanager, laufende Programme, processus système",
+    "system_get_gpu_info": "Grafikkarte GPU Details abrufen",
+    "system_get_event_logs": "Windows Ereignisanzeige Event Logs auslesen",
+    # Memory & Tasks
+    "memory_save": "Gedächtnis speichern, Notiz merken, Wissen ablegen, Langzeitgedächtnis, mémoriser note",
+    "memory_recall": "Gedächtnis durchsuchen, Notiz abrufen, Erinnerung finden, chercher mémoire",
+    "memory_get": "Notiz nach Schlüssel abrufen",
+    "memory_delete": "Gedächtniseintrag löschen",
+    "memory_list": "Alle gespeicherten Notizen auflisten",
+    "task_create": "Aufgabe erstellen, Task Kanban anlegen, créer tâche",
+    "task_update": "Aufgabe aktualisieren, Status ändern",
+    "task_list": "Aufgaben auflisten, Taskliste anzeigen, lister tâches",
+    "task_delete": "Aufgabe löschen",
+    "clipboard_get_text": "Zwischenablage lesen, Clipboard auslesen, kopierten Text holen, lire presse-papiers",
+    "clipboard_set_text": "In Zwischenablage kopieren, Text in Clipboard schreiben",
+    "clipboard_transform": "Zwischenablage umwandeln mit KI",
+}
+
+
 def _sanitize_mcp_tool_schema(tool: Any) -> None:
     """Sanitize and repair OpenAPI / JSON schema constructs on mcp.types.Tool or FastMCP Tool."""
     schema = getattr(tool, "input_schema", None) or getattr(tool, "inputSchema", None)
@@ -841,6 +903,18 @@ def _sanitize_mcp_tool_schema(tool: Any) -> None:
         if hasattr(tool, attr):
             try:
                 setattr(tool, attr, None)
+            except Exception:
+                pass
+    # Multilingual Keyword Enrichment (DE / FR / EN) for Mammouth AI and international clients
+    t_name = getattr(tool, "name", None)
+    if t_name and t_name in _MULTILINGUAL_TOOL_HINTS:
+        hint = _MULTILINGUAL_TOOL_HINTS[t_name]
+        desc = getattr(tool, "description", "") or ""
+        marker = "[Keywords/Mots-clés:"
+        if marker not in desc:
+            new_desc = f"{desc}\n{marker} {hint}]" if desc else f"{marker} {hint}]"
+            try:
+                setattr(tool, "description", new_desc)
             except Exception:
                 pass
 
@@ -902,6 +976,7 @@ if hasattr(mcp, "_list_tools_mcp"):
     mcp._list_tools_mcp = _profile_filtered_list_tools_mcp
 
 _ACTIVE_MCP_SESSIONS = set()
+_SERVER_EVENT_LOOP: Optional[asyncio.AbstractEventLoop] = None
 
 def register_active_mcp_session(session: Any):
     """Register an active MCP ServerSession to broadcast tool list updates."""
@@ -918,9 +993,28 @@ async def notify_all_mcp_sessions_tools_changed():
                 await s.send_tool_list_changed()
             elif hasattr(s, "send_notification"):
                 await s.send_notification(mcp_types.ToolListChangedNotification())
-        except Exception:
+        except Exception as err:
+            logger.debug(f"Failed to notify session {s}: {err}")
             dead.add(s)
     _ACTIVE_MCP_SESSIONS.difference_update(dead)
+
+def broadcast_tool_list_changed():
+    """Safely dispatch notifications/tools/list_changed across thread and event loop boundaries."""
+    if _SERVER_EVENT_LOOP and _SERVER_EVENT_LOOP.is_running():
+        try:
+            return asyncio.run_coroutine_threadsafe(notify_all_mcp_sessions_tools_changed(), _SERVER_EVENT_LOOP)
+        except Exception as err:
+            logger.debug(f"Cross-loop broadcast error: {err}")
+    try:
+        loop = asyncio.get_running_loop()
+        return loop.create_task(notify_all_mcp_sessions_tools_changed())
+    except RuntimeError:
+        import threading
+        threading.Thread(
+            target=lambda: asyncio.run(notify_all_mcp_sessions_tools_changed()),
+            daemon=True,
+            name="BroadcastToolListChangedFallback"
+        ).start()
 
 # Wrap FastMCP 4.x / MCP SDK 2.x protocol handler in _mcp_server if present
 if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_request_handlers"):
@@ -2049,10 +2143,13 @@ def build_app(token: Optional[str] = None):
                 init_browser_agent(cfg.get("browser_agent", {}))
             except Exception as e:
                 print(f"[BROWSER AGENT] Initialization notice: {e}")
+        global _SERVER_EVENT_LOOP
+        _SERVER_EVENT_LOOP = asyncio.get_running_loop()
         try:
             async with mcp._lifespan_manager(), streamable_http_app.session_manager.run():
                 yield
         finally:
+            _SERVER_EVENT_LOOP = None
             try:
                 browser_close()
             except Exception:

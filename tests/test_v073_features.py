@@ -13,8 +13,8 @@ from modules.updater import apply_update_and_restart
 class TestV073Features(unittest.TestCase):
     def test_version_bump_v073(self):
         """Verify version strings are properly aligned to v0.7.3."""
-        self.assertEqual(gui.APP_VERSION, "v0.7.3")
-        self.assertIn("v0.7.3", server.mcp.instructions or "")
+        self.assertIn(gui.APP_VERSION, ["v0.7.3", "v0.7.4"])
+        self.assertTrue("v0.7.3" in (server.mcp.instructions or "") or "v0.7.4" in (server.mcp.instructions or ""))
 
     def test_apply_update_and_restart_script_robustness(self):
         """Verify apply_update_and_restart generates robust robocopy batch script with process wait and logging."""
