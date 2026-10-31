@@ -820,8 +820,9 @@ def _sanitize_schema_dict(schema: Dict[str, Any]) -> None:
                     if not sub:
                         cleaned_anyof.append({"type": "string"})
                     elif "type" not in sub and "$ref" not in sub:
-                        sub["type"] = "string"
-                        cleaned_anyof.append(sub)
+                        sub_copy = dict(sub)
+                        sub_copy["type"] = "string"
+                        cleaned_anyof.append(sub_copy)
                     else:
                         cleaned_anyof.append(sub)
             prop_val["anyOf"] = cleaned_anyof
@@ -1043,59 +1044,43 @@ def broadcast_tool_list_changed():
             name="BroadcastToolListChangedFallback"
         ).start()
 
-# Wrap MCP server ListToolsRequest handler for strict schema cleanliness and tool profile filtering
+# Wrap MCP server _request_handlers for strict schema cleanliness, session tracking, and tool profile filtering
 import mcp.types as mcp_types
-if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "request_handlers"):
-    _orig_mcp_list_tools_handler = mcp._mcp_server.request_handlers.get(mcp_types.ListToolsRequest)
-    if _orig_mcp_list_tools_handler:
-        async def _sanitizing_list_tools_handler(req: mcp_types.ListToolsRequest) -> Any:
-            res = await _orig_mcp_list_tools_handler(req)
-            cfg = load_config()
-            profile_key = str(cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
-            tools_list = getattr(res.root, "tools", []) if hasattr(res, "root") else getattr(res, "tools", [])
-            if profile_key != "all":
-                if profile_key == "custom":
-                    mods = cfg.get("modules", {})
-                    filtered = [
-                        t for t in tools_list
-                        if t.name == "defroster_catalog" or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(t.name, ""), {}).get("enabled", True)
-                    ]
-                else:
-                    profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
-                    allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog"}
-                    filtered = [t for t in tools_list if t.name in allowed_names]
-            else:
-                filtered = list(tools_list)
-            for tool in filtered:
-                _sanitize_mcp_tool_schema(tool)
-            if hasattr(res, "root") and hasattr(res.root, "tools"):
-                res.root.tools = filtered
-            elif hasattr(res, "tools"):
-                res.tools = filtered
-            return res
-
-        mcp._mcp_server.request_handlers[mcp_types.ListToolsRequest] = _sanitizing_list_tools_handler
-
-if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_handle_message"):
-    _orig_handle_message = mcp._mcp_server._handle_message
-    async def _tracking_handle_message(message, session, lifespan_context, raise_exceptions=False):
-        register_active_mcp_session(session)
-        return await _orig_handle_message(message, session, lifespan_context, raise_exceptions)
-    mcp._mcp_server._handle_message = _tracking_handle_message
-
-# Also wrap older FastMCP / MCP SDK string-keyed _request_handlers if present
 if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_request_handlers"):
     _orig_tools_entry = mcp._mcp_server._request_handlers.get("tools/list")
     if _orig_tools_entry:
         _orig_on_list = _orig_tools_entry.handler
 
         async def _profile_filtered_on_list_handler(*args, **kwargs):
-            if args and hasattr(args[0], "session"):
-                register_active_mcp_session(args[0].session)
+            if args:
+                for arg in args:
+                    if hasattr(arg, "session") and arg.session:
+                        register_active_mcp_session(arg.session)
             result = await _orig_on_list(*args, **kwargs)
-            if hasattr(result, "tools"):
-                for tool in result.tools:
+            cfg = load_config()
+            profile_key = str(cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
+            tools_list = getattr(result, "tools", None)
+            if tools_list is None and hasattr(result, "root"):
+                tools_list = getattr(result.root, "tools", None)
+            if tools_list is not None:
+                if profile_key == "all":
+                    filtered = list(tools_list)
+                elif profile_key == "custom":
+                    mods = cfg.get("modules", {})
+                    filtered = [
+                        t for t in tools_list
+                        if getattr(t, "name", "") == "defroster_catalog" or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(getattr(t, "name", ""), ""), {}).get("enabled", True)
+                    ]
+                else:
+                    profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
+                    allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog"}
+                    filtered = [t for t in tools_list if getattr(t, "name", "") in allowed_names]
+                for tool in filtered:
                     _sanitize_mcp_tool_schema(tool)
+                if hasattr(result, "tools"):
+                    result.tools = filtered
+                elif hasattr(result, "root") and hasattr(result.root, "tools"):
+                    result.root.tools = filtered
             return result
 
         mcp._mcp_server._request_handlers["tools/list"] = _orig_tools_entry.__class__(
@@ -1108,8 +1093,10 @@ if hasattr(mcp, "_mcp_server") and hasattr(mcp._mcp_server, "_request_handlers")
         _orig_on_call = _orig_call_entry.handler
 
         async def _session_tracking_on_call_handler(*args, **kwargs):
-            if args and hasattr(args[0], "session"):
-                register_active_mcp_session(args[0].session)
+            if args:
+                for arg in args:
+                    if hasattr(arg, "session") and arg.session:
+                        register_active_mcp_session(arg.session)
             return await _orig_on_call(*args, **kwargs)
 
         mcp._mcp_server._request_handlers["tools/call"] = _orig_call_entry.__class__(
@@ -2058,7 +2045,9 @@ class SecurityAndAuthMiddleware:
             async def send_with_security_headers(message):
                 if message["type"] == "http.response.start":
                     headers = list(message.get("headers", []))
-                    headers.append((b"x-content-type-options", b"nosniff"))
+                    existing_keys = {k.lower() for k, _ in headers}
+                    if b"x-content-type-options" not in existing_keys:
+                        headers.append((b"x-content-type-options", b"nosniff"))
                     # Anti-clickjacking: DENY by default; for OAuth consent endpoints, restrict framing to mammouth.ai and self
                     is_oauth_consent = (
                         clean_path.startswith("/oauth/")
@@ -2066,16 +2055,23 @@ class SecurityAndAuthMiddleware:
                         or clean_path in ("/authorize", "/token", "/register")
                     )
                     if is_oauth_consent:
-                        headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai"))
+                        if b"content-security-policy" not in existing_keys:
+                            headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai"))
                     else:
-                        headers.append((b"x-frame-options", b"DENY"))
-                    headers.append((b"referrer-policy", b"no-referrer"))
-                    headers.append((b"x-xss-protection", b"1; mode=block"))
-                    headers.append((b"cache-control", b"no-store, no-cache, must-revalidate, private"))
-                    headers.append((b"pragma", b"no-cache"))
+                        if b"x-frame-options" not in existing_keys:
+                            headers.append((b"x-frame-options", b"DENY"))
+                    if b"referrer-policy" not in existing_keys:
+                        headers.append((b"referrer-policy", b"no-referrer"))
+                    if b"x-xss-protection" not in existing_keys:
+                        headers.append((b"x-xss-protection", b"1; mode=block"))
+                    if b"cache-control" not in existing_keys:
+                        headers.append((b"cache-control", b"no-store, no-cache, must-revalidate, private"))
+                    if b"pragma" not in existing_keys:
+                        headers.append((b"pragma", b"no-cache"))
                     # Support Chromium Private Network Access (PNA) for in-app browser & local network
-                    headers.append((b"access-control-allow-private-network", b"true"))
-                    if message.get("status") == 401:
+                    if b"access-control-allow-private-network" not in existing_keys:
+                        headers.append((b"access-control-allow-private-network", b"true"))
+                    if message.get("status") == 401 and b"www-authenticate" not in existing_keys:
                         proto = header_map.get("x-forwarded-proto", "https" if (".ts.net" in header_map.get("host", "") or ".trycloudflare.com" in header_map.get("host", "")) else "http")
                         host = header_map.get("x-forwarded-host", header_map.get("host", "127.0.0.1:8000"))
                         base_meta_url = f"{proto}://{host}".rstrip("/")
@@ -2083,9 +2079,31 @@ class SecurityAndAuthMiddleware:
                     message["headers"] = headers
                 await send(message)
 
-            # L-03: CORS Preflight OPTIONS requests must bypass auth unconditionally
+            # L-03: CORS Preflight OPTIONS requests must bypass auth unconditionally and return 200 with CORS headers
             if method == "OPTIONS":
-                await self.app(scope, receive, send_with_security_headers)
+                cors_resp = Response(
+                    content="",
+                    status_code=200,
+                    headers={
+                        "access-control-allow-origin": "*",
+                        "access-control-allow-methods": "GET, POST, DELETE, OPTIONS, HEAD",
+                        "access-control-allow-headers": "*",
+                        "access-control-allow-credentials": "true",
+                        "access-control-allow-private-network": "true",
+                        "access-control-max-age": "86400",
+                    }
+                )
+                await cors_resp(scope, receive, send_with_security_headers)
+                return
+
+            if method == "HEAD" and clean_path in ("/", "/sse", "/mcp"):
+                head_resp = Response(content="", status_code=200)
+                await head_resp(scope, receive, send_with_security_headers)
+                return
+
+            if clean_path == "/favicon.ico":
+                fav_resp = Response(content="", status_code=204)
+                await fav_resp(scope, receive, send_with_security_headers)
                 return
 
             # OAuth 2.0 Discovery & Endpoints bypass pre-authentication
@@ -2109,6 +2127,22 @@ class SecurityAndAuthMiddleware:
                 provided_token = ""
                 if auth_header.lower().startswith("bearer "):
                     provided_token = auth_header[7:].strip()
+                elif auth_header and not auth_header.lower().startswith("basic "):
+                    provided_token = auth_header
+
+                # Also support x-api-key header
+                if not provided_token:
+                    provided_token = header_map.get("x-api-key", "").strip()
+
+                # Also support URL query parameters (?token=... or ?api_key=... or ?access_token=...)
+                query_string = scope.get("query_string", b"").decode("latin1")
+                params = urllib.parse.parse_qs(query_string)
+                if not provided_token:
+                    provided_token = (
+                        params.get("token", [""])[0]
+                        or params.get("api_key", [""])[0]
+                        or params.get("access_token", [""])[0]
+                    ).strip()
 
                 is_valid = False
                 if provided_token:
@@ -2118,9 +2152,7 @@ class SecurityAndAuthMiddleware:
                         is_valid = True
 
                 # Check active authenticated SSE session for POST /messages from verified SSE clients
-                if not is_valid and clean_path.rstrip("/") == "/messages":
-                    query_string = scope.get("query_string", b"").decode("latin1")
-                    params = urllib.parse.parse_qs(query_string)
+                if not is_valid:
                     sid = params.get("session_id", [""])[0]
                     if sid and is_sse_session_authenticated(sid):
                         is_valid = True
@@ -2199,18 +2231,24 @@ def build_app(token: Optional[str] = None):
             self.fallback_app = fallback_app
 
         async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-            if scope["type"] == "http" and scope["method"] == "GET":
-                async with self.transport.connect_sse(scope, receive, send) as streams:
-                    for sid_uuid in list(self.transport._read_stream_writers.keys()):
-                        record_authenticated_sse_session(sid_uuid.hex)
-                        record_authenticated_sse_session(str(sid_uuid))
-                    await mcp._mcp_server.run(
-                        streams[0],
-                        streams[1],
-                        mcp._mcp_server.create_initialization_options(),
-                    )
-            else:
-                await self.fallback_app(scope, receive, send)
+            if scope["type"] == "http":
+                method = scope.get("method", "GET")
+                qs = scope.get("query_string", b"").decode("latin1")
+                if method == "GET":
+                    async with self.transport.connect_sse(scope, receive, send) as streams:
+                        for sid_uuid in list(self.transport._read_stream_writers.keys()):
+                            record_authenticated_sse_session(sid_uuid.hex)
+                            record_authenticated_sse_session(str(sid_uuid))
+                        await mcp._mcp_server.run(
+                            streams[0],
+                            streams[1],
+                            mcp._mcp_server.create_initialization_options(),
+                        )
+                    return
+                elif method == "POST" and "session_id=" in qs:
+                    await self.transport.handle_post_message(scope, receive, send)
+                    return
+            await self.fallback_app(scope, receive, send)
 
     class _MessagesRouteHandler:
         def __init__(self, transport: SseServerTransport, fallback_app: ASGIApp):
@@ -2225,11 +2263,14 @@ def build_app(token: Optional[str] = None):
                     return
             await self.fallback_app(scope, receive, send)
 
+    unified_handler = _SSERouteHandler(sse_transport, streamable_http_app)
+    messages_handler = _MessagesRouteHandler(sse_transport, streamable_http_app)
+
     routes = [
-        Route("/", endpoint=streamable_http_app, methods=["GET", "POST", "DELETE", "OPTIONS"]),
-        Route("/mcp", endpoint=streamable_http_app, methods=["GET", "POST", "DELETE", "OPTIONS"]),
-        Route("/sse", endpoint=_SSERouteHandler(sse_transport, streamable_http_app), methods=["GET", "POST", "DELETE", "OPTIONS"]),
-        Route("/messages", endpoint=_MessagesRouteHandler(sse_transport, streamable_http_app), methods=["GET", "POST", "DELETE", "OPTIONS"]),
+        Route("/", endpoint=unified_handler, methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"]),
+        Route("/mcp", endpoint=unified_handler, methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"]),
+        Route("/sse", endpoint=unified_handler, methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"]),
+        Route("/messages", endpoint=messages_handler, methods=["GET", "POST", "DELETE", "OPTIONS"]),
         Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
         Route("/.well-known/oauth-protected-resource/{subpath:path}", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
         Route("/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server, methods=["GET", "OPTIONS"]),
