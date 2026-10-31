@@ -33,6 +33,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "allowed_origins": [
             "https://mammouth.ai",
             "https://app.mammouth.ai",
+            "https://claude.ai",
+            "https://code.claude.ai",
+            "https://app.claude.ai",
+            "https://console.anthropic.com",
             "http://localhost",
             "http://127.0.0.1"
         ],
@@ -139,6 +143,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "name": "Smart Clipboard AI & Quick-Actions",
             "description": "Unicode clipboard bridge, global hotkey (Ctrl+Shift+K), and AI quick-actions (explain, fix bug, translate, git commit, summarize)."
         },
+        "claude_code": {
+            "enabled": True,
+            "name": "Claude Code CLI & Cloud Sessions",
+            "description": "Claude Code CLI agent & cloud sessions: .mcp.json sync, public tunnel bridge, terminal launcher, and cloud execution."
+        },
     },
     "browser_agent": {
         "channel": "msedge",
@@ -154,6 +163,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "auto_sync_mcp": True,
         "default_terminal": "wt",          # "wt" (Windows Terminal) or "powershell"
         "headless_timeout_seconds": 180
+    },
+    "claude_code": {
+        "binary_path": "",
+        "use_env_var": False,
+        "default_cloud": True,
+        "default_terminal": "powershell"
     },
     "embedded_browser": {
         "enabled": True,

@@ -162,6 +162,12 @@ from modules.mammouth_code import (
     install_or_update_mammouth_code as mammouth_code_install_or_update,
     sync_opencode_mcp_config as mammouth_code_sync_mcp,
 )
+from modules.claude_code import (
+    get_claude_code_status as claude_code_status,
+    launch_claude_terminal as claude_code_launch_terminal,
+    run_claude_task as claude_code_run_task,
+    sync_claude_code_mcp as claude_code_sync_mcp,
+)
 from modules.task_scheduler import (
     scheduler_create_task,
     scheduler_list_tasks,
@@ -525,6 +531,17 @@ _DEFROSTER_MODULE_CATALOG: Dict[str, Dict[str, Any]] = {
             {"name": "memory_recall", "desc": "Recall stored memories matching a query."},
             {"name": "memory_list", "desc": "List stored memories."}
         ]
+    },
+    "claude": {
+        "module": "claude_code",
+        "title": "Claude Code CLI & Cloud Sessions",
+        "description": "Claude Code agent & cloud sessions: status check, .mcp.json sync, terminal launcher, and cloud execution.",
+        "tools": [
+            {"name": "claude_code_status", "desc": "Check Claude Code CLI installation, version, and cloud MCP readiness."},
+            {"name": "claude_code_sync_mcp", "desc": "Sync Mammouth Defroster 9000 into repository .mcp.json for cloud sessions."},
+            {"name": "claude_code_launch_terminal", "desc": "Launch Claude Code terminal session (local or cloud)."},
+            {"name": "claude_code_run_task", "desc": "Execute Claude Code task non-interactively via CLI."}
+        ]
     }
 }
 
@@ -713,6 +730,12 @@ def register_active_tools():
         mcp.tool()(require_module("mammouth_code")(mammouth_code_install_or_update))
         mcp.tool()(require_module("mammouth_code")(mammouth_code_sync_mcp))
 
+    if mods.get("claude_code", {}).get("enabled", True):
+        mcp.tool(name="claude_code_status")(require_module("claude_code")(claude_code_status))
+        mcp.tool(name="claude_code_launch_terminal")(require_module("claude_code")(claude_code_launch_terminal))
+        mcp.tool(name="claude_code_run_task")(require_module("claude_code")(claude_code_run_task))
+        mcp.tool(name="claude_code_sync_mcp")(require_module("claude_code")(claude_code_sync_mcp))
+
     if mods.get("desktop_input", {}).get("enabled", True):
         mcp.tool()(require_module("desktop_input")(desktop_get_screen_info))
         mcp.tool()(require_module("desktop_input")(mouse_move))
@@ -784,6 +807,7 @@ _DEFROSTER_TOOL_TO_MODULE: Dict[str, str] = {
     "screen_capture": "screen_capture", "screen_list_monitors": "screen_capture", "screen_list_windows": "screen_capture", "screen_capture_active_window": "screen_capture", "screen_capture_window": "screen_capture", "screen_set_tracked_window": "screen_capture", "screen_get_tracked_window": "screen_capture",
     "web_fetch_url": "web_tools", "web_check_status": "web_tools",
     "mammouth_code_status": "mammouth_code", "get_mammouth_code_status": "mammouth_code", "launch_mammouth_terminal": "mammouth_code", "run_mammouth_task": "mammouth_code", "install_or_update_mammouth_code": "mammouth_code", "sync_opencode_mcp_config": "mammouth_code",
+    "claude_code_status": "claude_code", "get_claude_code_status": "claude_code", "launch_claude_terminal": "claude_code", "claude_code_launch_terminal": "claude_code", "run_claude_task": "claude_code", "claude_code_run_task": "claude_code", "sync_claude_code_mcp": "claude_code", "claude_code_sync_mcp": "claude_code",
     "desktop_get_screen_info": "desktop_input", "mouse_move": "desktop_input", "mouse_click": "desktop_input", "mouse_drag": "desktop_input", "mouse_scroll": "desktop_input", "mouse_get_position": "desktop_input", "keyboard_type": "desktop_input", "keyboard_press": "desktop_input", "keyboard_hotkey": "desktop_input",
     "gdrive_status": "google_drive", "gdrive_list_files": "google_drive", "gdrive_search_files": "google_drive", "gdrive_get_metadata": "google_drive", "gdrive_read_file": "google_drive", "gdrive_download_to_workspace": "google_drive", "gdrive_upload_from_workspace": "google_drive", "gdrive_write_file": "google_drive", "gdrive_update_file": "google_drive", "gdrive_create_folder": "google_drive", "gdrive_delete_file": "google_drive",
     "browser_navigate": "browser_agent", "browser_snapshot": "browser_agent", "browser_screenshot": "browser_agent", "browser_click": "browser_agent", "browser_fill": "browser_agent", "browser_press_key": "browser_agent", "browser_hover": "browser_agent", "browser_scroll": "browser_agent", "browser_get_content": "browser_agent", "browser_evaluate": "browser_agent", "browser_tabs": "browser_agent", "browser_status": "browser_agent", "browser_close": "browser_agent", "browser_restart": "browser_agent", "browser_list_browsers": "browser_agent",
@@ -892,6 +916,15 @@ _MULTILINGUAL_TOOL_HINTS: Dict[str, str] = {
     "clipboard_get_text": "Zwischenablage lesen, Clipboard auslesen, kopierten Text holen, lire presse-papiers",
     "clipboard_set_text": "In Zwischenablage kopieren, Text in Clipboard schreiben",
     "clipboard_transform": "Zwischenablage umwandeln mit KI",
+    # Claude Code & Cloud Sessions
+    "claude_code_status": "Claude Code Status prüfen, Claude CLI Version, Cloud Session MCP Bridge",
+    "get_claude_code_status": "Claude Code Status prüfen, Claude CLI Version, Cloud Session MCP Bridge",
+    "claude_code_sync_mcp": "Claude Code .mcp.json synchronisieren, Claude Cloud Session verbinden, MCP Server für Claude",
+    "sync_claude_code_mcp": "Claude Code .mcp.json synchronisieren, Claude Cloud Session verbinden, MCP Server für Claude",
+    "claude_code_launch_terminal": "Claude Code Terminal öffnen, Claude Cloud starten, claude --cloud ausführen",
+    "launch_claude_terminal": "Claude Code Terminal öffnen, Claude Cloud starten, claude --cloud ausführen",
+    "claude_code_run_task": "Claude Code Aufgabe ausführen, claude task headless",
+    "run_claude_task": "Claude Code Aufgabe ausführen, claude task headless",
 }
 
 
@@ -2023,10 +2056,11 @@ async def oauth_token(request: Request):
 
 class SecurityAndAuthMiddleware:
     """Handles constant-time Bearer token authentication, progressive IP backoff, fail-closed enforcement, OPTIONS preflight, security headers, and safe logging."""
-    def __init__(self, app: ASGIApp, token: str = "", enforce_auth: bool = True):
+    def __init__(self, app: ASGIApp, token: str = "", enforce_auth: bool = True, allow_query_token: bool = False):
         self.app = app
         self.enforce_auth = enforce_auth
         self.token = str(token).strip()
+        self.allow_query_token = allow_query_token
         # H-1 Fix: Fail closed — if enforce_auth is True, ensure a non-empty token is present
         if self.enforce_auth and not self.token:
             import secrets
@@ -2081,11 +2115,12 @@ class SecurityAndAuthMiddleware:
 
             # L-03: CORS Preflight OPTIONS requests must bypass auth unconditionally and return 200 with CORS headers
             if method == "OPTIONS":
+                req_origin = header_map.get("origin", "").strip() or "*"
                 cors_resp = Response(
                     content="",
                     status_code=200,
                     headers={
-                        "access-control-allow-origin": "*",
+                        "access-control-allow-origin": req_origin,
                         "access-control-allow-methods": "GET, POST, DELETE, OPTIONS, HEAD",
                         "access-control-allow-headers": "*",
                         "access-control-allow-credentials": "true",
@@ -2134,10 +2169,10 @@ class SecurityAndAuthMiddleware:
                 if not provided_token:
                     provided_token = header_map.get("x-api-key", "").strip()
 
-                # Also support URL query parameters (?token=... or ?api_key=... or ?access_token=...)
+                # Also support URL query parameters (?token=... or ?api_key=... or ?access_token=...) if explicitly permitted
                 query_string = scope.get("query_string", b"").decode("latin1")
                 params = urllib.parse.parse_qs(query_string)
-                if not provided_token:
+                if not provided_token and self.allow_query_token:
                     provided_token = (
                         params.get("token", [""])[0]
                         or params.get("api_key", [""])[0]
@@ -2308,10 +2343,14 @@ def build_app(token: Optional[str] = None):
             except Exception:
                 pass
 
-    # Stricter CORS settings: Restrict origins to Mammouth and localhost
+    # CORS settings: Allow Mammouth AI, Claude Code / Anthropic, and localhost origins
     configured_origins = server_cfg.get("allowed_origins", [
         "https://mammouth.ai",
         "https://app.mammouth.ai",
+        "https://claude.ai",
+        "https://code.claude.ai",
+        "https://app.claude.ai",
+        "https://console.anthropic.com",
         "http://localhost",
         "http://127.0.0.1",
         "http://localhost:3000",
@@ -2322,14 +2361,19 @@ def build_app(token: Optional[str] = None):
         Middleware(
             CORSMiddleware,
             allow_origins=configured_origins,
-            allow_origin_regex=r"^https://([a-zA-Z0-9-]+\.)?mammouth\.ai$|^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+            allow_origin_regex=r"^https://([a-zA-Z0-9.-]+\.)?(mammouth\.ai|claude\.ai|anthropic\.com)$|^http://(localhost|127\.0\.0\.1)(:\d+)?$",
             allow_methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"],
             allow_headers=["*"],
             expose_headers=["*"],
             allow_credentials=True,
             allow_private_network=True,
         ),
-        Middleware(SecurityAndAuthMiddleware, token=effective_token or "", enforce_auth=enforce_auth),
+        Middleware(
+            SecurityAndAuthMiddleware,
+            token=effective_token or "",
+            enforce_auth=enforce_auth,
+            allow_query_token=server_cfg.get("allow_query_token", True),
+        ),
     ]
 
     return create_base_app(routes=routes, middleware=middleware, lifespan=lifespan)

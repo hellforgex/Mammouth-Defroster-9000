@@ -4247,23 +4247,31 @@ class MammouthControlCenter(ctk.CTk):
             tool_counts = {
                 "memory": 5, "tasks_kanban": 4, "task_scheduler": 5, "file_ops": 6,
                 "shell_processes": 8, "putty_ssh": 6, "system_monitor": 5, "web_tools": 2,
-                "screen_capture": 7, "mammouth_code": 5, "desktop_input": 9, "google_drive": 11,
+                "screen_capture": 7, "mammouth_code": 5, "claude_code": 4, "desktop_input": 9, "google_drive": 11,
                 "browser_agent": 14, "workspace_memory": 4, "smart_clipboard": 3
             }
             for k, v in mods.items():
                 if v.get("enabled", True):
                     cnt += tool_counts.get(k, 1)
-            return f"{cnt} Custom (86 Total)"
+            return f"{cnt} Custom (90 Total)"
         else:
-            return "86 Promoted (Uncapped)"
+            return "90 Promoted (Uncapped)"
 
     def _copy_mcp_client_config(self):
         url = self._calculate_active_endpoint_url()
         token = self.config_data.get("server", {}).get("api_token", "")
+        # For HTTP transport (Claude Code & Streamable HTTP), normalize endpoint to /mcp
+        if url.endswith("/sse"):
+            http_url = url[:-4] + "/mcp"
+        elif not url.endswith(("/mcp", "/sse")):
+            http_url = url.rstrip("/") + "/mcp"
+        else:
+            http_url = url
         cfg_snippet = {
             "mcpServers": {
-                "MammouthDefroster9000": {
-                    "url": url,
+                "mammouth-defroster-9000": {
+                    "type": "http",
+                    "url": http_url,
                     "headers": {
                         "Authorization": f"Bearer {token}"
                     }
@@ -4569,6 +4577,11 @@ class MammouthControlCenter(ctk.CTk):
                 self.lbl_dash_key.configure(text=cur_tok if cur_tok else "(No Key Generated)")
             else:
                 self.lbl_dash_key.configure(text="•" * 28 if cur_tok else "(No Key Generated)")
+        if "lbl_claude_tunnel_ep" in self.__dict__:
+            try:
+                self._refresh_claude_code_status()
+            except Exception:
+                pass
 
     def _toggle_dash_key_visibility(self):
         self.dash_token_visible = not getattr(self, "dash_token_visible", False)
@@ -4755,7 +4768,7 @@ class MammouthControlCenter(ctk.CTk):
         self.btn_mc_sync = ctk.CTkButton(
             btn_box,
             text="🔗 Link Defroster MCP",
-            width=190,
+            width=180,
             height=32,
             fg_color=THEME_ACCENT,
             hover_color=THEME_ACCENT_HOVER,
@@ -4763,7 +4776,20 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(weight="bold"),
             command=self._sync_mammouth_code_mcp
         )
-        self.btn_mc_sync.pack(side="left")
+        self.btn_mc_sync.pack(side="left", padx=(0, 6))
+
+        self.btn_claude_sync = ctk.CTkButton(
+            btn_box,
+            text="☁️ Link Claude Cloud (.mcp.json)",
+            width=230,
+            height=32,
+            fg_color=("#4F46E5", "#6366F1"),
+            hover_color=("#4338CA", "#4F46E5"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=lambda: self._sync_claude_code_mcp(target_cloud=True)
+        )
+        self.btn_claude_sync.pack(side="left")
 
         mc_scroll = ctk.CTkScrollableFrame(self.tab_mammouth_code, fg_color="transparent")
         mc_scroll.pack(fill="both", expand=True, padx=15, pady=(0, 10))
@@ -4975,6 +5001,105 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_save_key.pack(side="right")
 
+        # CARD 5: Claude Code & Cloud Sessions (.mcp.json)
+        card_claude = ctk.CTkFrame(mc_scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
+        card_claude.pack(fill="x", pady=6)
+
+        c5_inner = ctk.CTkFrame(card_claude, fg_color="transparent")
+        c5_inner.pack(fill="x", padx=15, pady=12)
+
+        ctk.CTkLabel(c5_inner, text="☁️ CLAUDE CODE & CLOUD SESSIONS (.mcp.json)", font=ctk.CTkFont(size=12, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 4))
+        ctk.CTkLabel(c5_inner, text="Make Mammouth Defroster 9000 available inside Claude Code Cloud Sessions ('claude --cloud') via public exposure tunnel.", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 8))
+
+        claude_stat_row = ctk.CTkFrame(c5_inner, fg_color="transparent")
+        claude_stat_row.pack(fill="x", pady=(0, 4))
+
+        self.lbl_claude_status = ctk.CTkLabel(
+            claude_stat_row,
+            text="Claude CLI: Checking...",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY
+        )
+        self.lbl_claude_status.pack(side="left")
+
+        self.lbl_claude_cloud_ready = ctk.CTkLabel(
+            c5_inner,
+            text="Cloud Session Bridge: Checking .mcp.json...",
+            font=ctk.CTkFont(size=11),
+            text_color=THEME_TEXT_MUTED
+        )
+        self.lbl_claude_cloud_ready.pack(anchor="w", pady=(0, 2))
+
+        self.lbl_claude_tunnel_ep = ctk.CTkLabel(
+            c5_inner,
+            text="Tunnel Endpoint: -",
+            font=ctk.CTkFont(size=11),
+            text_color=THEME_TEXT_MUTED
+        )
+        self.lbl_claude_tunnel_ep.pack(anchor="w", pady=(0, 8))
+
+        c5_btn_row = ctk.CTkFrame(c5_inner, fg_color="transparent")
+        c5_btn_row.pack(fill="x", pady=(0, 6))
+
+        self.btn_claude_sync_cloud = ctk.CTkButton(
+            c5_btn_row,
+            text="☁️ Sync .mcp.json for Cloud Sessions",
+            height=34,
+            fg_color=("#4F46E5", "#6366F1"),
+            hover_color=("#4338CA", "#4F46E5"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=lambda: self._sync_claude_code_mcp(target_cloud=True)
+        )
+        self.btn_claude_sync_cloud.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        self.btn_claude_launch_cloud = ctk.CTkButton(
+            c5_btn_row,
+            text="☁️ Launch Cloud Session",
+            height=34,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=lambda: self._launch_claude_terminal_from_tab(cloud=True)
+        )
+        self.btn_claude_launch_cloud.pack(side="left", padx=(0, 6))
+
+        self.btn_claude_launch_local = ctk.CTkButton(
+            c5_btn_row,
+            text="▶ Local Terminal",
+            height=34,
+            width=130,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=lambda: self._launch_claude_terminal_from_tab(cloud=False)
+        )
+        self.btn_claude_launch_local.pack(side="left")
+
+        c5_opts_row = ctk.CTkFrame(c5_inner, fg_color="transparent")
+        c5_opts_row.pack(fill="x", pady=(4, 4))
+
+        self.chk_claude_use_env = ctk.CTkCheckBox(
+            c5_opts_row,
+            text="Use ${MAMMOUTH_DEFROSTER_TOKEN} in .mcp.json (instead of token)",
+            font=ctk.CTkFont(size=11)
+        )
+        self.chk_claude_use_env.pack(side="left", padx=(0, 15))
+
+        self.chk_claude_global = ctk.CTkCheckBox(
+            c5_opts_row,
+            text="Also sync global ~/.claude.json for local sessions",
+            font=ctk.CTkFont(size=11)
+        )
+        self.chk_claude_global.select()
+        self.chk_claude_global.pack(side="left")
+
         # Initial background status query
         self.after(500, self._refresh_mammouth_code_status)
 
@@ -5009,6 +5134,7 @@ class MammouthControlCenter(ctk.CTk):
                     text="MCP Bridge: ⚪ Not synced yet (Click 'Link Defroster MCP' above)",
                     text_color=THEME_TEXT_MUTED
                 )
+            self._refresh_claude_code_status()
         except Exception as ex:
             self._log(f"[MAMMOUTH CODE] Status refresh failed: {ex}")
 
@@ -5124,6 +5250,119 @@ class MammouthControlCenter(ctk.CTk):
             self._refresh_mammouth_code_status()
         else:
             messagebox.showerror("Error", "Configuration could not be saved.", parent=self)
+
+    def _refresh_claude_code_status(self):
+        try:
+            ws = self.ent_mc_ws.get().strip() if "ent_mc_ws" in self.__dict__ else None
+            from modules.claude_code import get_claude_code_status, resolve_public_tunnel_url
+            st = get_claude_code_status(workspace_path=ws)
+            if "lbl_claude_status" in self.__dict__:
+                if st.get("installed"):
+                    ver = st.get("version", "Installed")
+                    self.lbl_claude_status.configure(
+                        text=f"🟢 Claude CLI: Installed ({ver})",
+                        text_color=("#059669", "#10B981")
+                    )
+                else:
+                    self.lbl_claude_status.configure(
+                        text="⚪ Claude CLI: Not detected on PATH (npm install -g @anthropic-ai/claude-code)",
+                        text_color=THEME_TEXT_MUTED
+                    )
+
+            if "lbl_claude_tunnel_ep" in self.__dict__:
+                pub_tunnel = resolve_public_tunnel_url()
+                if pub_tunnel:
+                    self.lbl_claude_tunnel_ep.configure(
+                        text=f"Tunnel Endpoint: 🟢 Active ({pub_tunnel})",
+                        text_color=("#059669", "#10B981")
+                    )
+                else:
+                    self.lbl_claude_tunnel_ep.configure(
+                        text="Tunnel Endpoint: ⚠️ No public tunnel active (Tailscale Funnel / Cloudflare / Serveo needed for Cloud)",
+                        text_color=("#D97706", "#F59E0B")
+                    )
+
+            if "lbl_claude_cloud_ready" in self.__dict__:
+                if st.get("workspace_mcp_synced"):
+                    cfg_url = st.get("configured_url", "")
+                    if st.get("cloud_ready"):
+                        self.lbl_claude_cloud_ready.configure(
+                            text=f"Cloud Session Bridge: 🟢 Ready (.mcp.json configured -> {cfg_url})",
+                            text_color=("#059669", "#10B981")
+                        )
+                    else:
+                        self.lbl_claude_cloud_ready.configure(
+                            text=f"Cloud Session Bridge: ⚠️ .mcp.json configured with local/HTTP URL ({cfg_url})",
+                            text_color=("#D97706", "#F59E0B")
+                        )
+                else:
+                    self.lbl_claude_cloud_ready.configure(
+                        text="Cloud Session Bridge: ⚪ .mcp.json not present in workspace (Click 'Sync .mcp.json' below)",
+                        text_color=THEME_TEXT_MUTED
+                    )
+        except Exception as ex:
+            self._log(f"[CLAUDE CODE] Status refresh failed: {ex}")
+
+    def _sync_claude_code_mcp(self, target_cloud: bool = True):
+        ws = self.ent_mc_ws.get().strip() if "ent_mc_ws" in self.__dict__ else None
+        tok = self.config_data.get("server", {}).get("api_token", "")
+        use_env = bool(self.chk_claude_use_env.get()) if "chk_claude_use_env" in self.__dict__ else False
+        sync_glob = bool(self.chk_claude_global.get()) if "chk_claude_global" in self.__dict__ else True
+
+        from modules.claude_code import sync_claude_code_mcp
+        res = sync_claude_code_mcp(
+            workspace_path=ws,
+            api_token=tok,
+            target_cloud=target_cloud,
+            use_env_var=use_env,
+            sync_global=sync_glob
+        )
+
+        if res.get("success"):
+            cfgs = "\n".join(res.get("updated_configs", []))
+            target_desc = "Cloud Sessions" if target_cloud else "Local Sessions"
+            self._log(f"[CLAUDE CODE] .mcp.json synced for {target_desc} -> {res.get('server_url')}")
+            
+            msg = (
+                f"Mammouth Defroster 9000 registered for Claude Code ({target_desc})!\n\n"
+                f"Server URL: {res.get('server_url')}\n"
+                f"Updated files:\n{cfgs}\n\n"
+            )
+            if res.get("warning"):
+                msg += f"⚠️ {res.get('warning')}\n\n"
+            if target_cloud:
+                msg += "Tip: Commit .mcp.json to your Git repository and run 'claude --cloud' (or launch via web at claude.ai/code) to use Defroster in cloud sessions!"
+            
+            messagebox.showinfo("Claude Code MCP Synced", msg, parent=self)
+            self._refresh_claude_code_status()
+        else:
+            err_msg = "\n".join(res.get("errors", ["Unknown error"]))
+            messagebox.showerror("Error", f"Could not sync Claude Code configuration:\n\n{err_msg}", parent=self)
+
+    def _launch_claude_terminal_from_tab(self, cloud: bool = True):
+        ws = self.ent_mc_ws.get().strip() if "ent_mc_ws" in self.__dict__ else None
+        pref = self.opt_mc_term.get() if "opt_mc_term" in self.__dict__ else "PowerShell"
+        pref_term = "wt" if "Windows Terminal" in pref else "powershell"
+
+        from modules.claude_code import launch_claude_terminal
+        try:
+            res = launch_claude_terminal(
+                workspace_path=ws,
+                cloud=cloud,
+                preferred_terminal=pref_term
+            )
+            if res.get("success"):
+                mode_str = "Cloud Session ('claude --cloud')" if cloud else "Local Session ('claude')"
+                self._log(f"[CLAUDE CODE] 💻 Launched {res.get('terminal')} for {mode_str} in '{res.get('workspace')}'")
+            else:
+                self._log(f"[CLAUDE CODE ERROR] {res.get('error')}")
+                messagebox.showerror("Launch Error", f"Could not launch Claude Code:\n\n{res.get('error')}", parent=self)
+        except PermissionError as pe:
+            self._log(f"[SECURITY] Claude Code launch blocked: {pe}")
+            messagebox.showerror("Permission Denied (Admin Shell Required)", str(pe), parent=self)
+        except Exception as ex:
+            self._log(f"[CLAUDE CODE ERROR] {ex}")
+            messagebox.showerror("Error", f"Failed to launch Claude Code:\n\n{ex}", parent=self)
 
     # ---------------------------------------------------------
     # TAB 2: SKILLS & MODULES
@@ -5259,6 +5498,7 @@ class MammouthControlCenter(ctk.CTk):
             "web_tools": "2 Tools (SSRF Shield)",
             "screen_capture": "7 Tools (Vision Gate)",
             "mammouth_code": "5 Tools (Agent Bridge)",
+            "claude_code": "4 Tools (Cloud Sessions & CLI)",
             "desktop_input": "9 Tools",
             "google_drive": "11 Tools (Cloud & Docs)",
             "browser_agent": "14 Tools (Multi-Browser / Playwright)",
@@ -7026,6 +7266,13 @@ class MammouthControlCenter(ctk.CTk):
                         self._disable_tailscale_funnel()
                         return
                     self._log("[NETWORK] Tailscale Funnel background proxy activated.")
+                    try:
+                        from modules.claude_code import save_active_tunnel_info, get_tailscale_public_domain
+                        ts_url = get_tailscale_public_domain(ts_path)
+                        save_active_tunnel_info(ts_url, "Tailscale Funnel")
+                    except Exception:
+                        pass
+                    self.after(0, self._refresh_all_endpoint_labels)
                 else:
                     err = res.stderr.strip() or res.stdout.strip()
                     self._log(f"[NETWORK WARNING] Tailscale funnel: {err}")
@@ -7044,6 +7291,13 @@ class MammouthControlCenter(ctk.CTk):
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             subprocess.run([ts_bin, "funnel", "--https=443", "off"], capture_output=True, timeout=5, creationflags=flags)
             self._funnel_active = False
+            try:
+                from modules.claude_code import save_active_tunnel_info, get_active_tunnel_info
+                info = get_active_tunnel_info()
+                if info.get("tunnel_mode") == "Tailscale Funnel":
+                    save_active_tunnel_info(None, "")
+            except Exception:
+                pass
             self._log("[NETWORK] Tailscale Funnel proxy disabled.")
         except Exception:
             pass
@@ -7071,6 +7325,11 @@ class MammouthControlCenter(ctk.CTk):
         # Reset stale public URLs so dashboard / "Copy MCP Config" never show a dead tunnel
         self.dynamic_tunnel_url = None
         self.serveo_url = None
+        try:
+            from modules.claude_code import save_active_tunnel_info
+            save_active_tunnel_info(None, "")
+        except Exception:
+            pass
         configured_funnel = self.config_data.get("server", {}).get("tunnel_mode") == "Tailscale Funnel"
         if funnel_was_active or configured_funnel:
             self._enqueue_funnel_op(self._disable_tailscale_funnel)
@@ -7116,6 +7375,11 @@ class MammouthControlCenter(ctk.CTk):
                             if gen != self._tunnel_generation():
                                 return
                             self.dynamic_tunnel_url = url
+                            try:
+                                from modules.claude_code import save_active_tunnel_info
+                                save_active_tunnel_info(url, "Cloudflare Tunnel")
+                            except Exception:
+                                pass
                             self._log(f"[NETWORK] Cloudflare Tunnel Active: {url}")
                             self.after(0, self._refresh_all_endpoint_labels)
                             found = True
@@ -7159,6 +7423,11 @@ class MammouthControlCenter(ctk.CTk):
                         url = line.split("from")[-1].strip()
                         self.serveo_url = url
                         self.dynamic_tunnel_url = url
+                        try:
+                            from modules.claude_code import save_active_tunnel_info
+                            save_active_tunnel_info(url, "Serveo (Public SSH Tunnel)")
+                        except Exception:
+                            pass
                         self._log(f"[NETWORK] Serveo Tunnel Active: {url}")
                         self.after(0, self._refresh_all_endpoint_labels)
                         break
@@ -7196,6 +7465,11 @@ class MammouthControlCenter(ctk.CTk):
                                         return
                                     url = t["public_url"]
                                     self.dynamic_tunnel_url = url
+                                    try:
+                                        from modules.claude_code import save_active_tunnel_info
+                                        save_active_tunnel_info(url, "ngrok")
+                                    except Exception:
+                                        pass
                                     self._log(f"[NETWORK] ngrok Tunnel Active: {url}")
                                     self.after(0, self._refresh_all_endpoint_labels)
                                     return

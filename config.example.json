@@ -87,6 +87,9 @@
     },
     "smart_clipboard": {
       "enabled": true
+    },
+    "claude_code": {
+      "enabled": true
     }
   },
   "browser_agent": {
@@ -103,6 +106,12 @@
     "auto_sync_mcp": true,
     "default_terminal": "wt",
     "headless_timeout_seconds": 180
+  },
+  "claude_code": {
+    "binary_path": "",
+    "use_env_var": false,
+    "default_cloud": true,
+    "default_terminal": "powershell"
   },
   "embedded_browser": {
     "enabled": true,
