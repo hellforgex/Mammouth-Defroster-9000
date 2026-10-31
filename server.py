@@ -1586,33 +1586,49 @@ def _verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") 
     return False
 
 
-def _get_base_url(request: Request) -> str:
+def _resolve_base_url(header_map: Dict[str, str], default_scheme: str = "http", default_host: str = "127.0.0.1:8000") -> str:
     cfg = load_config()
     server_cfg = cfg.get("server", {})
-    custom = server_cfg.get("custom_public_url", "").strip() or server_cfg.get("cloudflare_custom_url", "").strip() or server_cfg.get("ngrok_custom_url", "").strip()
+    custom = (
+        server_cfg.get("custom_public_url", "").strip()
+        or server_cfg.get("cloudflare_custom_url", "").strip()
+        or server_cfg.get("ngrok_custom_url", "").strip()
+    )
     if custom:
         return custom.rstrip("/")
-    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
-    host = request.headers.get("x-forwarded-host", request.headers.get("host", f"{request.url.hostname}:{request.url.port}"))
-    if ".ts.net" in host or ".trycloudflare.com" in host or ".serveousercontent.com" in host or "ngrok" in host:
-        proto = "https"
+    host = header_map.get("x-forwarded-host", header_map.get("host", default_host))
+    proto = header_map.get("x-forwarded-proto", "")
+    if not proto:
+        if any(dom in host for dom in (".ts.net", ".trycloudflare.com", ".serveousercontent.com", "ngrok")):
+            proto = "https"
+        else:
+            proto = default_scheme
     return f"{proto}://{host}".rstrip("/")
+
+
+def _get_base_url(request: Request) -> str:
+    header_map = {k.lower(): v for k, v in request.headers.items()}
+    default_host = f"{request.url.hostname}:{request.url.port}" if request.url.port else (request.url.hostname or "127.0.0.1:8000")
+    return _resolve_base_url(header_map, default_scheme=request.url.scheme, default_host=default_host)
 
 
 async def oauth_protected_resource(request: Request):
     base_url = _get_base_url(request).rstrip("/")
     resource_param = request.query_params.get("resource", "").strip()
+    path = request.url.path.lower()
     if resource_param:
         resource_id = resource_param
-    elif request.url.path.endswith("/sse"):
+    elif "/sse" in path:
         resource_id = f"{base_url}/sse"
-    elif request.url.path.endswith("/mcp"):
+    elif "/mcp" in path:
         resource_id = f"{base_url}/mcp"
     else:
-        resource_id = base_url
+        resource_id = f"{base_url}/mcp"
     return JSONResponse({
         "resource": resource_id,
-        "authorization_servers": [base_url]
+        "authorization_servers": [base_url],
+        "bearer_methods_supported": ["header"],
+        "scopes_supported": ["mcp"]
     })
 
 
@@ -1623,6 +1639,7 @@ async def oauth_authorization_server(request: Request):
         "authorization_endpoint": f"{base_url}/oauth/authorize",
         "token_endpoint": f"{base_url}/oauth/token",
         "registration_endpoint": f"{base_url}/oauth/register",
+        "scopes_supported": ["mcp"],
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
@@ -1630,16 +1647,33 @@ async def oauth_authorization_server(request: Request):
     })
 
 
+async def openid_configuration(request: Request):
+    base_url = _get_base_url(request).rstrip("/")
+    return JSONResponse({
+        "issuer": base_url,
+        "authorization_endpoint": f"{base_url}/oauth/authorize",
+        "token_endpoint": f"{base_url}/oauth/token",
+        "registration_endpoint": f"{base_url}/oauth/register",
+        "scopes_supported": ["mcp", "openid"],
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic", "none"],
+        "subject_types_supported": ["public"],
+        "id_token_signing_alg_values_supported": ["RS256"]
+    })
+
+
 def _is_trusted_oauth_redirect_uri(uri: str) -> bool:
-    """Validate that redirect URI points strictly to trusted Mammouth AI or localhost domains."""
+    """Validate that redirect URI points strictly to trusted Mammouth AI, Claude/Anthropic, or localhost domains."""
     if not uri:
         return False
     try:
         parsed = urllib.parse.urlparse(uri)
         host = (parsed.hostname or "").lower()
-        if host == "mammouth.ai" or host.endswith(".mammouth.ai"):
+        if host in ("mammouth.ai", "claude.ai", "anthropic.com") or host.endswith((".mammouth.ai", ".claude.ai", ".anthropic.com")):
             return parsed.scheme == "https"
-        if host in ("localhost", "127.0.0.1"):
+        if host in ("localhost", "127.0.0.1", "::1"):
             return parsed.scheme in ("http", "https")
     except Exception:
         return False
@@ -1647,7 +1681,7 @@ def _is_trusted_oauth_redirect_uri(uri: str) -> bool:
 
 
 async def oauth_register(request: Request):
-    # Rate limiting — max 5 registrations per hour per IP
+    # Rate limiting — max 120 per hour for loopback, 30 per hour for external
     client_ip = _request_client_ip(request)
     if not _check_oauth_register_rate_limit(client_ip):
         return JSONResponse(
@@ -1673,7 +1707,7 @@ async def oauth_register(request: Request):
     except Exception:
         return JSONResponse({"error": "invalid_request", "error_description": "Invalid JSON body"}, status_code=400)
 
-    client_name = body.get("client_name", "Mammouth AI")
+    client_name = body.get("client_name") or ""
     redirect_uris = body.get("redirect_uris", [])
     if isinstance(redirect_uris, str):
         redirect_uris = [redirect_uris]
@@ -1681,31 +1715,65 @@ async def oauth_register(request: Request):
     if not redirect_uris:
         redirect_uris = ["https://mammouth.ai/api/mcp/oauth/callback"]
 
-    # F-02 Hardening: Dynamic registration only allowed for trusted Mammouth AI or localhost redirect URIs
+    if not client_name:
+        is_claude = any("claude" in u.lower() or "anthropic" in u.lower() for u in redirect_uris)
+        client_name = "Claude" if is_claude else "Mammouth AI"
+
+    # F-02 Hardening: Dynamic registration only allowed for trusted Mammouth AI, Claude/Anthropic, or localhost redirect URIs
     for u in redirect_uris:
         if not _is_trusted_oauth_redirect_uri(u):
             return JSONResponse(
-                {"error": "invalid_redirect_uri", "error_description": f"Redirect URI '{u}' is not allowed. Must belong to mammouth.ai or localhost."},
+                {"error": "invalid_redirect_uri", "error_description": f"Redirect URI '{u}' is not allowed. Must belong to mammouth.ai, claude.ai, anthropic.com, or localhost."},
                 status_code=400
             )
 
+    auth_method = body.get("token_endpoint_auth_method", "client_secret_post")
     client_id = f"mcp_{secrets.token_hex(16)}"
-    client_secret = secrets.token_urlsafe(32)
+    client_secret = secrets.token_urlsafe(32) if auth_method != "none" else ""
     _save_oauth_client(client_id, client_secret, client_name, redirect_uris)
-    return JSONResponse({
+
+    now = time.time()
+    resp_data: Dict[str, Any] = {
         "client_id": client_id,
-        "client_secret": client_secret,
+        "client_id_issued_at": int(now),
         "client_name": client_name,
         "redirect_uris": redirect_uris,
         "grant_types": ["authorization_code", "refresh_token"],
-        "response_types": ["code"]
-    }, status_code=201)
+        "response_types": ["code"],
+        "token_endpoint_auth_method": auth_method
+    }
+    if client_secret:
+        resp_data["client_secret"] = client_secret
+        resp_data["client_secret_expires_at"] = 0
+    return JSONResponse(resp_data, status_code=201)
 
 
 def _render_consent_page(request: Request, client_name: str, params: Dict[str, str], error_msg: str = "") -> HTMLResponse:
     """Render the OAuth consent page with a fresh CSRF token bound to the authorization parameters."""
     csrf_token = _create_oauth_csrf_token(dict(params))
     error_html = f'<div class="error-box">{html.escape(error_msg)}</div>' if error_msg else ""
+    server_cfg = load_config().get("server", {})
+    enforce_auth = server_cfg.get("enforce_auth", True)
+
+    is_claude = "claude" in client_name.lower() or "anthropic" in client_name.lower()
+    logo_icon = "🦣 ⚡"
+    if is_claude:
+        client_desc = "Anthropic Claude wants to connect to your local Defroster 9000."
+    else:
+        client_desc = f"<strong>{html.escape(client_name)}</strong> wants to connect to your local Defroster 9000."
+
+    if enforce_auth:
+        token_field_html = """
+                <label class="owner-label" for="owner_token">Defroster API Token (copy from the Cockpit)</label>
+                <input class="owner-input" type="password" id="owner_token" name="owner_token" autocomplete="off" placeholder="mc_..." autofocus>
+        """
+    else:
+        token_field_html = """
+                <div style="font-size: 12px; color: #10B981; margin-bottom: 16px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 10px; line-height: 1.4;">
+                    ✓ Authentication enforcement is disabled in Server Settings. Click Allow Access to authorize immediately.
+                </div>
+        """
+
     page = f"""<!DOCTYPE html>
     <html lang="en">
     <head>
@@ -1831,12 +1899,12 @@ def _render_consent_page(request: Request, client_name: str, params: Dict[str, s
     </head>
     <body>
         <div class="card">
-            <div class="logo">🦣 ⚡</div>
+            <div class="logo">{logo_icon}</div>
             <h2>Mammouth Defroster 9000</h2>
             <div class="subtitle">MCP Connection Request</div>
             <div class="badge">● Secure MCP OAuth 2.0 Flow</div>
             <div class="info-box">
-                <strong>{html.escape(client_name)}</strong> wants to connect to your local Defroster 9000.<br><br>
+                {client_desc}<br><br>
                 This grants access to sandboxed MCP tools (files, desktop, Google Drive, tasks & automation) on this host.
             </div>
             {error_html}
@@ -1848,8 +1916,7 @@ def _render_consent_page(request: Request, client_name: str, params: Dict[str, s
                 <input type="hidden" name="code_challenge" value="{html.escape(params.get("code_challenge", ""))}">
                 <input type="hidden" name="code_challenge_method" value="{html.escape(params.get("code_challenge_method", ""))}">
                 <input type="hidden" name="csrf_token" value="{html.escape(csrf_token)}">
-                <label class="owner-label" for="owner_token">Defroster API Token (copy from the Cockpit)</label>
-                <input class="owner-input" type="password" id="owner_token" name="owner_token" autocomplete="off" placeholder="mc_..." autofocus>
+                {token_field_html}
                 <div class="buttons">
                     <button type="submit" name="action" value="deny" class="btn-deny">Deny</button>
                     <button type="submit" name="action" value="allow" class="btn-allow">Allow Access</button>
@@ -1877,10 +1944,11 @@ async def oauth_authorize(request: Request):
 
         client_info = _get_oauth_client(client_id) if client_id else None
         if not client_info:
-            # If client_id is not yet in oauth.db but points to trusted mammouth.ai callback, auto-register
+            # If client_id is not yet in oauth.db but points to trusted callback, auto-register
             if _is_trusted_oauth_redirect_uri(redirect_uri):
                 effective_cid = client_id or f"mcp_{secrets.token_hex(16)}"
-                client_name = "Mammouth AI"
+                is_claude = any(c in redirect_uri.lower() for c in ("claude", "anthropic"))
+                client_name = "Claude" if is_claude else "Mammouth AI"
                 _save_oauth_client(effective_cid, "", client_name, [redirect_uri])
                 client_id = effective_cid
                 client_info = {"client_id": client_id, "client_name": client_name, "redirect_uris": [redirect_uri]}
@@ -1948,11 +2016,14 @@ async def oauth_authorize(request: Request):
                 return _render_consent_page(request, client_name, csrf_params,
                                             f"Too many failed attempts. Please try again in {int(remaining) + 1}s.")
             owner_token = str(form.get("owner_token", "") or "").strip()
-            expected_token = str(load_config().get("server", {}).get("api_token", "") or "")
-            if not owner_token or not expected_token or not secrets.compare_digest(owner_token, expected_token):
-                _record_failed_auth(client_ip, now)
-                return _render_consent_page(request, client_name, csrf_params,
-                                            "Incorrect or missing API token. You can find the token in the Defroster Cockpit.")
+            server_cfg = load_config().get("server", {})
+            enforce_auth = server_cfg.get("enforce_auth", True)
+            expected_token = str(server_cfg.get("api_token", "") or "").strip()
+            if enforce_auth:
+                if not owner_token or not expected_token or not secrets.compare_digest(owner_token, expected_token):
+                    _record_failed_auth(client_ip, now)
+                    return _render_consent_page(request, client_name, csrf_params,
+                                                "Incorrect or missing API token. You can find the token in the Defroster Cockpit.")
             _record_successful_auth(client_ip)
             code = f"mc_{secrets.token_urlsafe(32)}"
             _save_oauth_code(code, client_id, redirect_uri, code_challenge, code_challenge_method, time.time() + 600)
@@ -1999,6 +2070,7 @@ async def oauth_token(request: Request):
         code_verifier = body.get("code_verifier", "")
         client_id = body.get("client_id", "")
         client_secret = body.get("client_secret", "")
+        redirect_uri = body.get("redirect_uri", "")
 
         code_data = _get_and_consume_oauth_code(code)
         if not code_data:
@@ -2009,6 +2081,12 @@ async def oauth_token(request: Request):
         if code_client_id and client_id and not secrets.compare_digest(client_id, code_client_id):
             return JSONResponse({"error": "invalid_grant", "error_description": "client_id does not match the authorization code"}, status_code=400)
         effective_client_id = client_id or code_client_id
+
+        # Verify redirect_uri matches if provided
+        code_redirect = code_data.get("redirect_uri", "")
+        if redirect_uri and code_redirect:
+            if redirect_uri.rstrip("/") != code_redirect.rstrip("/"):
+                return JSONResponse({"error": "invalid_grant", "error_description": "redirect_uri mismatch"}, status_code=400)
 
         # Verify client_secret only if supplied (confidential clients vs public PKCE clients)
         if client_secret and effective_client_id:
@@ -2036,20 +2114,23 @@ async def oauth_token(request: Request):
                 status_code=500
             )
 
-        return JSONResponse({
-            "access_token": access_token,
-            "token_type": "Bearer",
-            "expires_in": expires_in,
-            "refresh_token": refresh_token,
-            "scope": "mcp"
-        })
+        return JSONResponse(
+            {
+                "access_token": access_token,
+                "token_type": "Bearer",
+                "expires_in": expires_in,
+                "refresh_token": refresh_token,
+                "scope": "mcp"
+            },
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache"}
+        )
 
     elif grant_type == "refresh_token":
         refresh_token = body.get("refresh_token", "")
         new_tokens = _refresh_oauth_token(refresh_token)
         if not new_tokens:
             return JSONResponse({"error": "invalid_grant", "error_description": "Invalid or expired refresh token"}, status_code=400)
-        return JSONResponse(new_tokens)
+        return JSONResponse(new_tokens, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
 
     return JSONResponse({"error": "unsupported_grant_type", "error_description": f"Grant type '{grant_type}' not supported"}, status_code=400)
 
@@ -2082,15 +2163,20 @@ class SecurityAndAuthMiddleware:
                     existing_keys = {k.lower() for k, _ in headers}
                     if b"x-content-type-options" not in existing_keys:
                         headers.append((b"x-content-type-options", b"nosniff"))
-                    # Anti-clickjacking: DENY by default; for OAuth consent endpoints, restrict framing to mammouth.ai and self
+                    # Anti-clickjacking: DENY by default; for OAuth consent endpoints, restrict framing to mammouth.ai, claude.ai, anthropic.com and self
                     is_oauth_consent = (
                         clean_path.startswith("/oauth/")
-                        or clean_path.startswith("/.well-known/oauth-")
-                        or clean_path in ("/authorize", "/token", "/register")
+                        or clean_path.startswith("/.well-known/")
+                        or "/.well-known/" in clean_path
+                        or clean_path in (
+                            "/authorize", "/token", "/register",
+                            "/mcp/authorize", "/mcp/token", "/mcp/register",
+                            "/mcp/oauth/authorize", "/mcp/oauth/token", "/mcp/oauth/register",
+                        )
                     )
                     if is_oauth_consent:
                         if b"content-security-policy" not in existing_keys:
-                            headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai"))
+                            headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai https://*.mammouth.ai https://claude.ai https://*.claude.ai https://anthropic.com https://*.anthropic.com"))
                     else:
                         if b"x-frame-options" not in existing_keys:
                             headers.append((b"x-frame-options", b"DENY"))
@@ -2106,10 +2192,8 @@ class SecurityAndAuthMiddleware:
                     if b"access-control-allow-private-network" not in existing_keys:
                         headers.append((b"access-control-allow-private-network", b"true"))
                     if message.get("status") == 401 and b"www-authenticate" not in existing_keys:
-                        proto = header_map.get("x-forwarded-proto", "https" if (".ts.net" in header_map.get("host", "") or ".trycloudflare.com" in header_map.get("host", "")) else "http")
-                        host = header_map.get("x-forwarded-host", header_map.get("host", "127.0.0.1:8000"))
-                        base_meta_url = f"{proto}://{host}".rstrip("/")
-                        headers.append((b"www-authenticate", f'Bearer error="unauthorized", resource_metadata="{base_meta_url}/.well-known/oauth-protected-resource"'.encode("latin1")))
+                        base_meta_url = _resolve_base_url(header_map)
+                        headers.append((b"www-authenticate", f'Bearer realm="MammouthDefroster9000", resource_metadata="{base_meta_url}/.well-known/oauth-protected-resource", scope="mcp"'.encode("latin1")))
                     message["headers"] = headers
                 await send(message)
 
@@ -2144,12 +2228,12 @@ class SecurityAndAuthMiddleware:
             # OAuth 2.0 Discovery & Endpoints bypass pre-authentication
             is_oauth_public = (
                 clean_path in {
-                    "/oauth/register", "/register",
-                    "/oauth/authorize", "/authorize",
-                    "/oauth/token", "/token",
+                    "/oauth/register", "/register", "/mcp/oauth/register", "/mcp/register",
+                    "/oauth/authorize", "/authorize", "/mcp/oauth/authorize", "/mcp/authorize",
+                    "/oauth/token", "/token", "/mcp/oauth/token", "/mcp/token",
                 }
-                or clean_path.startswith("/.well-known/oauth-protected-resource")
-                or clean_path.startswith("/.well-known/oauth-authorization-server")
+                or clean_path.startswith("/.well-known/")
+                or "/.well-known/" in clean_path
             )
             if is_oauth_public:
                 await self.app(scope, receive, send_with_security_headers)
@@ -2306,16 +2390,44 @@ def build_app(token: Optional[str] = None):
         Route("/mcp", endpoint=unified_handler, methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"]),
         Route("/sse", endpoint=unified_handler, methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"]),
         Route("/messages", endpoint=messages_handler, methods=["GET", "POST", "DELETE", "OPTIONS"]),
+
+        # RFC 9728 Protected Resource Metadata (root and subpaths)
         Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
         Route("/.well-known/oauth-protected-resource/{subpath:path}", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
+        Route("/mcp/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
+        Route("/mcp/.well-known/oauth-protected-resource/{subpath:path}", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
+        Route("/sse/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
+        Route("/sse/.well-known/oauth-protected-resource/{subpath:path}", endpoint=oauth_protected_resource, methods=["GET", "OPTIONS"]),
+
+        # RFC 8414 Authorization Server Metadata (root and subpaths)
         Route("/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server, methods=["GET", "OPTIONS"]),
         Route("/.well-known/oauth-authorization-server/{subpath:path}", endpoint=oauth_authorization_server, methods=["GET", "OPTIONS"]),
+        Route("/mcp/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server, methods=["GET", "OPTIONS"]),
+        Route("/mcp/.well-known/oauth-authorization-server/{subpath:path}", endpoint=oauth_authorization_server, methods=["GET", "OPTIONS"]),
+        Route("/sse/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server, methods=["GET", "OPTIONS"]),
+        Route("/sse/.well-known/oauth-authorization-server/{subpath:path}", endpoint=oauth_authorization_server, methods=["GET", "OPTIONS"]),
+
+        # OpenID Connect Discovery compatibility
+        Route("/.well-known/openid-configuration", endpoint=openid_configuration, methods=["GET", "OPTIONS"]),
+        Route("/.well-known/openid-configuration/{subpath:path}", endpoint=openid_configuration, methods=["GET", "OPTIONS"]),
+        Route("/mcp/.well-known/openid-configuration", endpoint=openid_configuration, methods=["GET", "OPTIONS"]),
+        Route("/mcp/.well-known/openid-configuration/{subpath:path}", endpoint=openid_configuration, methods=["GET", "OPTIONS"]),
+
+        # OAuth 2.0 Endpoints and subpath aliases
         Route("/oauth/register", endpoint=oauth_register, methods=["POST", "OPTIONS"]),
         Route("/register", endpoint=oauth_register, methods=["POST", "OPTIONS"]),
+        Route("/mcp/oauth/register", endpoint=oauth_register, methods=["POST", "OPTIONS"]),
+        Route("/mcp/register", endpoint=oauth_register, methods=["POST", "OPTIONS"]),
+
         Route("/oauth/authorize", endpoint=oauth_authorize, methods=["GET", "POST", "OPTIONS"]),
         Route("/authorize", endpoint=oauth_authorize, methods=["GET", "POST", "OPTIONS"]),
+        Route("/mcp/oauth/authorize", endpoint=oauth_authorize, methods=["GET", "POST", "OPTIONS"]),
+        Route("/mcp/authorize", endpoint=oauth_authorize, methods=["GET", "POST", "OPTIONS"]),
+
         Route("/oauth/token", endpoint=oauth_token, methods=["POST", "OPTIONS"]),
         Route("/token", endpoint=oauth_token, methods=["POST", "OPTIONS"]),
+        Route("/mcp/oauth/token", endpoint=oauth_token, methods=["POST", "OPTIONS"]),
+        Route("/mcp/token", endpoint=oauth_token, methods=["POST", "OPTIONS"]),
     ]
 
     @asynccontextmanager

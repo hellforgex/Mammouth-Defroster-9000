@@ -4789,7 +4789,22 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(weight="bold"),
             command=lambda: self._sync_claude_code_mcp(target_cloud=True)
         )
-        self.btn_claude_sync.pack(side="left")
+        self.btn_claude_sync.pack(side="left", padx=(0, 6))
+
+        self.btn_claude_copy_url = ctk.CTkButton(
+            btn_box,
+            text="📋 Copy Claude.ai URL",
+            width=170,
+            height=32,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            font=ctk.CTkFont(weight="bold"),
+            command=self._copy_claude_connector_url
+        )
+        self.btn_claude_copy_url.pack(side="left")
 
         mc_scroll = ctk.CTkScrollableFrame(self.tab_mammouth_code, fg_color="transparent")
         mc_scroll.pack(fill="both", expand=True, padx=15, pady=(0, 10))
@@ -5080,7 +5095,22 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(size=12, weight="bold"),
             command=lambda: self._launch_claude_terminal_from_tab(cloud=False)
         )
-        self.btn_claude_launch_local.pack(side="left")
+        self.btn_claude_launch_local.pack(side="left", padx=(0, 6))
+
+        self.btn_c5_copy_url = ctk.CTkButton(
+            c5_btn_row,
+            text="📋 Copy Claude.ai URL",
+            height=34,
+            width=160,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._copy_claude_connector_url
+        )
+        self.btn_c5_copy_url.pack(side="left")
 
         c5_opts_row = ctk.CTkFrame(c5_inner, fg_color="transparent")
         c5_opts_row.pack(fill="x", pady=(4, 4))
@@ -5338,6 +5368,22 @@ class MammouthControlCenter(ctk.CTk):
         else:
             err_msg = "\n".join(res.get("errors", ["Unknown error"]))
             messagebox.showerror("Error", f"Could not sync Claude Code configuration:\n\n{err_msg}", parent=self)
+
+    def _copy_claude_connector_url(self):
+        from modules.claude_code import resolve_public_tunnel_url, resolve_active_server_url
+        url = resolve_public_tunnel_url(endpoint_path="/mcp") or resolve_active_server_url(target_cloud=False, endpoint_path="/mcp")
+        self.clipboard_clear()
+        self.clipboard_append(url)
+        self._log(f"[CLAUDE] Copied Claude.ai Connector URL to clipboard: {url}")
+        messagebox.showinfo(
+            "Claude.ai Connector URL Copied",
+            f"Copied MCP Endpoint URL to clipboard:\n\n{url}\n\n"
+            "In Claude.ai:\n"
+            "1. Open Settings -> Connectors -> Add MCP Connector\n"
+            "2. Paste this URL and save\n"
+            "3. Claude connects directly and authenticates via Defroster's built-in OAuth 2.1 flow.",
+            parent=self
+        )
 
     def _launch_claude_terminal_from_tab(self, cloud: bool = True):
         ws = self.ent_mc_ws.get().strip() if "ent_mc_ws" in self.__dict__ else None

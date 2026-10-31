@@ -373,7 +373,12 @@ def get_claude_code_status(workspace_path: Optional[str] = None) -> Dict[str, An
                 configured_url = entry.get("url", "")
                 # Cloud-ready requires an HTTPS public URL (not localhost or 127.0.0.1)
                 is_local = "127.0.0.1" in configured_url or "localhost" in configured_url
-                has_auth = bool(entry.get("headers", {}).get("Authorization"))
+                has_auth = (
+                    bool(entry.get("headers", {}).get("Authorization"))
+                    or entry.get("auth_mode") == "oauth"
+                    or "oauth" in str(entry).lower()
+                    or ("headers" not in entry and not is_local)
+                )
                 if not is_local and configured_url.startswith("https://") and has_auth:
                     cloud_ready = True
         except Exception as ex:
@@ -439,7 +444,8 @@ def sync_claude_code_mcp(
     target_cloud: bool = True,
     use_env_var: bool = False,
     sync_global: bool = True,
-    update_claude_md: bool = True
+    update_claude_md: bool = True,
+    use_oauth: bool = False
 ) -> Dict[str, Any]:
     """Write/merge Mammouth Defroster 9000 MCP server entry into Claude Code configurations (.mcp.json and ~/.claude.json).
     
@@ -448,6 +454,7 @@ def sync_claude_code_mcp(
     - Sets transport type to 'http' (Streamable HTTP, the standard for modern Claude Code remote servers).
     - Writes the project-scoped .mcp.json file so it can be committed to Git and automatically loaded in cloud sessions.
     - Preserves local ~/.claude.json pointing to the stable local server endpoint so local sessions never break when tunnels close.
+    - When use_oauth=True, omits static Authorization headers so Claude Code performs the standard OAuth 2.1 handshake.
     """
     # 1. Resolve API Token
     try:
@@ -507,7 +514,7 @@ def sync_claude_code_mcp(
         "type": "http",
         "url": server_url
     }
-    if api_token or use_env_var:
+    if not use_oauth and (api_token or use_env_var):
         workspace_entry["headers"] = {"Authorization": auth_header_val}
 
     updated_files = []
@@ -531,7 +538,7 @@ def sync_claude_code_mcp(
                 "type": "http",
                 "url": local_url
             }
-            if api_token:
+            if not use_oauth and api_token:
                 global_entry["headers"] = {"Authorization": f"Bearer {api_token}"}
             _merge_claude_mcp_entry(DEFAULT_CLAUDE_CONFIG_FILE, global_entry, server_name=SERVER_NAME)
             updated_files.append(str(DEFAULT_CLAUDE_CONFIG_FILE))
@@ -556,13 +563,15 @@ def sync_claude_code_mcp(
             "(e.g. Tailscale Funnel, Cloudflare Tunnel, Serveo, or ngrok). "
             "Please start a public tunnel in the Dashboard to make Defroster reachable in the cloud."
         )
-    if target_cloud and not use_env_var and api_token:
+    if target_cloud and not use_oauth and not use_env_var and api_token:
         warning_list.append(
             "Security Notice: Committing plaintext tokens to version control carries security risks. "
-            "For public or shared Git repositories, consider 'use_env_var=True' to reference ${MAMMOUTH_DEFROSTER_TOKEN}."
+            "For public or shared Git repositories, consider 'use_env_var=True' or 'use_oauth=True'."
         )
 
     warning = "\n\n".join(warning_list)
+
+    auth_mode_str = "oauth" if use_oauth else ("env_var" if use_env_var else "token")
 
     return {
         "success": len(updated_files) > 0,
@@ -570,7 +579,7 @@ def sync_claude_code_mcp(
         "server_url": server_url,
         "target_cloud": target_cloud,
         "cloud_ready": is_cloud_ready,
-        "auth_mode": "env_var" if use_env_var else "token",
+        "auth_mode": auth_mode_str,
         "warning": warning,
         "errors": errors if errors else None
     }
