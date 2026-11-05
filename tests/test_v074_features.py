@@ -322,6 +322,44 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
         finally:
             srv.should_exit = True
 
+    def test_defroster_catalog_token_safety(self):
+        """Verify defroster_catalog returns a token-safe compact overview by default, and detailed tools on drill-down."""
+        import json
+        # 1. Default overview
+        overview = server.defroster_catalog()
+        self.assertEqual(overview["status"], "success")
+        self.assertIn("hint", overview)
+        self.assertIn("files", overview["categories"])
+        
+        # Tools in overview should only contain 'name' to keep token count compact
+        first_tool = overview["categories"]["files"]["tools"][0]
+        self.assertIn("name", first_tool)
+        self.assertNotIn("desc", first_tool)
+        
+        # Verify overview size is strictly token-budget safe (< 1,200 tokens / < 4,800 chars)
+        overview_dump = json.dumps(overview)
+        self.assertLess(len(overview_dump), 4800, f"Overview size {len(overview_dump)} chars is too large!")
+
+        # 2. Specific category drilldown returns full tool descriptions
+        files_cat = server.defroster_catalog(category="files")
+        self.assertEqual(len(files_cat["categories"]), 1)
+        files_first_tool = files_cat["categories"]["files"]["tools"][0]
+        self.assertIn("name", files_first_tool)
+        self.assertIn("desc", files_first_tool)
+        self.assertIn("description", files_cat["categories"]["files"])
+
+        # 3. Search filter returns full tool descriptions for matches
+        search_res = server.defroster_catalog(search="navigate")
+        self.assertIn("browser", search_res["categories"])
+        browser_tools = search_res["categories"]["browser"]["tools"]
+        self.assertTrue(any(t["name"] == "browser_navigate" and "desc" in t for t in browser_tools))
+
+        # 4. Explicit detailed=True returns full tool descriptions
+        detailed_res = server.defroster_catalog(detailed=True)
+        det_first_tool = detailed_res["categories"]["files"]["tools"][0]
+        self.assertIn("name", det_first_tool)
+        self.assertIn("desc", det_first_tool)
+
 
 if __name__ == "__main__":
     unittest.main()

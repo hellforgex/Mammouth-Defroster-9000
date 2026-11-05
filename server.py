@@ -198,13 +198,10 @@ from modules.google_drive import (
 # Initialize FastMCP Server with Mammouth Defroster 9000, Mammouth Code & Google Drive capabilities
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
-    instructions="""
-    Mammouth Defroster 9000 (v0.7.4): Sovereign Windows 11 Desktop Cockpit, Vision, Mammouth Code CLI & Cloud Integration Platform.
-    Provides sandboxed long-term memory, tasks, file operations, hardware diagnostics, desktop vision, browser automation, Google Drive cloud integration, and Mammouth Code CLI agent automation exclusively for Mammouth.ai.
-    Core Tool Hub: Use 'defroster_catalog' or 'file_read' to discover available tools across [files, shell, browser, screen, desktop, system, scheduler, gdrive, clipboard, memory].
-    Dynamic Tooling: If a required capability is not available as a built-in MCP tool, write a custom Python or PowerShell script using 'file_write' and execute it locally via 'powershell_exec' or 'command_run' ($0 cost). Do NOT use 'mammouth_code_run_task' to run existing local scripts.
-    Always prioritize safety, sandboxing, and precision.
-    """
+    instructions="""Mammouth Defroster 9000 (v0.7.4): Sovereign Windows Cockpit & Tool Hub for Mammouth.ai.
+Core Tool Hub: Call 'defroster_catalog' to discover tools across categories (files, shell, browser, screen, desktop, system, scheduler, gdrive, clipboard, memory, claude).
+Dynamic Tooling: Write scripts via 'file_write' and run locally via 'powershell_exec' ($0 cost). Do not use 'mammouth_code_run_task' for local scripts.
+Always prioritize safety, sandboxing, and precision."""
 )
 
 
@@ -550,17 +547,19 @@ def defroster_catalog(
     category: Optional[str] = None,
     search: Optional[str] = None,
     switch_profile: Optional[str] = None,
+    detailed: bool = False,
     ctx: Optional[Context] = None
 ) -> Dict[str, Any]:
     """Mammouth Defroster Core Skill Directory & Capability Router (defrost / defroster main hub).
 
-    Lists available Defroster tools grouped by category, reports active tool profile, and promoted tools.
-    Dynamic Tooling Rule: If a needed capability is not available as a built-in tool, create a custom Python or PowerShell script using file_write and execute it locally via powershell_exec or command_run ($0 API cost). Do not use mammouth_code_run_task for local script execution.
+    Lists Defroster tools by category, reports active tool profile, and promoted tools.
+    Dynamic Tooling Rule: If a capability is missing, write a script with file_write and execute via powershell_exec ($0 cost).
 
     Args:
-        category: Optional category filter ('files', 'shell', 'browser', 'screen', 'desktop', 'system', 'scheduler', 'gdrive', 'clipboard', 'memory', 'all').
-        search: Optional keyword search string (e.g. 'pdf', 'click', 'window', 'gpu').
+        category: Optional category filter ('files', 'shell', 'browser', 'screen', 'desktop', 'system', 'scheduler', 'gdrive', 'clipboard', 'memory', 'claude', 'all').
+        search: Optional search keyword (e.g. 'pdf', 'click', 'window').
         switch_profile: Optional profile switch ('mammouth_safe', 'developer', 'web_vision', 'automation', 'all', 'custom').
+        detailed: Optional flag to return full descriptions in overview mode (default False for token safety).
     """
     cfg = load_config()
     profile_switch_msg = None
@@ -591,6 +590,12 @@ def defroster_catalog(
     target_category = str(category or "").strip().lower()
     search_term = str(search or "").strip().lower()
 
+    # Determine whether detailed tool descriptions should be returned:
+    # Always detailed if filtered by a specific category, searched, or explicitly requested detailed=True.
+    is_filtered_category = bool(target_category and target_category not in ("all", "*"))
+    is_search = bool(search_term)
+    include_tool_details = is_filtered_category or is_search or bool(detailed)
+
     filtered_categories: Dict[str, Any] = {}
 
     for cat_key, cat_data in _DEFROSTER_MODULE_CATALOG.items():
@@ -609,13 +614,22 @@ def defroster_catalog(
                 matched_tools.append(t)
 
         if matched_tools or (not search_term and target_category in (cat_key, "all", "*")):
-            filtered_categories[cat_key] = {
+            if include_tool_details:
+                tools_repr = [{"name": t["name"], "desc": t["desc"]} for t in matched_tools]
+            else:
+                # Token-budget-safe compact overview: return tool dicts with name to preserve schema compatibility
+                tools_repr = [{"name": t["name"]} for t in matched_tools]
+
+            cat_dict: Dict[str, Any] = {
                 "title": cat_data["title"],
                 "module_name": mod_name,
                 "module_enabled": mod_enabled,
-                "description": cat_data["description"],
-                "tools": matched_tools
+                "tools_count": len(matched_tools),
+                "tools": tools_repr
             }
+            if include_tool_details:
+                cat_dict["description"] = cat_data["description"]
+            filtered_categories[cat_key] = cat_dict
 
     token_est = profile_info.get("token_estimate", 0)
     MAX_SCHEMA_BUDGET = 7719
@@ -642,6 +656,8 @@ def defroster_catalog(
         "categories": filtered_categories,
         "dynamic_tooling_advice": "To execute custom or newly written scripts (e.g. skills/*.py, *.ps1), ALWAYS use 'powershell_exec' or 'command_run' ($0 cost, local). Do not use 'mammouth_code_run_task' to run existing scripts as it consumes API budget."
     }
+    if not include_tool_details:
+        res["hint"] = "Compact overview shown for Mammouth token safety. Call defroster_catalog(category='<name>') for detailed tool parameters & descriptions, or defroster_catalog(search='<keyword>')."
     if profile_switch_msg:
         res["profile_switch_status"] = profile_switch_msg
     if tools_auto_refreshed:
