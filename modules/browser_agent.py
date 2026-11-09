@@ -92,12 +92,25 @@ _INDEX_ELEMENTS_JS = """
         let selector = '';
         if (el.id) {
             selector = '#' + CSS.escape(el.id);
+        } else if (el.getAttribute('data-testid')) {
+            selector = `[data-testid="${CSS.escape(el.getAttribute('data-testid'))}"]`;
         } else if (name) {
             selector = `${tag.toLowerCase()}[name="${CSS.escape(name)}"]`;
         } else if (placeholder) {
             selector = `${tag.toLowerCase()}[placeholder="${CSS.escape(placeholder)}"]`;
         } else if (ariaLabel) {
             selector = `[aria-label="${CSS.escape(ariaLabel)}"]`;
+        } else if (role) {
+            selector = `${tag.toLowerCase()}[role="${CSS.escape(role)}"]`;
+        } else if (inputType && inputType !== 'text') {
+            selector = `${tag.toLowerCase()}[type="${CSS.escape(inputType)}"]`;
+        } else {
+            const classes = Array.from(el.classList || []).filter(c => !c.startsWith('mammouth-') && c.length < 30);
+            if (classes.length > 0) {
+                selector = `${tag.toLowerCase()}.${CSS.escape(classes[0])}`;
+            } else {
+                selector = `${tag.toLowerCase()}`;
+            }
         }
 
         const elemId = idCounter++;
@@ -739,21 +752,38 @@ class _BrowserWorker:
 
     def _resolve_target(self, target: str):
         target_str = str(target).strip()
-        # 1. Numeric ID from snapshot
+
+        # 1. Coordinate format: "x,y" or "coords:x,y"
+        if "," in target_str and not any(c in target_str for c in ("#", ".", "[", ">", ":", "=")):
+            raw = target_str.replace("coords:", "").strip()
+            parts = raw.split(",")
+            if len(parts) == 2 and parts[0].strip().isdigit() and parts[1].strip().isdigit():
+                return (int(parts[0].strip()), int(parts[1].strip()))
+
+        # 2. Prioritize CSS / XPath locator if string looks like a selector
+        is_selector_like = (
+            any(target_str.startswith(p) for p in ("#", ".", "[", "xpath=", "css=", "text=")) or
+            any(c in target_str for c in (">", " ", ":", "[", "]", "@", "//"))
+        )
+        if is_selector_like:
+            try:
+                clean_sel = target_str
+                if clean_sel.startswith("css="):
+                    clean_sel = clean_sel[4:]
+                loc = self.active_page.locator(clean_sel)
+                if loc.count() > 0:
+                    return loc.first
+            except Exception:
+                pass
+
+        # 3. Numeric ID from snapshot ([data-mammouth-id="N"])
         if target_str.isdigit() or (target_str.startswith("#") and target_str[1:].isdigit()):
             num = target_str.lstrip("#")
             loc = self.active_page.locator(f'[data-mammouth-id="{num}"]')
             if loc.count() > 0:
                 return loc.first
 
-        # 2. Coordinate format: "x,y" or "coords:x,y"
-        if "," in target_str and not any(c in target_str for c in ("#", ".", "[", ">")):
-            raw = target_str.replace("coords:", "").strip()
-            parts = raw.split(",")
-            if len(parts) == 2 and parts[0].strip().isdigit() and parts[1].strip().isdigit():
-                return (int(parts[0].strip()), int(parts[1].strip()))
-
-        # 3. Standard CSS / XPath locator
+        # 4. Standard CSS fallback (for simple tags like 'button', 'input')
         try:
             loc = self.active_page.locator(target_str)
             if loc.count() > 0:
@@ -761,7 +791,7 @@ class _BrowserWorker:
         except Exception:
             pass
 
-        # 4. Text-based lookup
+        # 5. Text-based lookup
         try:
             loc = self.active_page.get_by_text(target_str, exact=False)
             if loc.count() > 0:
@@ -769,7 +799,7 @@ class _BrowserWorker:
         except Exception:
             pass
 
-        # 5. Role or placeholder fallback
+        # 6. Role or placeholder fallback
         try:
             loc = self.active_page.get_by_placeholder(target_str)
             if loc.count() > 0:
@@ -780,6 +810,7 @@ class _BrowserWorker:
         raise ValueError(f"Could not find element matching target '{target}'. Use browser_snapshot() to inspect available elements.")
 
     def _cmd_click(self, target: str, button: str = "left", double_click: bool = False) -> Dict[str, Any]:
+        t0 = time.perf_counter()
         resolved = self._resolve_target(target)
         if isinstance(resolved, tuple):
             x, y = resolved
@@ -796,15 +827,35 @@ class _BrowserWorker:
 
         # Allow SPA transitions to settle briefly
         time.sleep(0.3)
-        return {
-            "status": "success",
+        duration_ms = round((time.perf_counter() - t0) * 1000)
+
+        # Post-action verification & unexpected blocking error detection
+        unexpected_state = None
+        try:
+            alert_loc = self.active_page.locator('[role="alert"], .alert-danger, .error-banner, #error-message').first
+            if alert_loc.count() > 0 and alert_loc.is_visible(timeout=300):
+                alert_text = alert_loc.inner_text(timeout=300).strip()
+                if alert_text:
+                    unexpected_state = f"Page displayed error alert: {alert_text[:200]}"
+        except Exception:
+            pass
+
+        res = {
+            "status": "unexpected_state" if unexpected_state else "success",
             "action": "double_click" if double_click else "click",
             "target": str(target),
+            "duration_ms": duration_ms,
+            "verified": unexpected_state is None,
             "current_url": self.active_page.url,
             "title": self.active_page.title()
         }
+        if unexpected_state:
+            res["error"] = unexpected_state
+            res["error_code"] = "ERR_PAGE_ERROR_ALERT"
+        return res
 
     def _cmd_fill(self, target: str, text: str, press_enter: bool = False) -> Dict[str, Any]:
+        t0 = time.perf_counter()
         resolved = self._resolve_target(target)
         if isinstance(resolved, tuple):
             raise ValueError("Cannot fill text into pixel coordinates; target must be an element ID or selector.")
@@ -815,10 +866,34 @@ class _BrowserWorker:
             resolved.press("Enter", timeout=5000)
             time.sleep(0.3)
 
+        duration_ms = round((time.perf_counter() - t0) * 1000)
+
+        # Verify input value
+        verified = True
+        try:
+            actual_val = resolved.input_value(timeout=500)
+            verified = (actual_val == text) or (text in actual_val)
+        except Exception:
+            pass
+
+        # Mask sensitive passwords in returned log payload
+        is_password = False
+        try:
+            input_type = resolved.get_attribute("type")
+            if input_type and input_type.lower() == "password":
+                is_password = True
+        except Exception:
+            pass
+        if "password" in str(target).lower() or "secret" in str(target).lower():
+            is_password = True
+
         return {
             "status": "success",
             "target": str(target),
+            "duration_ms": duration_ms,
+            "verified": verified,
             "text_length": len(text),
+            "masked": "********" if is_password else None,
             "pressed_enter": press_enter,
             "current_url": self.active_page.url
         }

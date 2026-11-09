@@ -462,11 +462,18 @@ def powershell_exec(
         cwd: Optional alias for working_directory.
         timeout_seconds: Execution timeout in seconds (default 120).
     """
+    t0 = time.perf_counter()
     work_dir = _resolve_work_dir(cwd, working_directory)
     try:
         clean_cmd = _validate_shell_command(command, cwd=work_dir)
     except Exception as ex:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
+        is_ro = "read-only" in str(ex).lower() or "admin" in str(ex).lower()
+        err_code = "ERR_SECURITY_READONLY" if is_ro else "ERR_SECURITY_SHIELD"
         return {
+            "status": "permission_denied",
+            "error_code": err_code,
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": f"Security Error: {ex}",
             "exit_code": -1,
@@ -479,20 +486,32 @@ def powershell_exec(
             cwd=work_dir,
             timeout=timeout_seconds,
         )
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "success" if returncode == 0 else "error",
+            "error_code": None if returncode == 0 else "ERR_COMMAND_FAILED",
+            "duration_ms": duration_ms,
             "stdout": stdout,
             "stderr": stderr,
             "exit_code": returncode
         }
     except subprocess.TimeoutExpired:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "timeout",
+            "error_code": "ERR_TIMEOUT",
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": f"Execution timed out after {timeout_seconds}s",
             "exit_code": -1,
             "error": f"Execution timed out after {timeout_seconds}s"
         }
     except Exception as e:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "error",
+            "error_code": "ERR_PROCESS_ERROR",
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": str(e),
             "exit_code": -1,
@@ -514,11 +533,18 @@ def cmd_exec(
         cwd: Optional alias for working_directory.
         timeout_seconds: Execution timeout in seconds (default 120).
     """
+    t0 = time.perf_counter()
     work_dir = _resolve_work_dir(cwd, working_directory)
     try:
         clean_cmd = _validate_shell_command(command, cwd=work_dir)
     except Exception as ex:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
+        is_ro = "read-only" in str(ex).lower() or "admin" in str(ex).lower()
+        err_code = "ERR_SECURITY_READONLY" if is_ro else "ERR_SECURITY_SHIELD"
         return {
+            "status": "permission_denied",
+            "error_code": err_code,
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": f"Security Error: {ex}",
             "exit_code": -1,
@@ -533,20 +559,32 @@ def cmd_exec(
             timeout=timeout_seconds,
             encoding="oem" if os.name == "nt" else "utf-8",
         )
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "success" if returncode == 0 else "error",
+            "error_code": None if returncode == 0 else "ERR_COMMAND_FAILED",
+            "duration_ms": duration_ms,
             "stdout": stdout,
             "stderr": stderr,
             "exit_code": returncode
         }
     except subprocess.TimeoutExpired:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "timeout",
+            "error_code": "ERR_TIMEOUT",
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": f"Execution timed out after {timeout_seconds}s",
             "exit_code": -1,
             "error": f"Execution timed out after {timeout_seconds}s"
         }
     except Exception as e:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "error",
+            "error_code": "ERR_PROCESS_ERROR",
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": str(e),
             "exit_code": -1,
@@ -681,15 +719,69 @@ def process_get_output(task_id: str, tail_lines: int = 100) -> Dict[str, Any]:
 def process_kill_background(task_id: str) -> Dict[str, Any]:
     """Terminate a running background process."""
     if task_id not in BACKGROUND_PROCESSES:
-        return {"error": f"Task '{task_id}' not found."}
+        return {"status": "error", "error_code": "ERR_TASK_NOT_FOUND", "error": f"Task '{task_id}' not found."}
     
     proc = BACKGROUND_PROCESSES[task_id]["proc"]
     try:
         # Kill the whole tree: terminating only powershell.exe would orphan its children
         _kill_process_tree(proc)
-        return {"task_id": task_id, "status": "terminated"}
+        BACKGROUND_PROCESSES[task_id]["finished_at"] = time.time()
+        return {"task_id": task_id, "status": "terminated", "error_code": None}
     except Exception as e:
-        return {"error": f"Failed to kill process: {e}"}
+        return {"status": "error", "error_code": "ERR_PROCESS_KILL_FAILED", "error": f"Failed to kill process: {e}"}
+
+
+def process_cancel(task_id: str) -> Dict[str, Any]:
+    """Cancel and terminate a running background process with standardized status."""
+    res = process_kill_background(task_id)
+    if res.get("status") == "terminated":
+        res["status"] = "cancelled"
+    return res
+
+
+def process_tail_output(task_id: str, line_offset: int = 0, max_lines: int = 200) -> Dict[str, Any]:
+    """Retrieve output log content from a background task with line offset and pagination.
+    
+    Args:
+        task_id: ID of the background task.
+        line_offset: 0-based line index to start reading from.
+        max_lines: Maximum number of lines to return (default 200).
+    """
+    if task_id not in BACKGROUND_PROCESSES:
+        return {"status": "error", "error_code": "ERR_TASK_NOT_FOUND", "error": f"Task '{task_id}' not found."}
+
+    info = BACKGROUND_PROCESSES[task_id]
+    log_path = Path(info["log_file"])
+    if not log_path.exists():
+        return {
+            "status": "success",
+            "task_id": task_id,
+            "lines": [],
+            "total_lines": 0,
+            "next_offset": 0,
+            "is_running": info["proc"].poll() is None
+        }
+
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+        
+        total = len(all_lines)
+        start_idx = max(0, int(line_offset))
+        end_idx = min(total, start_idx + max(1, int(max_lines)))
+        selected = all_lines[start_idx:end_idx]
+        poll = info["proc"].poll()
+        return {
+            "status": "success",
+            "task_id": task_id,
+            "lines": selected,
+            "total_lines": total,
+            "next_offset": end_idx,
+            "is_running": poll is None,
+            "exit_code": poll
+        }
+    except Exception as e:
+        return {"status": "error", "error_code": "ERR_LOG_READ_FAILED", "error": f"Failed to read process log: {e}"}
 
 
 def desktop_open(target: str, arguments: Optional[str] = None) -> Dict[str, Any]:

@@ -85,7 +85,9 @@ from modules.shell_processes import (
     process_start_background,
     process_list_background,
     process_get_output,
-    process_kill_background
+    process_kill_background,
+    process_cancel,
+    process_tail_output
 )
 from modules.putty_ssh import (
     ssh_exec_command,
@@ -178,6 +180,8 @@ from modules.task_scheduler import (
     scheduler_resume_task,
     scheduler_trigger_task_now,
     scheduler_get_presets,
+    scheduler_get_history,
+    scheduler_test_run,
     TaskSchedulerEngine
 )
 from modules.google_drive import (
@@ -233,13 +237,18 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
     are anchored directly to the workspace root).
     Commands are validated against the security blocklist and read-only allowlist.
     """
+    t0 = time.perf_counter()
     raw_cmd = str(command or "").strip()
     # Strip wrapping quotes if the whole command was accidentally quoted by the caller
     if (raw_cmd.startswith('"') and raw_cmd.endswith('"')) or (raw_cmd.startswith("'") and raw_cmd.endswith("'")):
         raw_cmd = raw_cmd[1:-1].strip()
 
     if not raw_cmd:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "error",
+            "error_code": "ERR_EMPTY_COMMAND",
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": "Command cannot be empty.",
             "exit_code": -1,
@@ -252,14 +261,24 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
         # Execute exactly the command string that was validated
         raw_cmd = _validate_shell_command(raw_cmd)
     except PermissionError as ex:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
+        is_ro = "read-only" in str(ex).lower() or "admin" in str(ex).lower()
+        err_code = "ERR_SECURITY_READONLY" if is_ro else "ERR_SECURITY_SHIELD"
         return {
+            "status": "permission_denied",
+            "error_code": err_code,
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": f"Security Error: {ex}",
             "exit_code": -1,
             "error": str(ex)
         }
     except Exception as ex:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "error",
+            "error_code": "ERR_VALIDATION",
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": f"Command validation error: {ex}",
             "exit_code": -1,
@@ -283,7 +302,11 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
 
     # Enforce workspace root boundary
     if not (resolved_cwd == workdir_root or resolved_cwd.startswith(workdir_root + os.sep) or resolved_cwd.startswith(workdir_root + "/")):
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "permission_denied",
+            "error_code": "ERR_SECURITY_PATH",
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": f"Security: cwd '{cwd}' resolves to '{resolved_cwd}' which is outside the allowed workspace '{workdir_root}'.",
             "exit_code": -1,
@@ -297,7 +320,11 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
             except Exception:
                 pass
         if not os.path.exists(resolved_cwd):
+            duration_ms = round((time.perf_counter() - t0) * 1000)
             return {
+                "status": "error",
+                "error_code": "ERR_DIRECTORY_NOT_FOUND",
+                "duration_ms": duration_ms,
                 "stdout": "",
                 "stderr": f"Directory not found: '{resolved_cwd}'",
                 "exit_code": -1,
@@ -312,21 +339,33 @@ def local_exec_command(command: str, cwd: str = "", timeout: int = 600) -> dict:
             cwd=resolved_cwd,
             timeout=timeout,
         )
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "success" if returncode == 0 else "error",
+            "error_code": None if returncode == 0 else "ERR_COMMAND_FAILED",
+            "duration_ms": duration_ms,
             "stdout": stdout or "",
             "stderr": stderr or "",
             "exit_code": returncode,
             "error": None
         }
     except subprocess.TimeoutExpired:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "timeout",
+            "error_code": "ERR_TIMEOUT",
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": f"Command timed out after {timeout} seconds.",
             "exit_code": -1,
             "error": f"TimeoutExpired({timeout}s)"
         }
     except Exception as ex:
+        duration_ms = round((time.perf_counter() - t0) * 1000)
         return {
+            "status": "error",
+            "error_code": "ERR_PROCESS_ERROR",
+            "duration_ms": duration_ms,
             "stdout": "",
             "stderr": str(ex),
             "exit_code": -1,
@@ -371,22 +410,42 @@ def task_schedule_list(status: Optional[str] = None) -> List[Dict[str, Any]]:
 
 
 def task_schedule_control(task_id: int, action: str) -> Dict[str, Any]:
-    """Control a scheduled task.
+    """Control a scheduled task (pause, resume, trigger, test_run, preview, history, stop).
     
     Args:
         task_id: ID of the scheduled task
-        action: 'pause', 'resume', 'trigger_now', or 'stop'
+        action: 'pause', 'resume', 'trigger' / 'trigger_now', 'stop' / 'abort', 'test_run', 'preview' / 'dry_run', 'history'
     """
     act = str(action).lower().strip()
     if act == "pause":
         return scheduler_pause_task(task_id)
     elif act == "resume":
         return scheduler_resume_task(task_id)
-    elif act == "trigger_now":
+    elif act in ("trigger_now", "trigger"):
         return scheduler_trigger_task_now(task_id)
-    elif act == "stop":
+    elif act in ("stop", "abort"):
         return scheduler_update_task(task_id, status="stopped")
-    return {"error": f"Unknown action '{action}'. Valid: 'pause', 'resume', 'trigger_now', 'stop'"}
+    elif act == "test_run":
+        from modules.task_scheduler import scheduler_test_run
+        return scheduler_test_run(task_id, dry_run=False)
+    elif act in ("preview", "dry_run"):
+        from modules.task_scheduler import scheduler_test_run
+        return scheduler_test_run(task_id, dry_run=True)
+    elif act == "history":
+        from modules.task_scheduler import scheduler_get_history
+        return {"status": "success", "task_id": task_id, "history": scheduler_get_history(task_id)}
+    return {"error": f"Unknown action '{action}'. Valid: 'pause', 'resume', 'trigger', 'stop', 'test_run', 'dry_run', 'history'"}
+
+
+def task_schedule_get_history(task_id: int, limit: int = 20) -> List[Dict[str, Any]]:
+    """Get past execution runs and logs for a scheduled task.
+    
+    Args:
+        task_id: ID of the scheduled task.
+        limit: Maximum number of execution records to return (default 20).
+    """
+    from modules.task_scheduler import scheduler_get_history
+    return scheduler_get_history(task_id=task_id, limit=limit)
 
 
 def task_schedule_delete(task_id: int) -> str:
@@ -543,22 +602,162 @@ _DEFROSTER_MODULE_CATALOG: Dict[str, Dict[str, Any]] = {
 }
 
 
+
+def defroster_health_check() -> Dict[str, Any]:
+    """Execute read-only self-test and dependency probe (Python, DPAPI, databases, PowerShell, sandbox)."""
+    t0 = time.perf_counter()
+    cfg = load_config()
+    server_cfg = cfg.get("server", {})
+    issues = []
+
+    # 1. Runtime
+    runtime_info = {
+        "python_version": sys.version.split()[0],
+        "platform": sys.platform,
+        "is_frozen": getattr(sys, "frozen", False),
+        "executable": sys.executable
+    }
+
+    # 2. Security & Sandbox
+    from modules.shell_processes import resolve_workspace_root, _is_admin_shell_allowed
+    ws_root = resolve_workspace_root()
+    ws_exists = os.path.exists(ws_root)
+    if not ws_exists:
+        issues.append(f"Workspace directory does not exist: {ws_root}")
+
+    # DPAPI probe
+    dpapi_ok = False
+    try:
+        from config import _encrypt_dpapi, _decrypt_dpapi
+        test_val = "defroster_health_probe"
+        enc = _encrypt_dpapi(test_val)
+        dec = _decrypt_dpapi(enc)
+        dpapi_ok = (dec == test_val)
+    except Exception as e:
+        issues.append(f"DPAPI encryption probe failed: {e}")
+
+    security_info = {
+        "workspace_root": ws_root,
+        "workspace_exists": ws_exists,
+        "workspace_sandbox_enforced": server_cfg.get("enforce_workspace_sandbox", True),
+        "admin_shell_allowed": _is_admin_shell_allowed(),
+        "dpapi_available": dpapi_ok
+    }
+
+    # 3. Databases
+    db_status = {}
+    for db_name in ("tasks.db", "memory.db", "oauth.db"):
+        db_path = BASE_DIR / db_name
+        exists = db_path.exists()
+        can_read = False
+        if exists:
+            try:
+                import sqlite3
+                conn = sqlite3.connect(db_path, timeout=2.0)
+                cur = conn.cursor()
+                cur.execute("PRAGMA integrity_check;")
+                row = cur.fetchone()
+                can_read = bool(row and row[0] == "ok")
+                conn.close()
+            except Exception:
+                can_read = False
+        db_status[db_name] = {"exists": exists, "integrity_ok": can_read}
+
+    # 4. Dependencies
+    playwright_installed = False
+    try:
+        import playwright
+        playwright_installed = True
+    except ImportError:
+        pass
+
+    cloudflared_path = BASE_DIR / "cloudflared.exe"
+    cloudflared_present = cloudflared_path.exists()
+
+    powershell_available = False
+    try:
+        import subprocess
+        res = subprocess.run(["powershell.exe", "-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"],
+                             capture_output=True, text=True, timeout=5)
+        powershell_available = (res.returncode == 0)
+    except Exception:
+        pass
+
+    deps_info = {
+        "playwright_installed": playwright_installed,
+        "powershell_available": powershell_available,
+        "cloudflared_present": cloudflared_present
+    }
+    if not powershell_available:
+        issues.append("PowerShell is not accessible or failed execution probe.")
+
+    # 5. MCP Profile Status
+    active_profile_key = str(server_cfg.get("tool_profile", "mammouth_safe")).strip().lower()
+    prof_info = TOOL_PROFILES.get(active_profile_key, TOOL_PROFILES.get("mammouth_safe", {}))
+    profile_status = {
+        "id": active_profile_key,
+        "name": prof_info.get("name", "Unknown"),
+        "promoted_tools_count": len(prof_info.get("tools", [])),
+        "token_estimate": prof_info.get("token_estimate", 0)
+    }
+
+    duration_ms = round((time.perf_counter() - t0) * 1000)
+    overall = "healthy"
+    if issues:
+        overall = "degraded" if (ws_exists and powershell_available) else "error"
+
+    return {
+        "status": overall,
+        "duration_ms": duration_ms,
+        "issues": issues,
+        "runtime": runtime_info,
+        "security": security_info,
+        "storage": db_status,
+        "dependencies": deps_info,
+        "profile": profile_status
+    }
+
+
+def _extract_tool_schema_def(tool_name: str) -> Optional[Dict[str, Any]]:
+    """Extract registered parameter schema for a tool synchronously from local_provider components."""
+    try:
+        if hasattr(mcp, "local_provider") and hasattr(mcp.local_provider, "_components"):
+            comp = mcp.local_provider._components.get(f"tool:{tool_name}@")
+            if comp:
+                params = getattr(comp, "parameters", None) or getattr(comp, "inputSchema", None)
+                return {
+                    "name": tool_name,
+                    "description": getattr(comp, "description", ""),
+                    "parameters": params
+                }
+    except Exception:
+        pass
+    return None
+
+
 def defroster_catalog(
     category: Optional[str] = None,
     search: Optional[str] = None,
     switch_profile: Optional[str] = None,
+    tool_schema: Optional[str] = None,
+    include_schemas: bool = False,
     detailed: bool = False,
     ctx: Optional[Context] = None
 ) -> Dict[str, Any]:
     """Mammouth Defroster Core Skill Directory & Capability Router (defrost / defroster main hub).
 
-    Lists Defroster tools by category, reports active tool profile, and promoted tools.
-    Dynamic Tooling Rule: If a capability is missing, write a script with file_write and execute via powershell_exec ($0 cost).
+    Lists Defroster tools by category, reports active tool profile, promoted tools, and schemas.
+    Differentiates clearly between:
+      1. loaded_in_profile (directly callable right now)
+      2. activated_in_config (module enabled in config.json)
+      3. catalog_available (total Defroster suite tools)
 
     Args:
         category: Optional category filter ('files', 'shell', 'browser', 'screen', 'desktop', 'system', 'scheduler', 'gdrive', 'clipboard', 'memory', 'claude', 'all').
         search: Optional search keyword (e.g. 'pdf', 'click', 'window').
         switch_profile: Optional profile switch ('mammouth_safe', 'developer', 'web_vision', 'automation', 'all', 'custom').
+        tool_schema: Optional tool name to retrieve full machine-readable JSON schema (e.g. 'powershell_exec', 'browser_click').
+        include_schemas: Whether to include parameter schemas for all returned tools (default False for token safety).
         detailed: Optional flag to return full descriptions in overview mode (default False for token safety).
     """
     cfg = load_config()
@@ -585,25 +784,65 @@ def defroster_catalog(
 
     active_profile_key = str(cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
     profile_info = TOOL_PROFILES.get(active_profile_key, TOOL_PROFILES["mammouth_safe"])
+    promoted_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check"}
     mods = cfg.get("modules", {})
+
+    # Single tool schema request (on-demand machine-readable inspection)
+    if tool_schema:
+        target_tool = str(tool_schema).strip()
+        schema_def = _extract_tool_schema_def(target_tool)
+        target_cat = None
+        target_mod = _DEFROSTER_TOOL_TO_MODULE.get(target_tool, "unknown")
+        reqs = {}
+        for ck, cdata in _DEFROSTER_MODULE_CATALOG.items():
+            for t in cdata["tools"]:
+                if t["name"] == target_tool:
+                    target_cat = ck
+                    reqs = t.get("requirements", cdata.get("requirements", {}))
+                    break
+        
+        # Determine recommended profile to switch to
+        rec_prof = None
+        for pid, pdata in TOOL_PROFILES.items():
+            if target_tool in pdata.get("tools", []):
+                rec_prof = pid
+                break
+
+        is_loaded = target_tool in promoted_names or active_profile_key == "all"
+        is_mod_enabled = mods.get(target_mod, {}).get("enabled", True)
+
+        return {
+            "status": "success" if schema_def else "not_found",
+            "tool_name": target_tool,
+            "status_in_active_profile": "loaded" if is_loaded else ("available" if is_mod_enabled else "disabled"),
+            "category": target_cat,
+            "module": target_mod,
+            "module_enabled": is_mod_enabled,
+            "requirements": reqs,
+            "recommended_profile": rec_prof or "all",
+            "schema": schema_def or {"error": f"Tool '{target_tool}' schema not found or not registered."}
+        }
 
     target_category = str(category or "").strip().lower()
     search_term = str(search or "").strip().lower()
 
-    # Determine whether detailed tool descriptions should be returned:
-    # Always detailed if filtered by a specific category, searched, or explicitly requested detailed=True.
     is_filtered_category = bool(target_category and target_category not in ("all", "*"))
     is_search = bool(search_term)
     include_tool_details = is_filtered_category or is_search or bool(detailed)
 
     filtered_categories: Dict[str, Any] = {}
+    total_catalog_count = 0
+    activated_in_config_count = 0
 
     for cat_key, cat_data in _DEFROSTER_MODULE_CATALOG.items():
-        if target_category and target_category not in ("all", "*") and cat_key != target_category:
-            continue
-
+        total_catalog_count += len(cat_data["tools"])
         mod_name = cat_data["module"]
         mod_enabled = mods.get(mod_name, {}).get("enabled", True)
+        if mod_enabled:
+            activated_in_config_count += len(cat_data["tools"])
+
+        if target_category and target_category not in ("all", "*") and cat_key != target_category:
+            continue
 
         matched_tools = []
         for t in cat_data["tools"]:
@@ -615,9 +854,29 @@ def defroster_catalog(
 
         if matched_tools or (not search_term and target_category in (cat_key, "all", "*")):
             if include_tool_details:
-                tools_repr = [{"name": t["name"], "desc": t["desc"]} for t in matched_tools]
+                tools_repr = []
+                for t in matched_tools:
+                    t_name = t["name"]
+                    is_loaded = t_name in promoted_names or active_profile_key == "all"
+                    t_status = "loaded" if is_loaded else ("available" if mod_enabled else "disabled")
+                    
+                    rec_p = None
+                    for pid, pdata in TOOL_PROFILES.items():
+                        if t_name in pdata.get("tools", []):
+                            rec_p = pid
+                            break
+
+                    t_dict = {
+                        "name": t_name,
+                        "status": t_status,
+                        "recommended_profile": rec_p or "all",
+                        "desc": t["desc"],
+                        "requirements": t.get("requirements", cat_data.get("requirements", {}))
+                    }
+                    if include_schemas:
+                        t_dict["schema"] = _extract_tool_schema_def(t_name)
+                    tools_repr.append(t_dict)
             else:
-                # Token-budget-safe compact overview: return tool dicts with name to preserve schema compatibility
                 tools_repr = [{"name": t["name"]} for t in matched_tools]
 
             cat_dict: Dict[str, Any] = {
@@ -627,6 +886,8 @@ def defroster_catalog(
                 "tools_count": len(matched_tools),
                 "tools": tools_repr
             }
+            if include_tool_details:
+                cat_dict["requirements"] = cat_data.get("requirements", {})
             if include_tool_details:
                 cat_dict["description"] = cat_data["description"]
             filtered_categories[cat_key] = cat_dict
@@ -640,6 +901,10 @@ def defroster_catalog(
     else:
         budget_status = f"Warning (~{token_est:,} / {MAX_SCHEMA_BUDGET:,} tokens - exceeds platform limit, promotion may fail)"
 
+    # Three-Tier tool metrics
+    loaded_tools_list = [t for t in promoted_names if t != "*"] if active_profile_key != "all" else ["all"]
+    loaded_tools_count = len(promoted_names) if active_profile_key != "all" else activated_in_config_count
+
     res = {
         "status": "success",
         "active_tool_profile": {
@@ -650,14 +915,19 @@ def defroster_catalog(
             "promoted_tools_count": len(profile_info.get("tools", [])) if profile_info.get("tools") else "all enabled",
             "promoted_tools": profile_info.get("tools", ["all"])
         },
+        "tool_inventory_metrics": {
+            "loaded_in_profile": loaded_tools_count,
+            "activated_in_config": activated_in_config_count,
+            "total_catalog_suite": total_catalog_count
+        },
         "available_profiles": [p["id"] for p in TOOL_PROFILES.values()],
         "total_categories": len(filtered_categories),
         "available_categories": list(_DEFROSTER_MODULE_CATALOG.keys()),
         "categories": filtered_categories,
-        "dynamic_tooling_advice": "To execute custom or newly written scripts (e.g. skills/*.py, *.ps1), ALWAYS use 'powershell_exec' or 'command_run' ($0 cost, local). Do not use 'mammouth_code_run_task' to run existing scripts as it consumes API budget."
+        "dynamic_tooling_advice": "Execute scripts via powershell_exec or command_run ($0 cost, local)."
     }
-    if not include_tool_details:
-        res["hint"] = "Compact overview shown for Mammouth token safety. Call defroster_catalog(category='<name>') for detailed tool parameters & descriptions, or defroster_catalog(search='<keyword>')."
+    if not include_tool_details and not include_schemas:
+        res["hint"] = "Compact overview shown for Mammouth token safety. Call defroster_catalog(tool_schema='<name>') for machine-readable parameter schema, or defroster_catalog(category='<name>', include_schemas=True)."
     if profile_switch_msg:
         res["profile_switch_status"] = profile_switch_msg
     if tools_auto_refreshed:
@@ -667,6 +937,7 @@ def defroster_catalog(
 def register_active_tools():
     """Register tools dynamically based on enabled modules in config.json."""
     mcp.tool()(defroster_catalog)
+    mcp.tool()(defroster_health_check)
     cfg = load_config()
     mods = cfg.get("modules", {})
 
@@ -689,6 +960,7 @@ def register_active_tools():
         mcp.tool()(require_module("task_scheduler")(task_schedule_control))
         mcp.tool()(require_module("task_scheduler")(task_schedule_delete))
         mcp.tool()(require_module("task_scheduler")(task_schedule_get_presets))
+        mcp.tool()(require_module("task_scheduler")(task_schedule_get_history))
 
     if mods.get("file_ops", {}).get("enabled", True):
         mcp.tool()(require_module("file_ops")(file_read))
@@ -708,6 +980,8 @@ def register_active_tools():
         mcp.tool()(require_module("shell_processes")(process_list_background))
         mcp.tool()(require_module("shell_processes")(process_get_output))
         mcp.tool()(require_module("shell_processes")(process_kill_background))
+        mcp.tool()(require_module("shell_processes")(process_cancel))
+        mcp.tool()(require_module("shell_processes")(process_tail_output))
 
     if mods.get("putty_ssh", {}).get("enabled", True):
         mcp.tool()(require_module("putty_ssh")(ssh_exec_command))
@@ -813,6 +1087,10 @@ register_active_tools()
 
 _DEFROSTER_TOOL_TO_MODULE: Dict[str, str] = {
     "defroster_catalog": "core",
+    "defroster_health_check": "core",
+    "process_cancel": "shell_processes",
+    "process_tail_output": "shell_processes",
+    "task_schedule_get_history": "task_scheduler",
     "memory_save": "memory", "memory_recall": "memory", "memory_get": "memory", "memory_delete": "memory", "memory_list": "memory",
     "task_create": "tasks_kanban", "task_update": "tasks_kanban", "task_list": "tasks_kanban", "task_delete": "tasks_kanban",
     "task_schedule_create": "task_scheduler", "task_schedule_list": "task_scheduler", "task_schedule_control": "task_scheduler", "task_schedule_delete": "task_scheduler", "task_schedule_get_presets": "task_scheduler",
@@ -874,6 +1152,10 @@ def _sanitize_schema_dict(schema: Dict[str, Any]) -> None:
 _MULTILINGUAL_TOOL_HINTS: Dict[str, str] = {
     # Core & Catalog
     "defroster_catalog": "Tool-Katalog, Werkzeuge auflisten, Profil wechseln, catalogue outils, list tools",
+    "defroster_health_check": "Selbsttest, Systemdiagnose, Gesundheitsprüfung, Abhängigkeiten prüfen, self test, health check, diagnostics",
+    "process_cancel": "Prozess abbrechen, Hintergrundprozess stoppen, cancel process, abort task",
+    "process_tail_output": "Prozess-Logs lesen, Ausgabe paginieren, tail output, read log lines",
+    "task_schedule_get_history": "Ausführungsprotokoll, Aufgabenhistorie, Task-Logs, execution history, run logs",
     # File Operations
     "directory_list": "Verzeichnis auflisten, Ordnerinhalt, Dateien anzeigen, Ordner durchsuchen, lister répertoire, list directory",
     "directory_tree": "Verzeichnisbaum, Ordnerstruktur rekursiv auflisten, arborescence dossiers",
@@ -1013,11 +1295,11 @@ async def _profile_filtered_list_tools(*args, **kwargs) -> Any:
         mods = cfg.get("modules", {})
         filtered_tools = [
             t for t in tools
-            if t.name == "defroster_catalog" or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(t.name, ""), {}).get("enabled", True)
+            if t.name in ("defroster_catalog", "defroster_health_check") or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(t.name, ""), {}).get("enabled", True)
         ]
     else:
         profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
-        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog"}
+        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check"}
         filtered_tools = [t for t in tools if t.name in allowed_names]
 
     # Sanitize each tool schema
@@ -1042,11 +1324,11 @@ if hasattr(mcp, "_list_tools_mcp"):
                 mods = cfg.get("modules", {})
                 result.tools = [
                     t for t in result.tools
-                    if t.name == "defroster_catalog" or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(t.name, ""), {}).get("enabled", True)
+                    if t.name in ("defroster_catalog", "defroster_health_check") or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(t.name, ""), {}).get("enabled", True)
                 ]
             else:
                 profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
-                allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog"}
+                allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check"}
                 result.tools = [t for t in result.tools if t.name in allowed_names]
         for tool in result.tools:
             _sanitize_mcp_tool_schema(tool)
@@ -1179,11 +1461,11 @@ if hasattr(mcp, "_mcp_server"):
                         mods = cfg.get("modules", {})
                         filtered = [
                             t for t in tools_list
-                            if getattr(t, "name", "") == "defroster_catalog" or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(getattr(t, "name", ""), ""), {}).get("enabled", True)
+                            if getattr(t, "name", "") in ("defroster_catalog", "defroster_health_check") or mods.get(_DEFROSTER_TOOL_TO_MODULE.get(getattr(t, "name", ""), ""), {}).get("enabled", True)
                         ]
                     else:
                         profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
-                        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog"}
+                        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check"}
                         filtered = [t for t in tools_list if getattr(t, "name", "") in allowed_names]
 
                     for tool in filtered:

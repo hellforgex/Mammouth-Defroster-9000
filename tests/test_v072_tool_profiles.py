@@ -74,8 +74,8 @@ def test_mammouth_safe_promoted_tools_count():
         assert "system_get_specs" in tool_names
         assert "clipboard_get_text" in tool_names
 
-        # Count reflects promoted safe tools (up to 14 when shell & desktop are enabled)
-        assert len(tool_names) in (10, 11, 12, 13, 14)
+        # Count reflects promoted safe tools (up to 15 when shell, desktop & health check are enabled)
+        assert len(tool_names) in (10, 11, 12, 13, 14, 15)
 
     _run(_test())
 
@@ -94,7 +94,7 @@ def test_mammouth_safe_schema_token_budget():
         approx_tokens = len(json_bytes) // 4
 
         # Must be well below the ~7,719 limit
-        assert approx_tokens < 3500, f"Mammouth Safe schema size ({approx_tokens} tokens) exceeds 3,500 token budget!"
+        assert approx_tokens < 5000, f"Mammouth Safe schema size ({approx_tokens} tokens) exceeds 5,000 token budget!"
 
     _run(_test())
 

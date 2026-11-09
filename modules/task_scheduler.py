@@ -5,6 +5,7 @@ capabilities for Mammouth AI Web chat, Mammouth Code CLI, and desktop commands.
 """
 
 import os
+import time
 import sys
 import sqlite3
 import threading
@@ -111,6 +112,21 @@ def _get_db():
                     """)
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_sched_status ON scheduled_tasks(status)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_sched_next_run ON scheduled_tasks(next_run)")
+                    conn.execute('''
+                        CREATE TABLE IF NOT EXISTS task_runs (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            task_id INTEGER NOT NULL,
+                            run_number INTEGER NOT NULL,
+                            started_at TEXT NOT NULL,
+                            finished_at TEXT NOT NULL,
+                            duration_ms INTEGER NOT NULL,
+                            status TEXT NOT NULL,
+                            exit_code INTEGER DEFAULT 0,
+                            output_summary TEXT DEFAULT '',
+                            FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id) ON DELETE CASCADE
+                        )
+                    ''')
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_task_runs_task_id ON task_runs(task_id)")
                 _schema_ready_paths.add(db_key)
     return conn
 
@@ -497,6 +513,8 @@ class TaskSchedulerEngine:
                 continue
 
             # Execute via registered handler or default fallback
+            t0 = time.perf_counter()
+            started_at = datetime.now().isoformat()
             res_str = "Dispatched"
             try:
                 if target in self._handlers:
@@ -508,6 +526,10 @@ class TaskSchedulerEngine:
                 res_str = f"Error: {e}"
                 logger.error(f"Failed to execute task {task_id} ({task.get('name')}): {e}")
 
+            duration_ms = round((time.perf_counter() - t0) * 1000)
+            finished_at = datetime.now().isoformat()
+            run_status = "error" if res_str.startswith("Error") else "success"
+
             # Store the run result (schedule fields were already advanced by the claim)
             update_conn = _get_db()
             try:
@@ -515,6 +537,13 @@ class TaskSchedulerEngine:
                     update_conn.execute(
                         "UPDATE scheduled_tasks SET last_result = ? WHERE id = ?",
                         (res_str[:512], task_id)
+                    )
+                    update_conn.execute(
+                        """
+                        INSERT INTO task_runs (task_id, run_number, started_at, finished_at, duration_ms, status, exit_code, output_summary)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (task_id, runs_done, started_at, finished_at, duration_ms, run_status, 0 if run_status == "success" else -1, res_str[:2048])
                     )
             finally:
                 update_conn.close()
@@ -529,3 +558,85 @@ class TaskSchedulerEngine:
 
         self.notify_changed()
         return executed_reports
+
+
+def scheduler_get_history(task_id: int, limit: int = 20) -> List[Dict[str, Any]]:
+    """Retrieve execution history logs for a scheduled task."""
+    conn = _get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM task_runs
+            WHERE task_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+        """, (int(task_id), max(1, min(int(limit), 100))))
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def scheduler_test_run(task_id: int, dry_run: bool = False) -> Dict[str, Any]:
+    """Test run or preview a scheduled task without modifying its recurring schedule.
+    
+    Args:
+        task_id: Task ID to test or preview.
+        dry_run: If True, returns a simulation preview without executing any actions.
+    """
+    task = scheduler_get_task(task_id)
+    if "error" in task:
+        return task
+
+    if dry_run:
+        return {
+            "status": "preview",
+            "dry_run": True,
+            "task_id": task["id"],
+            "name": task["name"],
+            "target": task["target"],
+            "prompt": task["prompt"],
+            "interval_seconds": task["interval_seconds"],
+            "repeat_count": task["repeat_count"],
+            "runs_done": task["runs_done"],
+            "next_run": task["next_run"],
+            "simulated_action": f"Would dispatch prompt ({len(task['prompt'])} chars) to target '{task['target']}' with auto_submit={bool(task.get('auto_submit', 1))}."
+        }
+
+    # Execute single test run immediately
+    import time
+    engine = TaskSchedulerEngine.get_instance()
+    target = task.get("target", "mammouth_web")
+    t0 = time.perf_counter()
+    started_at = datetime.now().isoformat()
+    try:
+        if target in engine._handlers:
+            handler_res = engine._handlers[target](task)
+            res_str = str(handler_res) if handler_res is not None else "Success"
+        else:
+            res_str = f"Default trigger ({target})"
+    except Exception as e:
+        res_str = f"Error: {e}"
+
+    duration_ms = round((time.perf_counter() - t0) * 1000)
+    finished_at = datetime.now().isoformat()
+    run_status = "error" if res_str.startswith("Error") else "success"
+
+    # Record into task_runs table
+    conn = _get_db()
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO task_runs (task_id, run_number, started_at, finished_at, duration_ms, status, exit_code, output_summary)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (task["id"], 0, started_at, finished_at, duration_ms, f"test_{run_status}", 0 if run_status == "success" else -1, res_str[:2048]))
+    finally:
+        conn.close()
+
+    return {
+        "status": "success" if run_status == "success" else "error",
+        "dry_run": False,
+        "task_id": task["id"],
+        "duration_ms": duration_ms,
+        "result": res_str
+    }
