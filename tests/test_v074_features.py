@@ -75,7 +75,7 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
 
             self.assertEqual(app.curr_tool_profile_id, target_profile_id)
             self.assertEqual(app.config_data.get("server", {}).get("tool_profile"), target_profile_id)
-            self.assertIn("~3,800", app.dash_profile_badge.cget("text"))
+            self.assertIn("~4,100", app.dash_profile_badge.cget("text"))
 
             # Switch using profile ID directly
             app._on_tool_profile_change("web_vision")

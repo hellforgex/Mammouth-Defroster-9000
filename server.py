@@ -698,7 +698,7 @@ def register_active_tools():
         mcp.tool()(require_module("file_ops")(directory_list))
         mcp.tool()(require_module("file_ops")(directory_tree))
 
-    if mods.get("shell_processes", {}).get("enabled", False):
+    if mods.get("shell_processes", {}).get("enabled", True):
         mcp.tool()(require_module("shell_processes")(local_exec_command))
         mcp.tool()(require_module("shell_processes")(command_run))
         mcp.tool()(require_module("shell_processes")(powershell_exec))
@@ -914,6 +914,7 @@ _MULTILINGUAL_TOOL_HINTS: Dict[str, str] = {
     # Shell & System
     "command_run": "Befehl ausführen, Kommando starten, Shell CMD, Terminal, exécuter commande, run command",
     "powershell_exec": "PowerShell ausführen, Skript starten, PS Befehl, execute powershell",
+    "desktop_open": "Datei öffnen, URL öffnen, App starten, ouvrir fichier, open file, launch app",
     "local_exec_command": "Lokalen Befehl ausführen, Kommandozeile",
     "system_get_specs": "System-Informationen, Hardware-Spezifikationen, CPU RAM Festplatte, spécifications système",
     "system_get_processes": "Prozesse auflisten, Taskmanager, laufende Programme, processus système",

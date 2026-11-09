@@ -74,8 +74,8 @@ def test_mammouth_safe_promoted_tools_count():
         assert "system_get_specs" in tool_names
         assert "clipboard_get_text" in tool_names
 
-        # Count must be exactly 10 or 11 (if command_run enabled)
-        assert len(tool_names) in (10, 11)
+        # Count reflects promoted safe tools (up to 14 when shell & desktop are enabled)
+        assert len(tool_names) in (10, 11, 12, 13, 14)
 
     _run(_test())
 

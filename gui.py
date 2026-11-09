@@ -6015,7 +6015,7 @@ class MammouthControlCenter(ctk.CTk):
         from config import TOOL_PROFILES
         lbl = TOOL_PROFILES["mammouth_safe"]["label"]
         self._on_tool_profile_change(lbl)
-        self._log("[TOOLS] Preset 'Mammouth Chat Safe' activated: 12 core tools promoted under ~2,700 tokens.")
+        self._log(f"[TOOLS] Preset 'Mammouth Chat Safe' activated: {len(TOOL_PROFILES['mammouth_safe']['tools'])} core tools promoted under ~{TOOL_PROFILES['mammouth_safe']['token_estimate']:,} tokens.")
 
     def _save_skills(self):
         for key, var in self.module_switches.items():
