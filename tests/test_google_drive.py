@@ -1,9 +1,6 @@
 import unittest
 import os
 import sys
-import json
-import tempfile
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 # Add project root to path
@@ -13,24 +10,14 @@ from modules.google_drive import (
     gdrive_status,
     gdrive_list_files,
     gdrive_search_files,
-    gdrive_get_metadata,
     gdrive_read_file,
-    gdrive_download_to_workspace,
-    gdrive_upload_from_workspace,
     gdrive_write_file,
     gdrive_update_file,
     gdrive_create_folder,
     gdrive_delete_file,
-    get_active_access_token,
     get_drive_auth_headers,
     _OAuthCallbackHandler,
-    complete_oauth_code_exchange,
-    auto_authenticate_if_needed,
-    _load_stored_token,
-    _save_stored_token,
-    disconnect_gdrive,
-    TOKEN_FILE,
-    CREDENTIALS_FILE
+    auto_authenticate_if_needed
 )
 
 

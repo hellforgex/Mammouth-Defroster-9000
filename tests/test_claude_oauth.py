@@ -1,19 +1,15 @@
 """Unit tests for Claude OAuth integration (RFC 9728, RFC 8414, RFC 7591, PKCE S256, and Claude.ai / Claude Code compatibility).
 """
 
-import os
 import sys
 import json
-import time
 import base64
 import hashlib
-import secrets
 import urllib.parse
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
 
 SRC_DIR = Path(__file__).parent.parent.resolve()
 if str(SRC_DIR) not in sys.path:
@@ -28,10 +24,8 @@ from server import (
     oauth_register,
     oauth_authorize,
     oauth_token,
-    _save_oauth_client,
     _get_oauth_client,
     _is_valid_oauth_token,
-    _token_hash,
     _render_consent_page,
     SecurityAndAuthMiddleware,
 )
@@ -367,8 +361,8 @@ class TestClaudeOAuthIntegration(unittest.TestCase):
             ]
             for sp in subpaths:
                 sent_sp = []
-                async def send_sp_cap(msg):
-                    sent_sp.append(msg)
+                async def send_sp_cap(msg, target=sent_sp):
+                    target.append(msg)
                 scope_sp = {
                     "type": "http",
                     "method": "POST" if "token" in sp or "register" in sp else "GET",

@@ -44,7 +44,7 @@ class TestPuttySecurity(unittest.TestCase):
                 pw_path = cmd[idx + 1]
                 pw_file_seen.append(pw_path)
                 self.assertTrue(os.path.exists(pw_path), "Temp password file must exist during subprocess execution")
-                with open(pw_path, "r", encoding="utf-8") as f:
+                with open(pw_path, encoding="utf-8") as f:
                     self.assertIn("SuperSecretPassword123!", f.read())
             return mock_proc
 

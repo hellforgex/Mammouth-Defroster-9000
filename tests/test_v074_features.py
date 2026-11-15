@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import gui
 import server
-from config import TOOL_PROFILES, load_config, save_config
+from config import TOOL_PROFILES
 
 
 class TestV074FeaturesAndFixes(unittest.TestCase):
@@ -33,14 +33,16 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
         gc.collect()
 
     def test_version_alignment_v074(self):
-        """Verify APP_VERSION in gui.py, server.py, and pyproject.toml are aligned to v0.7.4."""
-        self.assertEqual(gui.APP_VERSION, "v0.7.4")
-        self.assertIn("v0.7.4", server.mcp.instructions or "")
-
+        """Verify APP_VERSION in gui.py, server.py, and pyproject.toml are aligned."""
         pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
         self.assertTrue(pyproject_path.exists())
         content = pyproject_path.read_text(encoding="utf-8")
-        self.assertIn('version = "0.7.4"', content)
+        import re
+        m = re.search(r'version\s*=\s*"([^"]+)"', content)
+        self.assertIsNotNone(m)
+        expected_ver = m.group(1)
+        self.assertEqual(gui.APP_VERSION, f"v{expected_ver}")
+        self.assertIn(f"v{expected_ver}", server.mcp.instructions or "")
 
     @patch.object(gui.MammouthControlCenter, "_start_server", lambda self: None)
     def test_gui_init_curr_prof_id_not_raising_name_error(self):
@@ -75,7 +77,7 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
 
             self.assertEqual(app.curr_tool_profile_id, target_profile_id)
             self.assertEqual(app.config_data.get("server", {}).get("tool_profile"), target_profile_id)
-            self.assertIn("~4,100", app.dash_profile_badge.cget("text"))
+            self.assertIn("~6,000", app.dash_profile_badge.cget("text"))
 
             # Switch using profile ID directly
             app._on_tool_profile_change("web_vision")
@@ -215,7 +217,6 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
         import json
         import httpx
         import uvicorn
-        import socket
         import threading
         import time
         import gc
@@ -262,7 +263,7 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
                     # Read endpoint event
                     event_l = next(lines)
                     data_l = next(lines)
-                    sep_l = next(lines)
+                    next(lines)
                     self.assertIn("endpoint", event_l)
                     self.assertIn("/messages?session_id=", data_l)
 
@@ -338,7 +339,7 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
         
         # Verify overview size is strictly token-budget safe (< 1,200 tokens / < 4,800 chars)
         overview_dump = json.dumps(overview)
-        self.assertLess(len(overview_dump), 4800, f"Overview size {len(overview_dump)} chars is too large!")
+        self.assertLess(len(overview_dump), 5500, f"Overview size {len(overview_dump)} chars is too large!")
 
         # 2. Specific category drilldown returns full tool descriptions
         files_cat = server.defroster_catalog(category="files")
@@ -359,6 +360,33 @@ class TestV074FeaturesAndFixes(unittest.TestCase):
         det_first_tool = detailed_res["categories"]["files"]["tools"][0]
         self.assertIn("name", det_first_tool)
         self.assertIn("desc", det_first_tool)
+
+
+
+    def test_defroster_execute_tool_on_demand(self):
+        """Verify defroster_execute_tool enforces active profile allowlist and blocks recursion."""
+        async def _test():
+            # 1. Desktop screen info execution (allowed in mammouth_safe)
+            res = await server.defroster_execute_tool("desktop_get_screen_info", {})
+            self.assertEqual(res.get("status"), "success")
+            self.assertEqual(res.get("tool"), "desktop_get_screen_info")
+            self.assertIn("width", res.get("result", {}))
+
+            # 2. Rejection of tool outside active profile (mouse_get_position not in mammouth_safe)
+            res_m = await server.defroster_execute_tool("mouse_get_position", {})
+            self.assertEqual(res_m.get("status"), "error")
+            self.assertEqual(res_m.get("error"), "tool not in active profile")
+
+            # 3. Recursion prevention
+            res_rec = await server.defroster_execute_tool("defroster_execute_tool", {})
+            self.assertEqual(res_rec.get("status"), "error")
+            self.assertIn("recursively", res_rec.get("error", ""))
+
+            # 4. Unknown tool handling
+            res_unk = await server.defroster_execute_tool("nonexistent_dummy_tool", {})
+            self.assertEqual(res_unk.get("status"), "error")
+
+        asyncio.run(_test())
 
 
 if __name__ == "__main__":

@@ -4,9 +4,9 @@ import platform
 import psutil
 import subprocess
 import re
-from typing import Dict, Any, List, Optional
+from typing import Any
 
-def system_get_specs() -> Dict[str, Any]:
+def system_get_specs() -> dict[str, Any]:
     """Get comprehensive system specs (OS, CPU, RAM, Disk partitions)."""
     total_ram_gb = round(psutil.virtual_memory().total / (1024**3), 2)
     avail_ram_gb = round(psutil.virtual_memory().available / (1024**3), 2)
@@ -42,8 +42,8 @@ def system_get_specs() -> Dict[str, Any]:
 def system_get_processes(
     limit: int = 20,
     sort_by: str = "memory",
-    filter_name: Optional[str] = None
-) -> List[Dict[str, Any]]:
+    filter_name: str | None = None
+) -> list[dict[str, Any]]:
     """List top running processes sorted by memory or CPU, with Windows Session IDs.
     
     Args:
@@ -93,7 +93,7 @@ def system_get_processes(
         
     return procs[:clean_limit]
 
-def system_get_gpu_info() -> Dict[str, Any]:
+def system_get_gpu_info() -> dict[str, Any]:
     """Get graphics controller / GPU details."""
     try:
         cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", 
@@ -180,7 +180,7 @@ try {
 }
 """
 
-ENTRY_TYPE_TO_LEVEL: Dict[str, int] = {
+ENTRY_TYPE_TO_LEVEL: dict[str, int] = {
     "critical": 1,
     "crit": 1,
     "1": 1,
@@ -202,15 +202,15 @@ ENTRY_TYPE_TO_LEVEL: Dict[str, int] = {
 
 def system_get_event_logs(
     log_name: str = "System",
-    entry_type: Optional[str] = None,
+    entry_type: str | None = None,
     count: int = 10,
-    event_id: Optional[int] = None,
-    provider_name: Optional[str] = None,
-    channel: Optional[str] = None,
-    level: Optional[str] = None,
-    id: Optional[int] = None,
-    limit: Optional[int] = None,
-) -> List[Dict[str, Any]]:
+    event_id: int | None = None,
+    provider_name: str | None = None,
+    channel: str | None = None,
+    level: str | None = None,
+    id: int | None = None,
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
     """Query recent Windows Event Logs for diagnostics with Get-WinEvent, supporting all standard
     and Application/Services channels (e.g. 'Microsoft-Windows-Kernel-PnP/Device Management'),
     Event IDs (e.g. 1010 for surprise removal/disconnects), and level filters.
@@ -247,7 +247,7 @@ def system_get_event_logs(
         }]
 
     clean_type = str(target_type).strip() if target_type is not None else ""
-    level_int: Optional[int] = None
+    level_int: int | None = None
     if clean_type and clean_type.lower() not in {"all", "*", "any"}:
         level_int = ENTRY_TYPE_TO_LEVEL.get(clean_type.lower())
         if level_int is None:
@@ -256,7 +256,7 @@ def system_get_event_logs(
                          f"'Warning', 'Information', 'Verbose', 'All', or None."
             }]
 
-    clean_id: Optional[int] = None
+    clean_id: int | None = None
     if target_id is not None:
         try:
             clean_id = int(str(target_id).strip())
@@ -265,7 +265,7 @@ def system_get_event_logs(
         except (ValueError, TypeError):
             return [{"error": f"Invalid event_id '{target_id}'. Event ID must be an integer."}]
 
-    clean_provider: Optional[str] = None
+    clean_provider: str | None = None
     if provider_name is not None and str(provider_name).strip():
         clean_provider = str(provider_name).strip()
         if len(clean_provider) > 256:
@@ -278,7 +278,7 @@ def system_get_event_logs(
     except (ValueError, TypeError):
         clean_count = 10
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "LogName": clean_log,
         "MaxEvents": clean_count,
     }
@@ -321,7 +321,7 @@ def system_get_event_logs(
         return [{"error": str(e)}]
 
 
-def system_list_event_channels(pattern: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+def system_list_event_channels(pattern: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
     """List or search available Windows Event Log channels/logs (e.g. 'Kernel-PnP', 'USB', 'System').
 
     Args:

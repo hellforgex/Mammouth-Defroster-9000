@@ -10,7 +10,8 @@ import hashlib
 import tempfile
 import subprocess
 import zipfile
-from typing import Optional, Dict, Any, Tuple, Callable
+from typing import Any
+from collections.abc import Callable
 import httpx
 from packaging import version
 
@@ -33,7 +34,7 @@ GITHUB_REPO = "hellforgex/Mammouth-Defroster-9000"
 RELEASES_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 
-def check_for_update(current_version: str) -> Optional[Dict[str, Any]]:
+def check_for_update(current_version: str) -> dict[str, Any] | None:
     """Check GitHub Releases for newer version of Mammouth Defroster 9000."""
     try:
         headers = {
@@ -95,9 +96,9 @@ def check_for_update(current_version: str) -> Optional[Dict[str, Any]]:
 
 
 def download_and_verify_update(
-    update_info: Dict[str, Any],
-    progress_cb: Optional[Callable[[float, str], None]] = None
-) -> Tuple[bool, str]:
+    update_info: dict[str, Any],
+    progress_cb: Callable[[float, str], None] | None = None
+) -> tuple[bool, str]:
     """Download update ZIP and verify SHA256 checksum against GitHub release asset.
     Returns (True, downloaded_zip_path) or (False, error_message).
     """
@@ -124,7 +125,7 @@ def download_and_verify_update(
                 expected_sha256 = parts[0].strip().lower()
 
         if not expected_sha256 or len(expected_sha256) != 64:
-            return False, f"Security Error: Malformed or missing SHA256 checksum asset!"
+            return False, "Security Error: Malformed or missing SHA256 checksum asset!"
 
         # 2. Download ZIP asset with streaming progress
         zip_url = update_info.get("zip_url", "")

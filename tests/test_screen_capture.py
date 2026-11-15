@@ -1,7 +1,6 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from PIL import Image as RealPILImage
-import io
 import os
 import sys
 
@@ -50,7 +49,7 @@ class TestScreenCaptureConsent(unittest.TestCase):
             mock_grab.grab.return_value = real_img
 
             res1 = screen_capture(monitor=1, save_to_workspace=False)
-            res2 = screen_capture(monitor=1, save_to_workspace=False)
+            screen_capture(monitor=1, save_to_workspace=False)
             if isinstance(res1, dict):
                 self.assertNotEqual(res1.get("status"), "consent_required")
     def test_interactive_consent_prompt_granted(self):

@@ -17,7 +17,7 @@ class TestAuthLockout(unittest.TestCase):
         now = time.time()
 
         # 1-4 failures: no lockout cooldown
-        for i in range(1, 5):
+        for _i in range(1, 5):
             delay = _record_failed_auth(client_ip, now)
             self.assertEqual(delay, 0.0)
             is_locked, _ = _is_ip_locked_out(client_ip, now)

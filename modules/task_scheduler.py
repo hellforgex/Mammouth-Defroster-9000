@@ -4,7 +4,6 @@ Provides persistent scheduling, recurring intervals, and automated trigger
 capabilities for Mammouth AI Web chat, Mammouth Code CLI, and desktop commands.
 """
 
-import os
 import time
 import sys
 import sqlite3
@@ -12,7 +11,8 @@ import threading
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable
+from typing import Any, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger("task_scheduler")
 
@@ -139,7 +139,7 @@ def _shell_module_enabled() -> bool:
         return False
 
 
-def scheduler_get_presets() -> List[Dict[str, Any]]:
+def scheduler_get_presets() -> list[dict[str, Any]]:
     """Return available pre-configured templates."""
     return [dict(p) for p in PRESET_TEMPLATES]
 
@@ -153,7 +153,7 @@ def scheduler_create_task(
     auto_submit: bool = True,
     switch_tab: bool = True,
     start_immediately: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a new scheduled automated task.
     
     Args:
@@ -220,7 +220,7 @@ def scheduler_create_task(
     return task_obj
 
 
-def scheduler_get_task(task_id: int) -> Dict[str, Any]:
+def scheduler_get_task(task_id: int) -> dict[str, Any]:
     """Retrieve details of a single scheduled task by ID."""
     conn = _get_db()
     cursor = conn.cursor()
@@ -232,7 +232,7 @@ def scheduler_get_task(task_id: int) -> Dict[str, Any]:
     return dict(row)
 
 
-def scheduler_list_tasks(status: Optional[str] = None) -> List[Dict[str, Any]]:
+def scheduler_list_tasks(status: str | None = None) -> list[dict[str, Any]]:
     """List all scheduled tasks optionally filtered by status."""
     conn = _get_db()
     cursor = conn.cursor()
@@ -247,15 +247,15 @@ def scheduler_list_tasks(status: Optional[str] = None) -> List[Dict[str, Any]]:
 
 def scheduler_update_task(
     task_id: int,
-    name: Optional[str] = None,
-    prompt: Optional[str] = None,
-    interval_seconds: Optional[int] = None,
-    repeat_count: Optional[int] = None,
-    target: Optional[str] = None,
-    auto_submit: Optional[bool] = None,
-    switch_tab: Optional[bool] = None,
-    status: Optional[str] = None
-) -> Dict[str, Any]:
+    name: str | None = None,
+    prompt: str | None = None,
+    interval_seconds: int | None = None,
+    repeat_count: int | None = None,
+    target: str | None = None,
+    auto_submit: bool | None = None,
+    switch_tab: bool | None = None,
+    status: str | None = None
+) -> dict[str, Any]:
     """Update properties of an existing scheduled task."""
     updates = []
     params = []
@@ -338,12 +338,12 @@ def scheduler_delete_task(task_id: int) -> str:
     return f"Scheduled task {task_id} not found."
 
 
-def scheduler_pause_task(task_id: int) -> Dict[str, Any]:
+def scheduler_pause_task(task_id: int) -> dict[str, Any]:
     """Pause execution of a scheduled task."""
     return scheduler_update_task(task_id, status="paused")
 
 
-def scheduler_resume_task(task_id: int) -> Dict[str, Any]:
+def scheduler_resume_task(task_id: int) -> dict[str, Any]:
     """Resume a paused or stopped task."""
     current = scheduler_get_task(task_id)
     if "error" in current:
@@ -366,7 +366,7 @@ def scheduler_resume_task(task_id: int) -> Dict[str, Any]:
     return scheduler_get_task(task_id)
 
 
-def scheduler_trigger_task_now(task_id: int) -> Dict[str, Any]:
+def scheduler_trigger_task_now(task_id: int) -> dict[str, Any]:
     """Immediately trigger a scheduled task without waiting for the interval."""
     current = scheduler_get_task(task_id)
     if "error" in current:
@@ -407,12 +407,12 @@ class TaskSchedulerEngine:
 
     def __init__(self):
         self._run_lock = threading.Lock()
-        self._handlers: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
-        self._listeners: List[Callable[[], None]] = []
+        self._handlers: dict[str, Callable[[dict[str, Any]], Any]] = {}
+        self._listeners: list[Callable[[], None]] = []
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
-    def register_handler(self, target: str, handler: Callable[[Dict[str, Any]], Any]):
+    def register_handler(self, target: str, handler: Callable[[dict[str, Any]], Any]):
         """Register a handler function for a specific target ('mammouth_web', 'mammouth_code', etc.)."""
         self._handlers[target] = handler
 
@@ -454,7 +454,7 @@ class TaskSchedulerEngine:
     def stop_background_loop(self):
         self._running = False
 
-    def check_and_run_due_tasks(self) -> List[Dict[str, Any]]:
+    def check_and_run_due_tasks(self) -> list[dict[str, Any]]:
         """Check all active tasks and execute any that are due.
 
         Serialized by a lock, and every due row is claimed atomically (compare-and-set on next_run)
@@ -467,7 +467,7 @@ class TaskSchedulerEngine:
         finally:
             self._run_lock.release()
 
-    def _check_and_run_due_tasks_locked(self) -> List[Dict[str, Any]]:
+    def _check_and_run_due_tasks_locked(self) -> list[dict[str, Any]]:
         now_dt = datetime.now()
         now_str = now_dt.isoformat()
 
@@ -560,7 +560,7 @@ class TaskSchedulerEngine:
         return executed_reports
 
 
-def scheduler_get_history(task_id: int, limit: int = 20) -> List[Dict[str, Any]]:
+def scheduler_get_history(task_id: int, limit: int = 20) -> list[dict[str, Any]]:
     """Retrieve execution history logs for a scheduled task."""
     conn = _get_db()
     try:
@@ -577,7 +577,7 @@ def scheduler_get_history(task_id: int, limit: int = 20) -> List[Dict[str, Any]]
         conn.close()
 
 
-def scheduler_test_run(task_id: int, dry_run: bool = False) -> Dict[str, Any]:
+def scheduler_test_run(task_id: int, dry_run: bool = False) -> dict[str, Any]:
     """Test run or preview a scheduled task without modifying its recurring schedule.
     
     Args:

@@ -13,7 +13,7 @@ import time
 import sqlite3
 import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger("workspace_indexer")
 
@@ -65,7 +65,7 @@ def get_index_db_path() -> Path:
     return _active_db_path
 
 
-def _get_connection(db_path: Optional[Path] = None) -> sqlite3.Connection:
+def _get_connection(db_path: Path | None = None) -> sqlite3.Connection:
     """Open SQLite connection with WAL mode and schema initialization."""
     target_path = Path(db_path or _active_db_path)
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,7 +149,7 @@ def _detect_language(filepath: Path) -> str:
     return mapping.get(ext, ext.lstrip(".") or "text")
 
 
-def _extract_python_symbols(content: str, rel_path: str) -> List[Dict[str, Any]]:
+def _extract_python_symbols(content: str, rel_path: str) -> list[dict[str, Any]]:
     """Extract classes, functions, and methods from Python code using AST."""
     symbols = []
     try:
@@ -198,7 +198,7 @@ def _extract_python_symbols(content: str, rel_path: str) -> List[Dict[str, Any]]
     return symbols
 
 
-def _extract_regex_symbols(content: str, rel_path: str) -> List[Dict[str, Any]]:
+def _extract_regex_symbols(content: str, rel_path: str) -> list[dict[str, Any]]:
     """Extract declarations from source code using regex patterns."""
     symbols = []
     lines = content.splitlines()
@@ -232,7 +232,7 @@ def _extract_regex_symbols(content: str, rel_path: str) -> List[Dict[str, Any]]:
     return symbols
 
 
-def _chunk_file_content(content: str, chunk_size: int = 60, overlap: int = 15) -> List[Dict[str, Any]]:
+def _chunk_file_content(content: str, chunk_size: int = 60, overlap: int = 15) -> list[dict[str, Any]]:
     """Split file content into overlapping chunks with line numbers for FTS5 indexing."""
     lines = content.splitlines()
     if not lines:
@@ -300,7 +300,7 @@ def workspace_index_directory(
     directory_path: str = "",
     force_reindex: bool = False,
     max_files: int = 5000
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Index or incrementally refresh files in a workspace directory for FTS5 code search and symbol lookups.
     
     Skips ignored folders (.git, node_modules, .venv, dist, build, etc.) and tracks mtime
@@ -440,7 +440,7 @@ def workspace_index_directory(
 
         # Prune deleted files that were previously indexed strictly within this directory
         with conn:
-            for old_path in existing_records.keys():
+            for old_path in existing_records:
                 if old_path not in seen_files:
                     conn.execute("DELETE FROM indexed_files WHERE file_path = ?", (old_path,))
                     conn.execute("DELETE FROM file_symbols WHERE file_path = ?", (old_path,))
@@ -448,7 +448,7 @@ def workspace_index_directory(
                     pruned_count += 1
 
         elapsed = time.time() - start_time
-        res: Dict[str, Any] = {
+        res: dict[str, Any] = {
             "status": "success",
             "directory": str(target_dir),
             "indexed_files": indexed_count,
@@ -470,7 +470,7 @@ def workspace_search(
     query: str,
     limit: int = 10,
     file_pattern: str = ""
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute high-speed full-text code search across indexed workspace files using SQLite FTS5.
 
     Args:
@@ -496,7 +496,7 @@ def workspace_search(
             FROM fts_code
             WHERE fts_code MATCH ?
         """
-        params: List[Any] = [sanitized]
+        params: list[Any] = [sanitized]
 
         if file_pattern and file_pattern.strip():
             sql += " AND file_path LIKE ?"
@@ -543,7 +543,7 @@ def workspace_find_symbols(
     symbol_type: str = "",
     file_pattern: str = "",
     limit: int = 50
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Search for declared symbols (functions, classes, methods, arrow functions) across the indexed codebase.
 
     Args:
@@ -557,7 +557,7 @@ def workspace_find_symbols(
     try:
         cur = conn.cursor()
         sql = "SELECT file_path, symbol_name, symbol_type, line_number, signature FROM file_symbols WHERE 1=1"
-        params: List[Any] = []
+        params: list[Any] = []
 
         if symbol_name and symbol_name.strip():
             sql += " AND symbol_name LIKE ?"
@@ -606,7 +606,7 @@ def workspace_find_symbols(
         conn.close()
 
 
-def workspace_get_stats() -> Dict[str, Any]:
+def workspace_get_stats() -> dict[str, Any]:
     """Retrieve statistical telemetry about the sovereign code index (file counts, symbol counts, DB size)."""
     conn = _get_connection()
     try:

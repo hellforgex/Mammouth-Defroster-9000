@@ -1,12 +1,11 @@
-import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pytest
-from config import TOOL_PROFILES, get_tool_profile
-from server import defroster_catalog, mcp
-from modules.file_ops import file_read, file_write, _validate_path
+from config import TOOL_PROFILES
+from server import defroster_catalog
+from modules.file_ops import file_read, _validate_path
 
 
 def test_mammouth_safe_has_directory_list():
@@ -14,7 +13,7 @@ def test_mammouth_safe_has_directory_list():
     safe_profile = TOOL_PROFILES["mammouth_safe"]
     assert "directory_list" in safe_profile["tools"]
     assert "file_read" in safe_profile["tools"]
-    assert safe_profile["token_estimate"] <= 3000
+    assert safe_profile["token_estimate"] <= 6000
 
 
 def test_workspace_alias_resolution_in_file_ops(tmp_path, monkeypatch):
@@ -75,6 +74,6 @@ def test_schema_budget_status_non_contradictory():
     res_dev = defroster_catalog(switch_profile="developer")
     dev_info = res_dev["active_tool_profile"]
     assert "Safe" in dev_info["schema_budget_status"]
-    assert "4,100" in dev_info["schema_budget_status"]
+    assert "6,000" in dev_info["schema_budget_status"]
     assert "7,719" in dev_info["schema_budget_status"]
     assert "< 3,000" not in dev_info["schema_budget_status"]

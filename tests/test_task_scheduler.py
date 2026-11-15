@@ -17,7 +17,6 @@ from modules.task_scheduler import (
     scheduler_delete_task,
     scheduler_pause_task,
     scheduler_resume_task,
-    scheduler_trigger_task_now,
     scheduler_get_presets,
     TaskSchedulerEngine,
     _get_db

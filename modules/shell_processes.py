@@ -7,7 +7,7 @@ import uuid
 import sys
 from collections import deque
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
 
 if getattr(sys, "frozen", False):
     BASE_DIR = Path(sys.executable).parent.resolve()
@@ -18,7 +18,7 @@ LOGS_DIR = BASE_DIR / "process_logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
 # In-memory registry of background processes
-BACKGROUND_PROCESSES: Dict[str, Dict[str, Any]] = {}
+BACKGROUND_PROCESSES: dict[str, dict[str, Any]] = {}
 MAX_BACKGROUND_PROCESSES = 10
 
 # Prohibited destructive / high-risk commands for shell safety
@@ -146,7 +146,7 @@ def _kill_process_tree(proc: subprocess.Popen) -> None:
         pass
 
 
-def run_process_tree(args: List[str], cwd: Optional[str], timeout: float, encoding: str = "utf-8") -> tuple:
+def run_process_tree(args: list[str], cwd: str | None, timeout: float, encoding: str = "utf-8") -> tuple:
     """Run a command and capture output; on timeout the whole process tree is killed.
 
     subprocess.run() only kills the direct child on timeout, so a grandchild holding the
@@ -176,7 +176,7 @@ def run_process_tree(args: List[str], cwd: Optional[str], timeout: float, encodi
     return stdout, stderr, proc.returncode
 
 
-def _check_readonly_path_guard(raw_cmd: str, cwd: Optional[str] = None) -> None:
+def _check_readonly_path_guard(raw_cmd: str, cwd: str | None = None) -> None:
     """R7-N1 & R7-N2: Enforce path extraction, resolution against workspace sandbox, and root-recurse blocking."""
     # 1. Regex check on raw command for sensitive credential/configuration names
     for pat in SENSITIVE_PATH_DENYLIST_PATTERNS:
@@ -338,7 +338,7 @@ def _is_admin_shell_allowed() -> bool:
         return False
 
 
-def _validate_shell_command(command: str, allow_admin: Optional[bool] = None, cwd: Optional[str] = None) -> str:
+def _validate_shell_command(command: str, allow_admin: bool | None = None, cwd: str | None = None) -> str:
     """Validate shell command against dangerous patterns and read-only allowlist."""
     clean = str(command).strip()
     clean = _unwrap_powershell_wrapper(clean)
@@ -424,7 +424,7 @@ def _validate_shell_command(command: str, allow_admin: Optional[bool] = None, cw
     return clean
 
 
-def _resolve_work_dir(cwd: Optional[str], working_directory: Optional[str]) -> str:
+def _resolve_work_dir(cwd: str | None, working_directory: str | None) -> str:
     work_dir = cwd if cwd and os.path.exists(cwd) else working_directory
     if not work_dir or not os.path.exists(work_dir):
         work_dir = "C:\\" if os.path.exists("C:\\") else os.getcwd()
@@ -451,9 +451,9 @@ def _prune_finished_background_processes() -> None:
 def powershell_exec(
     command: str,
     working_directory: str = "C:\\",
-    cwd: Optional[str] = None,
+    cwd: str | None = None,
     timeout_seconds: int = 120
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute a PowerShell command on the Windows host and return stdout, stderr, and exit_code.
     
     Args:
@@ -522,9 +522,9 @@ def powershell_exec(
 def cmd_exec(
     command: str,
     working_directory: str = "C:\\",
-    cwd: Optional[str] = None,
+    cwd: str | None = None,
     timeout_seconds: int = 120
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute a Windows Command Prompt (CMD) command and return stdout, stderr, and exit_code.
     
     Args:
@@ -592,7 +592,7 @@ def cmd_exec(
         }
 
 
-def command_run(command: str, cwd: Optional[str] = None, timeout_seconds: int = 60) -> Dict[str, Any]:
+def command_run(command: str, cwd: str | None = None, timeout_seconds: int = 60) -> dict[str, Any]:
     """Execute a local PowerShell command synchronously (backward-compatible alias for powershell_exec)."""
     return powershell_exec(command=command, working_directory=cwd or "C:\\", cwd=cwd, timeout_seconds=timeout_seconds)
 
@@ -600,9 +600,9 @@ def command_run(command: str, cwd: Optional[str] = None, timeout_seconds: int = 
 def process_spawn(
     command: str,
     working_directory: str = "C:\\",
-    cwd: Optional[str] = None,
-    name: Optional[str] = None
-) -> Dict[str, Any]:
+    cwd: str | None = None,
+    name: str | None = None
+) -> dict[str, Any]:
     """Spawn a detached background process on the Windows host and track it.
     
     Args:
@@ -666,7 +666,7 @@ def process_spawn(
         return {"error": f"Failed to spawn background process: {e}"}
 
 
-def process_start_background(command: str, cwd: Optional[str] = None, name: Optional[str] = None) -> Dict[str, Any]:
+def process_start_background(command: str, cwd: str | None = None, name: str | None = None) -> dict[str, Any]:
     """Start a long-running process in the background (backward-compatible alias for process_spawn)."""
     res = process_spawn(command=command, working_directory=cwd or "C:\\", cwd=cwd, name=name)
     if "status" in res and res["status"] == "started":
@@ -674,7 +674,7 @@ def process_start_background(command: str, cwd: Optional[str] = None, name: Opti
     return res
 
 
-def process_list_background() -> List[Dict[str, Any]]:
+def process_list_background() -> list[dict[str, Any]]:
     """List all running and finished background processes managed by the MCP server."""
     result = []
     for tid, info in list(BACKGROUND_PROCESSES.items()):
@@ -693,7 +693,7 @@ def process_list_background() -> List[Dict[str, Any]]:
     return result
 
 
-def process_get_output(task_id: str, tail_lines: int = 100) -> Dict[str, Any]:
+def process_get_output(task_id: str, tail_lines: int = 100) -> dict[str, Any]:
     """Retrieve output log content from a background task."""
     if task_id not in BACKGROUND_PROCESSES:
         return {"error": f"Task '{task_id}' not found."}
@@ -703,7 +703,7 @@ def process_get_output(task_id: str, tail_lines: int = 100) -> Dict[str, Any]:
         return {"output": "", "status": "no log file found"}
     
     try:
-        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(log_path, encoding="utf-8", errors="replace") as f:
             tail = deque(f, maxlen=max(1, int(tail_lines)))
         proc = BACKGROUND_PROCESSES[task_id]["proc"]
         poll = proc.poll()
@@ -716,7 +716,7 @@ def process_get_output(task_id: str, tail_lines: int = 100) -> Dict[str, Any]:
         return {"error": f"Failed to read process log: {e}"}
 
 
-def process_kill_background(task_id: str) -> Dict[str, Any]:
+def process_kill_background(task_id: str) -> dict[str, Any]:
     """Terminate a running background process."""
     if task_id not in BACKGROUND_PROCESSES:
         return {"status": "error", "error_code": "ERR_TASK_NOT_FOUND", "error": f"Task '{task_id}' not found."}
@@ -731,7 +731,7 @@ def process_kill_background(task_id: str) -> Dict[str, Any]:
         return {"status": "error", "error_code": "ERR_PROCESS_KILL_FAILED", "error": f"Failed to kill process: {e}"}
 
 
-def process_cancel(task_id: str) -> Dict[str, Any]:
+def process_cancel(task_id: str) -> dict[str, Any]:
     """Cancel and terminate a running background process with standardized status."""
     res = process_kill_background(task_id)
     if res.get("status") == "terminated":
@@ -739,7 +739,7 @@ def process_cancel(task_id: str) -> Dict[str, Any]:
     return res
 
 
-def process_tail_output(task_id: str, line_offset: int = 0, max_lines: int = 200) -> Dict[str, Any]:
+def process_tail_output(task_id: str, line_offset: int = 0, max_lines: int = 200) -> dict[str, Any]:
     """Retrieve output log content from a background task with line offset and pagination.
     
     Args:
@@ -763,7 +763,7 @@ def process_tail_output(task_id: str, line_offset: int = 0, max_lines: int = 200
         }
 
     try:
-        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(log_path, encoding="utf-8", errors="replace") as f:
             all_lines = f.readlines()
         
         total = len(all_lines)
@@ -784,7 +784,7 @@ def process_tail_output(task_id: str, line_offset: int = 0, max_lines: int = 200
         return {"status": "error", "error_code": "ERR_LOG_READ_FAILED", "error": f"Failed to read process log: {e}"}
 
 
-def desktop_open(target: str, arguments: Optional[str] = None) -> Dict[str, Any]:
+def desktop_open(target: str, arguments: str | None = None) -> dict[str, Any]:
     """Open a URL in the default browser, or launch a file/application on the active Windows desktop.
     
     Uses Windows ShellExecute (equivalent to double-clicking in File Explorer or running via Start Menu).

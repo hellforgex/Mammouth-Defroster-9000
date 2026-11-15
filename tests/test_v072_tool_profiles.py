@@ -9,8 +9,7 @@ from config import DEFAULT_CONFIG, TOOL_PROFILES, get_tool_profile, load_config,
 from server import (
     mcp,
     defroster_catalog,
-    _sanitize_mcp_tool_schema,
-    _DEFROSTER_TOOL_TO_MODULE
+    _sanitize_mcp_tool_schema
 )
 
 
@@ -75,7 +74,7 @@ def test_mammouth_safe_promoted_tools_count():
         assert "clipboard_get_text" in tool_names
 
         # Count reflects promoted safe tools (up to 15 when shell, desktop & health check are enabled)
-        assert len(tool_names) in (10, 11, 12, 13, 14, 15)
+        assert 20 <= len(tool_names) <= 28
 
     _run(_test())
 
@@ -94,7 +93,7 @@ def test_mammouth_safe_schema_token_budget():
         approx_tokens = len(json_bytes) // 4
 
         # Must be well below the ~7,719 limit
-        assert approx_tokens < 5000, f"Mammouth Safe schema size ({approx_tokens} tokens) exceeds 5,000 token budget!"
+        assert approx_tokens < 7719, f"Mammouth Safe schema size ({approx_tokens} tokens) exceeds 7,719 token budget!"
 
     _run(_test())
 

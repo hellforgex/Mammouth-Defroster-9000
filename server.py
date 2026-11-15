@@ -9,7 +9,8 @@ import re
 import time
 import hashlib
 from pathlib import Path
-from typing import Optional, AsyncGenerator, Any, Dict, List
+from typing import Any
+from collections.abc import AsyncGenerator
 
 import asyncio
 import base64
@@ -18,17 +19,15 @@ import sqlite3
 
 logger = logging.getLogger("mammouth.server")
 import urllib.parse
-from urllib.parse import parse_qs, urlencode, quote
 import subprocess
 import threading
 import uvicorn
 from contextlib import asynccontextmanager
-from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, HTMLResponse, RedirectResponse
-from starlette.routing import Route, Mount
+from starlette.routing import Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 from mcp.server.sse import SseServerTransport
 from mcp.server.transport_security import TransportSecuritySettings
@@ -64,7 +63,7 @@ except ImportError:
             create_base_app
         )
 
-from config import load_config, save_config, _encrypt_dpapi, _decrypt_dpapi, TOOL_PROFILES, get_tool_profile
+from config import load_config, save_config, _encrypt_dpapi, _decrypt_dpapi, TOOL_PROFILES
 
 # Import modular capabilities
 from modules.memory import memory_save, memory_recall, memory_get, memory_delete, memory_list
@@ -173,16 +172,13 @@ from modules.claude_code import (
 from modules.task_scheduler import (
     scheduler_create_task,
     scheduler_list_tasks,
-    scheduler_get_task,
     scheduler_update_task,
     scheduler_delete_task,
     scheduler_pause_task,
     scheduler_resume_task,
     scheduler_trigger_task_now,
     scheduler_get_presets,
-    scheduler_get_history,
-    scheduler_test_run,
-    TaskSchedulerEngine
+    scheduler_get_history
 )
 from modules.google_drive import (
     gdrive_status,
@@ -202,10 +198,23 @@ from modules.google_drive import (
 # Initialize FastMCP Server with Mammouth Defroster 9000, Mammouth Code & Google Drive capabilities
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
-    instructions="""Mammouth Defroster 9000 (v0.7.4): Sovereign Windows Cockpit & Tool Hub for Mammouth.ai.
-Core Tool Hub: Call 'defroster_catalog' to discover tools across categories (files, shell, browser, screen, desktop, system, scheduler, gdrive, clipboard, memory, claude).
-Dynamic Tooling: Write scripts via 'file_write' and run locally via 'powershell_exec' ($0 cost). Do not use 'mammouth_code_run_task' for local scripts.
-Always prioritize safety, sandboxing, and precision."""
+    instructions="""Mammouth Defroster 9000 (v0.7.5): Sovereign Windows Cockpit & Tool Hub for Mammouth.ai.
+All 86+ Windows tools are immediately discoverable and executable without manual profile switching:
+- Shell & Scripting: 'powershell_exec', 'command_run', 'desktop_open'
+- Files & Sandboxing: 'file_read', 'file_write', 'directory_list', 'file_search_text', 'file_replace_chunk'
+- Desktop Vision: 'screen_capture', 'screen_capture_active_window', 'screen_list_windows'
+- Desktop Automation: 'mouse_click', 'mouse_move', 'keyboard_type', 'keyboard_hotkey', 'desktop_get_screen_info'
+- Browser (Playwright): 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_screenshot'
+- Diagnostics & System: 'system_get_specs', 'system_get_processes'
+- Memory & Clipboard: 'memory_save', 'memory_recall', 'clipboard_get_text', 'clipboard_set_text'
+- Cloud & Scheduling: Google Drive ('gdrive_*'), Task Scheduler ('task_schedule_*'), Claude Code ('claude_code_*')
+
+UNIVERSAL TOOL EXECUTION:
+1. Promoted tools can be invoked directly by name.
+2. Tools within your active profile can also be executed on demand via:
+   defroster_execute_tool(tool_name="<name>", arguments={...})
+3. Call 'defroster_catalog' to inspect categories, search tools, or switch profiles via defroster_catalog(switch_profile="<name>").
+Write scripts via 'file_write' and execute them locally via 'powershell_exec' ($0 cost). Safety, sandboxing, and precision are always prioritized."""
 )
 
 
@@ -380,7 +389,7 @@ def task_schedule_create(
     repeat_count: int = 0,
     target: str = "mammouth_web",
     start_immediately: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Schedule an automated recurring task to be triggered in the Defroster GUI.
     
     Args:
@@ -404,12 +413,12 @@ def task_schedule_create(
     )
 
 
-def task_schedule_list(status: Optional[str] = None) -> List[Dict[str, Any]]:
+def task_schedule_list(status: str | None = None) -> list[dict[str, Any]]:
     """List all scheduled automation tasks (active, paused, completed)."""
     return scheduler_list_tasks(status=status)
 
 
-def task_schedule_control(task_id: int, action: str) -> Dict[str, Any]:
+def task_schedule_control(task_id: int, action: str) -> dict[str, Any]:
     """Control a scheduled task (pause, resume, trigger, test_run, preview, history, stop).
     
     Args:
@@ -437,14 +446,13 @@ def task_schedule_control(task_id: int, action: str) -> Dict[str, Any]:
     return {"error": f"Unknown action '{action}'. Valid: 'pause', 'resume', 'trigger', 'stop', 'test_run', 'dry_run', 'history'"}
 
 
-def task_schedule_get_history(task_id: int, limit: int = 20) -> List[Dict[str, Any]]:
+def task_schedule_get_history(task_id: int, limit: int = 20) -> list[dict[str, Any]]:
     """Get past execution runs and logs for a scheduled task.
     
     Args:
         task_id: ID of the scheduled task.
         limit: Maximum number of execution records to return (default 20).
     """
-    from modules.task_scheduler import scheduler_get_history
     return scheduler_get_history(task_id=task_id, limit=limit)
 
 
@@ -453,13 +461,13 @@ def task_schedule_delete(task_id: int) -> str:
     return scheduler_delete_task(task_id)
 
 
-def task_schedule_get_presets() -> List[Dict[str, Any]]:
+def task_schedule_get_presets() -> list[dict[str, Any]]:
     """Get available pre-configured task templates (e.g. football live ticker, crypto prices, system health)."""
     return scheduler_get_presets()
 
 
 
-_DEFROSTER_MODULE_CATALOG: Dict[str, Dict[str, Any]] = {
+_DEFROSTER_MODULE_CATALOG: dict[str, dict[str, Any]] = {
     "files": {
         "module": "file_ops",
         "title": "File Operations & Workspace Sandbox",
@@ -603,7 +611,7 @@ _DEFROSTER_MODULE_CATALOG: Dict[str, Dict[str, Any]] = {
 
 
 
-def defroster_health_check() -> Dict[str, Any]:
+def defroster_health_check() -> dict[str, Any]:
     """Execute read-only self-test and dependency probe (Python, DPAPI, databases, PowerShell, sandbox)."""
     t0 = time.perf_counter()
     cfg = load_config()
@@ -666,7 +674,7 @@ def defroster_health_check() -> Dict[str, Any]:
     # 4. Dependencies
     playwright_installed = False
     try:
-        import playwright
+        import playwright  # noqa: F401
         playwright_installed = True
     except ImportError:
         pass
@@ -718,7 +726,7 @@ def defroster_health_check() -> Dict[str, Any]:
     }
 
 
-def _extract_tool_schema_def(tool_name: str) -> Optional[Dict[str, Any]]:
+def _extract_tool_schema_def(tool_name: str) -> dict[str, Any] | None:
     """Extract registered parameter schema for a tool synchronously from local_provider components."""
     try:
         if hasattr(mcp, "local_provider") and hasattr(mcp.local_provider, "_components"):
@@ -736,14 +744,14 @@ def _extract_tool_schema_def(tool_name: str) -> Optional[Dict[str, Any]]:
 
 
 def defroster_catalog(
-    category: Optional[str] = None,
-    search: Optional[str] = None,
-    switch_profile: Optional[str] = None,
-    tool_schema: Optional[str] = None,
+    category: str | None = None,
+    search: str | None = None,
+    switch_profile: str | None = None,
+    tool_schema: str | None = None,
     include_schemas: bool = False,
     detailed: bool = False,
-    ctx: Optional[Context] = None
-) -> Dict[str, Any]:
+    ctx: Context | None = None
+) -> dict[str, Any]:
     """Mammouth Defroster Core Skill Directory & Capability Router (defrost / defroster main hub).
 
     Lists Defroster tools by category, reports active tool profile, promoted tools, and schemas.
@@ -784,7 +792,7 @@ def defroster_catalog(
 
     active_profile_key = str(cfg.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
     profile_info = TOOL_PROFILES.get(active_profile_key, TOOL_PROFILES["mammouth_safe"])
-    promoted_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check"}
+    promoted_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check", "defroster_execute_tool"}
     mods = cfg.get("modules", {})
 
     # Single tool schema request (on-demand machine-readable inspection)
@@ -820,6 +828,7 @@ def defroster_catalog(
             "module_enabled": is_mod_enabled,
             "requirements": reqs,
             "recommended_profile": rec_prof or "all",
+            "execution_syntax": f"defroster_execute_tool(tool_name='{target_tool}', arguments={{...}})",
             "schema": schema_def or {"error": f"Tool '{target_tool}' schema not found or not registered."}
         }
 
@@ -830,7 +839,7 @@ def defroster_catalog(
     is_search = bool(search_term)
     include_tool_details = is_filtered_category or is_search or bool(detailed)
 
-    filtered_categories: Dict[str, Any] = {}
+    filtered_categories: dict[str, Any] = {}
     total_catalog_count = 0
     activated_in_config_count = 0
 
@@ -879,7 +888,7 @@ def defroster_catalog(
             else:
                 tools_repr = [{"name": t["name"]} for t in matched_tools]
 
-            cat_dict: Dict[str, Any] = {
+            cat_dict: dict[str, Any] = {
                 "title": cat_data["title"],
                 "module_name": mod_name,
                 "module_enabled": mod_enabled,
@@ -902,7 +911,6 @@ def defroster_catalog(
         budget_status = f"Warning (~{token_est:,} / {MAX_SCHEMA_BUDGET:,} tokens - exceeds platform limit, promotion may fail)"
 
     # Three-Tier tool metrics
-    loaded_tools_list = [t for t in promoted_names if t != "*"] if active_profile_key != "all" else ["all"]
     loaded_tools_count = len(promoted_names) if active_profile_key != "all" else activated_in_config_count
 
     res = {
@@ -924,20 +932,99 @@ def defroster_catalog(
         "total_categories": len(filtered_categories),
         "available_categories": list(_DEFROSTER_MODULE_CATALOG.keys()),
         "categories": filtered_categories,
-        "dynamic_tooling_advice": "Execute scripts via powershell_exec or command_run ($0 cost, local)."
+        "execution_guidance": "Execute tools in the active profile directly or via 'defroster_execute_tool(tool_name, arguments)'. Switch profiles with 'defroster_catalog(switch_profile=\"<name>\")'.",
+        "dynamic_tooling_advice": "Run local scripts via powershell_exec ($0 cost)."
     }
     if not include_tool_details and not include_schemas:
-        res["hint"] = "Compact overview shown for Mammouth token safety. Call defroster_catalog(tool_schema='<name>') for machine-readable parameter schema, or defroster_catalog(category='<name>', include_schemas=True)."
+        res["hint"] = "Execute tools in your active profile via defroster_execute_tool(tool_name='<name>', arguments={...}). Call defroster_catalog(tool_schema='<name>') for schemas."
     if profile_switch_msg:
         res["profile_switch_status"] = profile_switch_msg
     if tools_auto_refreshed:
         res["tools_auto_refreshed"] = True
     return res
 
+async def defroster_execute_tool(
+    tool_name: str,
+    arguments: dict[str, Any] | None = None,
+    ctx: Context | None = None
+) -> dict[str, Any]:
+    """Execute a tool from the active Mammouth Defroster profile on demand.
+
+    Args:
+        tool_name: Name of the Defroster tool to execute (e.g. 'desktop_get_screen_info', 'system_get_specs').
+        arguments: Key-value dictionary of arguments for the tool (e.g. {'x': 100, 'y': 200}).
+    """
+    if not tool_name or not isinstance(tool_name, str):
+        return {"status": "error", "error": "Invalid or missing 'tool_name' parameter."}
+
+    t_name = tool_name.strip()
+    if t_name in ("defroster_execute_tool", "defroster_call_tool"):
+        return {"status": "error", "error": "Cannot execute execution meta-tool recursively."}
+
+    args = arguments if isinstance(arguments, dict) else {}
+
+    cfg = load_config()
+    server_cfg = cfg.get("server", {})
+    profile_key = str(server_cfg.get("tool_profile", "mammouth_safe")).strip().lower()
+    mods = cfg.get("modules", {})
+
+    # 1. Enforce active profile allowlist
+    if profile_key == "all":
+        is_profile_allowed = True
+    elif profile_key == "custom":
+        mod = _DEFROSTER_TOOL_TO_MODULE.get(t_name, "")
+        is_profile_allowed = t_name in ("defroster_catalog", "defroster_health_check") or mods.get(mod, {}).get("enabled", True)
+    else:
+        profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES.get("mammouth_safe", {}))
+        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check"}
+        is_profile_allowed = t_name in allowed_names
+
+    if not is_profile_allowed:
+        return {
+            "status": "error",
+            "tool": t_name,
+            "error": "tool not in active profile"
+        }
+
+    # 2. Enforce module enabled status
+    mod_name = _DEFROSTER_TOOL_TO_MODULE.get(t_name)
+    if mod_name and mod_name != "core":
+        if not mods.get(mod_name, {}).get("enabled", True):
+            return {
+                "status": "error",
+                "tool": t_name,
+                "error": f"Module '{mod_name}' for tool '{t_name}' is currently disabled in Defroster settings."
+            }
+
+    try:
+        call_res = await mcp.call_tool(t_name, args)
+        if hasattr(call_res, "is_error") and call_res.is_error:
+            err_msg = ""
+            if hasattr(call_res, "content") and call_res.content:
+                err_msg = "\n".join(getattr(c, "text", str(c)) for c in call_res.content)
+            return {"status": "error", "tool": t_name, "error": err_msg or "Tool execution reported error."}
+
+        if hasattr(call_res, "structured_content") and call_res.structured_content is not None:
+            return {"status": "success", "tool": t_name, "result": call_res.structured_content}
+
+        if hasattr(call_res, "content") and call_res.content:
+            raw_text = "\n".join(getattr(c, "text", str(c)) for c in call_res.content)
+            try:
+                parsed_json = json.loads(raw_text)
+                return {"status": "success", "tool": t_name, "result": parsed_json}
+            except Exception:
+                return {"status": "success", "tool": t_name, "result": raw_text}
+
+        return {"status": "success", "tool": t_name, "result": str(call_res)}
+    except Exception as err:
+        return {"status": "error", "tool": t_name, "error": f"Execution failed: {err}"}
+
+
 def register_active_tools():
     """Register tools dynamically based on enabled modules in config.json."""
     mcp.tool()(defroster_catalog)
     mcp.tool()(defroster_health_check)
+    mcp.tool()(defroster_execute_tool)
     cfg = load_config()
     mods = cfg.get("modules", {})
 
@@ -1085,9 +1172,10 @@ register_active_tools()
 # TOOL PROFILING & SCHEMA BUDGET MANAGEMENT
 # ==========================================
 
-_DEFROSTER_TOOL_TO_MODULE: Dict[str, str] = {
+_DEFROSTER_TOOL_TO_MODULE: dict[str, str] = {
     "defroster_catalog": "core",
     "defroster_health_check": "core",
+    "defroster_execute_tool": "core",
     "process_cancel": "shell_processes",
     "process_tail_output": "shell_processes",
     "task_schedule_get_history": "task_scheduler",
@@ -1110,7 +1198,7 @@ _DEFROSTER_TOOL_TO_MODULE: Dict[str, str] = {
 }
 
 
-def _sanitize_schema_dict(schema: Dict[str, Any]) -> None:
+def _sanitize_schema_dict(schema: dict[str, Any]) -> None:
     """Recursively repair OpenAPI/JSON schema dictionary."""
     if not isinstance(schema, dict):
         return
@@ -1149,10 +1237,12 @@ def _sanitize_schema_dict(schema: Dict[str, Any]) -> None:
             prop_val["type"] = "string"
 
 
-_MULTILINGUAL_TOOL_HINTS: Dict[str, str] = {
+_MULTILINGUAL_TOOL_HINTS: dict[str, str] = {
     # Core & Catalog
     "defroster_catalog": "Tool-Katalog, Werkzeuge auflisten, Profil wechseln, catalogue outils, list tools",
     "defroster_health_check": "Selbsttest, Systemdiagnose, Gesundheitsprüfung, Abhängigkeiten prüfen, self test, health check, diagnostics",
+    "defroster_execute_tool": "Werkzeug ausführen, Tool aufrufen, Screen-Capture ausführen, Klick ausführen, Tastatur tippen, Desktop steuern, execute tool, call tool, run defroster tool, invoke tool",
+    "desktop_get_screen_info": "Bildschirmauflösung abrufen, Monitorgröße ermitteln, screen info, display resolution",
     "process_cancel": "Prozess abbrechen, Hintergrundprozess stoppen, cancel process, abort task",
     "process_tail_output": "Prozess-Logs lesen, Ausgabe paginieren, tail output, read log lines",
     "task_schedule_get_history": "Ausführungsprotokoll, Aufgabenhistorie, Task-Logs, execution history, run logs",
@@ -1263,7 +1353,7 @@ def _sanitize_mcp_tool_schema(tool: Any) -> None:
     if not hasattr(tool, "output_schema"):
         if "outputSchema" in getattr(tool, "__dict__", {}) or "outputSchema" in getattr(type(tool), "model_fields", {}):
             try:
-                setattr(tool, "outputSchema", None)
+                tool.outputSchema = None
             except Exception:
                 pass
     # Multilingual Keyword Enrichment (DE / FR / EN) for Mammouth AI and international clients
@@ -1275,7 +1365,7 @@ def _sanitize_mcp_tool_schema(tool: Any) -> None:
         if marker not in desc:
             new_desc = f"{desc}\n{marker} {hint}]" if desc else f"{marker} {hint}]"
             try:
-                setattr(tool, "description", new_desc)
+                tool.description = new_desc
             except Exception:
                 pass
 
@@ -1299,7 +1389,7 @@ async def _profile_filtered_list_tools(*args, **kwargs) -> Any:
         ]
     else:
         profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
-        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check"}
+        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check", "defroster_execute_tool"}
         filtered_tools = [t for t in tools if t.name in allowed_names]
 
     # Sanitize each tool schema
@@ -1328,7 +1418,7 @@ if hasattr(mcp, "_list_tools_mcp"):
                 ]
             else:
                 profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
-                allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check"}
+                allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check", "defroster_execute_tool"}
                 result.tools = [t for t in result.tools if t.name in allowed_names]
         for tool in result.tools:
             _sanitize_mcp_tool_schema(tool)
@@ -1337,8 +1427,8 @@ if hasattr(mcp, "_list_tools_mcp"):
     mcp._list_tools_mcp = _profile_filtered_list_tools_mcp
 
 _ACTIVE_MCP_SESSIONS = set()
-_SERVER_EVENT_LOOP: Optional[asyncio.AbstractEventLoop] = None
-_AUTHENTICATED_SSE_SESSIONS: Dict[str, float] = {}
+_SERVER_EVENT_LOOP: asyncio.AbstractEventLoop | None = None
+_AUTHENTICATED_SSE_SESSIONS: dict[str, float] = {}
 _SSE_SESSION_LOCK = threading.Lock()
 
 def record_authenticated_sse_session(session_id: str, ttl_seconds: float = 86400.0) -> None:
@@ -1465,7 +1555,7 @@ if hasattr(mcp, "_mcp_server"):
                         ]
                     else:
                         profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES["mammouth_safe"])
-                        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check"}
+                        allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check", "defroster_execute_tool"}
                         filtered = [t for t in tools_list if getattr(t, "name", "") in allowed_names]
 
                     for tool in filtered:
@@ -1528,7 +1618,7 @@ if hasattr(mcp, "_mcp_server"):
 # Persistent log path for server operations
 log_path = BASE_DIR / "server.log"
 
-_failed_ip_attempts: Dict[str, Dict[str, Any]] = {}
+_failed_ip_attempts: dict[str, dict[str, Any]] = {}
 MAX_LOCKOUT_ENTRIES = 1000
 
 
@@ -1590,7 +1680,7 @@ def _record_successful_auth(client_ip: str) -> None:
 _LOOPBACK_PEERS = ("127.0.0.1", "::1", "localhost")
 
 
-def _resolve_client_ip(peer_ip: str, header_map: Dict[str, str]) -> str:
+def _resolve_client_ip(peer_ip: str, header_map: dict[str, str]) -> str:
     """Determine the real client IP behind a local tunnel (cloudflared, Tailscale Funnel, ngrok).
 
     Only a loopback peer (the local tunnel process) is trusted to supply forwarding headers.
@@ -1623,11 +1713,11 @@ def _request_client_ip(request: Request) -> str:
 
 # F-01 Fix: In-memory CSRF token store for OAuth consent flow (token → {params, expires_at})
 import threading
-_oauth_csrf_tokens: Dict[str, Dict[str, Any]] = {}
+_oauth_csrf_tokens: dict[str, dict[str, Any]] = {}
 _oauth_csrf_lock = threading.Lock()
 _OAUTH_CSRF_TTL = 600  # 10 minutes
 
-def _create_oauth_csrf_token(params: Dict[str, str]) -> str:
+def _create_oauth_csrf_token(params: dict[str, str]) -> str:
     """Generate a cryptographic CSRF token bound to specific authorization request parameters."""
     csrf_token = secrets.token_urlsafe(32)
     now = time.time()
@@ -1642,7 +1732,7 @@ def _create_oauth_csrf_token(params: Dict[str, str]) -> str:
         }
     return csrf_token
 
-def _consume_oauth_csrf_token(csrf_token: str) -> Optional[Dict[str, str]]:
+def _consume_oauth_csrf_token(csrf_token: str) -> dict[str, str] | None:
     """Validate and consume a CSRF token. Returns bound params if valid, None otherwise."""
     if not csrf_token:
         return None
@@ -1775,7 +1865,7 @@ def _init_oauth_db():
 _init_oauth_db()
 
 # H-1: Rate limiting for OAuth dynamic client registration
-_oauth_register_attempts: Dict[str, List[float]] = {}
+_oauth_register_attempts: dict[str, list[float]] = {}
 OAUTH_REGISTER_MAX_PER_HOUR = 5
 
 def _check_oauth_register_rate_limit(client_ip: str) -> bool:
@@ -1809,9 +1899,9 @@ def _cleanup_expired_oauth_entries():
             )
             conn.commit()
     except Exception:
-        pass
+        logger.warning("OAuth cleanup of expired entries failed", exc_info=True)
 
-def _save_oauth_client(client_id: str, client_secret: str, client_name: str, redirect_uris: List[str]):
+def _save_oauth_client(client_id: str, client_secret: str, client_name: str, redirect_uris: list[str]):
     now = time.time()
     with sqlite3.connect(OAUTH_DB_PATH) as conn:
         conn.execute(
@@ -1821,7 +1911,7 @@ def _save_oauth_client(client_id: str, client_secret: str, client_name: str, red
         conn.commit()
 
 
-def _get_oauth_client(client_id: str) -> Optional[Dict[str, Any]]:
+def _get_oauth_client(client_id: str) -> dict[str, Any] | None:
     with sqlite3.connect(OAUTH_DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -1846,7 +1936,7 @@ def _save_oauth_code(code: str, client_id: str, redirect_uri: str, code_challeng
         conn.commit()
 
 
-def _get_and_consume_oauth_code(code: str) -> Optional[Dict[str, Any]]:
+def _get_and_consume_oauth_code(code: str) -> dict[str, Any] | None:
     now = time.time()
     with sqlite3.connect(OAUTH_DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
@@ -1880,7 +1970,7 @@ def _save_oauth_token(access_token: str, refresh_token: str, client_id: str, exp
 
 # Short-lived in-memory cache of validated access tokens (hash -> expires_at) so steady MCP
 # traffic does not hit SQLite on every request. Entries are re-checked against the DB after 60s.
-_valid_token_cache: Dict[str, float] = {}
+_valid_token_cache: dict[str, float] = {}
 _valid_token_cache_lock = threading.Lock()
 _VALID_TOKEN_CACHE_TTL = 60.0
 
@@ -1911,7 +2001,7 @@ def _is_valid_oauth_token(token: str) -> bool:
     return True
 
 
-def _refresh_oauth_token(refresh_token: str) -> Optional[Dict[str, Any]]:
+def _refresh_oauth_token(refresh_token: str) -> dict[str, Any] | None:
     if not refresh_token:
         return None
     now = time.time()
@@ -1970,7 +2060,7 @@ def _verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") 
     return False
 
 
-def _resolve_base_url(header_map: Dict[str, str], default_scheme: str = "http", default_host: str = "127.0.0.1:8000") -> str:
+def _resolve_base_url(header_map: dict[str, str], default_scheme: str = "http", default_host: str = "127.0.0.1:8000") -> str:
     cfg = load_config()
     server_cfg = cfg.get("server", {})
     custom = (
@@ -1985,9 +2075,7 @@ def _resolve_base_url(header_map: Dict[str, str], default_scheme: str = "http", 
     raw_proto = header_map.get("x-forwarded-proto", "")
     proto = raw_proto.split(",")[0].strip() if raw_proto else ""
     if not proto:
-        if header_map.get("x-forwarded-ssl", "").lower() == "on" or header_map.get("front-end-https", "").lower() == "on":
-            proto = "https"
-        elif any(dom in host for dom in (".ts.net", ".trycloudflare.com", ".serveousercontent.com", "ngrok")):
+        if header_map.get("x-forwarded-ssl", "").lower() == "on" or header_map.get("front-end-https", "").lower() == "on" or any(dom in host for dom in (".ts.net", ".trycloudflare.com", ".serveousercontent.com", "ngrok")):
             proto = "https"
         else:
             proto = default_scheme
@@ -2129,7 +2217,7 @@ async def oauth_register(request: Request):
 
     now = time.time()
     req_scope = str(body.get("scope", "mcp")).strip() or "mcp"
-    resp_data: Dict[str, Any] = {
+    resp_data: dict[str, Any] = {
         "client_id": client_id,
         "client_id_issued_at": int(now),
         "client_name": client_name,
@@ -2146,7 +2234,7 @@ async def oauth_register(request: Request):
 
 
 
-def _render_consent_page(request: Request, client_name: str, params: Dict[str, str], error_msg: str = "") -> HTMLResponse:
+def _render_consent_page(request: Request, client_name: str, params: dict[str, str], error_msg: str = "") -> HTMLResponse:
     """Render the OAuth consent page with a fresh CSRF token bound to the authorization parameters."""
     csrf_token = _create_oauth_csrf_token(dict(params))
     error_html = f'<div class="error-box">{html.escape(error_msg)}</div>' if error_msg else ""
@@ -2439,7 +2527,7 @@ async def oauth_authorize(request: Request):
 
 async def oauth_token(request: Request):
     content_type = request.headers.get("content-type", "")
-    body: Dict[str, Any] = {}
+    body: dict[str, Any] = {}
     if "application/json" in content_type:
         try:
             body = await request.json()
@@ -2464,7 +2552,7 @@ async def oauth_token(request: Request):
                 if not body.get("client_secret"):
                     body["client_secret"] = basic_csec
         except Exception:
-            pass
+            logger.debug("Ignoring malformed HTTP Basic credentials on /oauth/token", exc_info=True)
 
 
     grant_type = body.get("grant_type", "")
@@ -2539,13 +2627,69 @@ async def oauth_token(request: Request):
     return JSONResponse({"error": "unsupported_grant_type", "error_description": f"Grant type '{grant_type}' not supported"}, status_code=400)
 
 
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://mammouth.ai",
+    "https://app.mammouth.ai",
+    "https://claude.ai",
+    "https://code.claude.ai",
+    "https://app.claude.ai",
+    "https://claude.com",
+    "https://www.claude.ai",
+    "https://www.claude.com",
+    "https://console.anthropic.com",
+    "http://localhost",
+    "http://127.0.0.1",
+    "http://localhost:3000",
+    "http://localhost:8000"
+]
+DEFAULT_ALLOW_ORIGIN_REGEX = r"^https://([a-zA-Z0-9.-]+\.)?(mammouth\.ai|claude\.ai|anthropic\.com|claude\.com)$|^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+
+
+def is_allowed_origin(
+    origin: str,
+    allowed_origins: list[str] | None = None,
+    allow_origin_regex: str | None = None
+) -> bool:
+    """Check if an Origin header is permitted under allowed_origins or allow_origin_regex."""
+    if not origin or not isinstance(origin, str):
+        return False
+    clean_origin = origin.strip()
+    if not clean_origin or clean_origin == "*":
+        return False
+    if allowed_origins is None:
+        try:
+            cfg = load_config()
+            allowed_origins = cfg.get("server", {}).get("allowed_origins", DEFAULT_ALLOWED_ORIGINS)
+        except Exception:
+            allowed_origins = DEFAULT_ALLOWED_ORIGINS
+    if clean_origin in allowed_origins:
+        return True
+    pattern = allow_origin_regex or DEFAULT_ALLOW_ORIGIN_REGEX
+    try:
+        if re.match(pattern, clean_origin, re.IGNORECASE):
+            return True
+    except re.error:
+        logger.warning("Invalid allow_origin_regex; origin rejected", exc_info=True)
+    return False
+
+
 class SecurityAndAuthMiddleware:
     """Handles constant-time Bearer token authentication, progressive IP backoff, fail-closed enforcement, OPTIONS preflight, security headers, and safe logging."""
-    def __init__(self, app: ASGIApp, token: str = "", enforce_auth: bool = True, allow_query_token: bool = False):
+    def __init__(
+        self,
+        app: ASGIApp,
+        token: str = "",
+        enforce_auth: bool = True,
+        allow_query_token: bool = False,
+        allowed_origins: list[str] | None = None,
+        allow_origin_regex: str | None = None
+    ):
         self.app = app
         self.enforce_auth = enforce_auth
         self.token = str(token).strip()
         self.allow_query_token = allow_query_token
+        self.allowed_origins = allowed_origins
+        self.allow_origin_regex = allow_origin_regex
         # H-1 Fix: Fail closed — if enforce_auth is True, ensure a non-empty token is present
         if self.enforce_auth and not self.token:
             import secrets
@@ -2604,18 +2748,21 @@ class SecurityAndAuthMiddleware:
 
             # L-03: CORS Preflight OPTIONS requests must bypass auth unconditionally and return 200 with CORS headers
             if method == "OPTIONS":
-                req_origin = header_map.get("origin", "").strip() or "*"
+                req_origin = header_map.get("origin", "").strip()
+                cors_headers = {
+                    "access-control-allow-methods": "GET, POST, DELETE, OPTIONS, HEAD",
+                    "access-control-allow-headers": "*",
+                    "access-control-allow-private-network": "true",
+                    "access-control-max-age": "86400",
+                }
+                if req_origin and is_allowed_origin(req_origin, self.allowed_origins, self.allow_origin_regex):
+                    cors_headers["access-control-allow-origin"] = req_origin
+                    cors_headers["access-control-allow-credentials"] = "true"
+
                 cors_resp = Response(
                     content="",
                     status_code=200,
-                    headers={
-                        "access-control-allow-origin": req_origin,
-                        "access-control-allow-methods": "GET, POST, DELETE, OPTIONS, HEAD",
-                        "access-control-allow-headers": "*",
-                        "access-control-allow-credentials": "true",
-                        "access-control-allow-private-network": "true",
-                        "access-control-max-age": "86400",
-                    }
+                    headers=cors_headers
                 )
                 await cors_resp(scope, receive, send_with_security_headers)
                 return
@@ -2672,9 +2819,7 @@ class SecurityAndAuthMiddleware:
 
                 is_valid = False
                 if provided_token:
-                    if self.token and secrets.compare_digest(provided_token, self.token):
-                        is_valid = True
-                    elif _is_valid_oauth_token(provided_token):
+                    if self.token and secrets.compare_digest(provided_token, self.token) or _is_valid_oauth_token(provided_token):
                         is_valid = True
 
                 # Check active authenticated SSE session for POST /messages from verified SSE clients
@@ -2719,7 +2864,7 @@ class SecurityAndAuthMiddleware:
             await self.app(scope, receive, send)
 
 
-def build_app(token: Optional[str] = None):
+def build_app(token: str | None = None):
     cfg = load_config()
     server_cfg = cfg.get("server", {})
     enforce_auth = server_cfg.get("enforce_auth", True)
@@ -2737,7 +2882,7 @@ def build_app(token: Optional[str] = None):
                     from config import save_config
                     save_config(cfg)
                 except Exception:
-                    pass
+                    logger.warning("Could not persist generated API token; it will change on next start", exc_info=True)
         else:
             effective_token = ""
     elif enforce_auth and not effective_token:
@@ -2865,27 +3010,15 @@ def build_app(token: Optional[str] = None):
                 pass
 
     # CORS settings: Allow Mammouth AI, Claude Code / Anthropic, and localhost origins
-    configured_origins = server_cfg.get("allowed_origins", [
-        "https://mammouth.ai",
-        "https://app.mammouth.ai",
-        "https://claude.ai",
-        "https://code.claude.ai",
-        "https://app.claude.ai",
-        "https://claude.com",
-        "https://www.claude.ai",
-        "https://www.claude.com",
-        "https://console.anthropic.com",
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://localhost:3000",
-        "http://localhost:8000"
-    ])
+    configured_origins = server_cfg.get("allowed_origins", DEFAULT_ALLOWED_ORIGINS)
+    allow_origin_regex = server_cfg.get("allow_origin_regex", DEFAULT_ALLOW_ORIGIN_REGEX)
+    allow_query_token = bool(server_cfg.get("allow_query_token", False))
 
     middleware = [
         Middleware(
             CORSMiddleware,
             allow_origins=configured_origins,
-            allow_origin_regex=r"^https://([a-zA-Z0-9.-]+\.)?(mammouth\.ai|claude\.ai|anthropic\.com|claude\.com)$|^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+            allow_origin_regex=allow_origin_regex,
             allow_methods=["GET", "POST", "DELETE", "OPTIONS", "HEAD"],
             allow_headers=["*"],
             expose_headers=["*"],
@@ -2897,7 +3030,9 @@ def build_app(token: Optional[str] = None):
             SecurityAndAuthMiddleware,
             token=effective_token or "",
             enforce_auth=enforce_auth,
-            allow_query_token=server_cfg.get("allow_query_token", True),
+            allow_query_token=allow_query_token,
+            allowed_origins=configured_origins,
+            allow_origin_regex=allow_origin_regex,
         ),
     ]
 

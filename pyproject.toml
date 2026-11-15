@@ -1,17 +1,17 @@
 [project]
 name = "mammouth-defroster-9000"
-version = "0.7.4"
+version = "0.7.5"
 description = "Mammouth Defroster 9000: FastMCP Desktop Cockpit & Windows 11 DevOps Automation for Mammouth.ai"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "fastmcp>=3.4.0",
+    "fastmcp>=4.1.4",
     "httpx>=0.28.0",
     "psutil>=7.0.0",
     "uvicorn>=0.30.0",
-    "starlette>=0.38.0",
+    "starlette>=1.10.0",
     "customtkinter>=5.2.0",
-    "pillow>=10.0.0",
+    "pillow>=13.0.0",
     "packaging>=24.0",
     "pyinstaller>=6.10.0",
     "pyautogui>=0.9.54",
@@ -21,6 +21,7 @@ dependencies = [
     "pythonnet>=3.0.0",
     "pyperclip>=1.8.2",
     "playwright>=1.63.0",
+    "opentelemetry-api>=1.45.2",
 ]
 
 [tool.setuptools.packages.find]
@@ -31,6 +32,24 @@ dev = [
     "pytest>=9.2.0",
 ]
 
-
 [tool.pytest.ini_options]
 addopts = "-s"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "SIM", "UP", "BLE"]
+ignore = [
+    "E501",   # Line length (>120 chars)
+    "BLE001", # Blind except (deferred to Fix 7)
+    "E402",   # Module import not at top of file (sys.path bootstrap)
+    "E741",   # Ambiguous variable name
+    "SIM105", # Use contextlib.suppress instead of try-except-pass
+    "SIM108", # Use ternary operator instead of if-else
+    "SIM117", # Multiple with statements
+    "SIM102", # Collapsible if
+    "SIM115", # Open file with context handler
+    "SIM118", # Key in dict
+    "SIM103", # Needless bool
+]

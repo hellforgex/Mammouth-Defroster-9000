@@ -12,8 +12,6 @@ import os
 import time
 import json
 import socket
-import shutil
-import tempfile
 import subprocess
 import urllib.request
 import urllib.error
@@ -63,7 +61,7 @@ def run_runtime_checks(server_exe_path: str, test_port: int = 8991):
     # Backup original config
     original_config_content = None
     if os.path.exists(config_path):
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             original_config_content = f.read()
 
     # Step 1: Set empty api_token in config.json to test fail-closed auto-generation
@@ -117,7 +115,7 @@ def run_runtime_checks(server_exe_path: str, test_port: int = 8991):
 
         # Check (c): Read config.json to confirm token was auto-generated (fail-closed)
         print("\n[3/5] Check (c): Verifying empty api_token auto-generation (Fail-closed)...")
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             updated_cfg = json.load(f)
         auto_token = updated_cfg.get("server", {}).get("api_token", "")
         print(f"  -> Auto-generated token: {auto_token[:6]}... (length: {len(auto_token)})")

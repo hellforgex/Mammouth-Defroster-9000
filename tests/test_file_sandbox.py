@@ -1,10 +1,9 @@
 import unittest
 import os
 import sys
-from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from modules.file_ops import _validate_path, _normalize_and_resolve_path, file_write, file_read
+from modules.file_ops import _validate_path, _normalize_and_resolve_path
 
 
 class TestFileSandbox(unittest.TestCase):

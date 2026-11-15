@@ -15,8 +15,7 @@ from modules.mammouth_code import (
     get_mammouth_code_status,
     launch_mammouth_terminal,
     run_mammouth_task,
-    sync_opencode_mcp_config,
-    get_configured_api_key
+    sync_opencode_mcp_config
 )
 
 
@@ -203,7 +202,7 @@ class TestMammouthCodeModule(unittest.TestCase):
         # Check local workspace opencode.json
         local_cfg_file = self.ws_path / "opencode.json"
         self.assertTrue(local_cfg_file.exists())
-        with open(local_cfg_file, "r", encoding="utf-8") as f:
+        with open(local_cfg_file, encoding="utf-8") as f:
             data = json.load(f)
 
         self.assertIn("mcp", data)
@@ -216,7 +215,7 @@ class TestMammouthCodeModule(unittest.TestCase):
         self.assertTrue(entry["enabled"])
 
         # The global (per-user) config keeps the real token
-        with open(global_temp, "r", encoding="utf-8") as f:
+        with open(global_temp, encoding="utf-8") as f:
             global_entry = json.load(f)["mcp"]["mammouth-defroster-9000"]
         self.assertEqual(global_entry["headers"]["Authorization"], f"Bearer {api_token}")
 

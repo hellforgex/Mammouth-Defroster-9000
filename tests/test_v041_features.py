@@ -1,8 +1,7 @@
 import unittest
 import os
 import sys
-from typing import Dict, Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Add src to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -10,9 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from config import DEFAULT_CONFIG
 from modules.embedded_browser import (
     parse_mammouth_quota_data,
-    MAMMOUTH_BRAND_COLORS,
-    PLAN_MULTIPLIERS,
-    BASE_THRESHOLD_CENTS
+    MAMMOUTH_BRAND_COLORS
 )
 from modules.screen_capture import copy_image_to_clipboard
 
@@ -399,7 +396,6 @@ class TestV041SecurityAndParameterFixes(unittest.TestCase):
     def test_file_write_parameter_parsing_and_quotes(self):
         """Test that file_write handles wrapping quotes, internal quotes, and leading slashes safely."""
         from modules.file_ops import file_write, file_read
-        from pathlib import Path
 
         # 1. Path wrapped in double quotes
         res1 = file_write(file_path='"wrapped_quote.txt"', content="Line 1\nLine 2")
@@ -604,8 +600,8 @@ class TestV041SecurityAndParameterFixes(unittest.TestCase):
             ]
             for p in test_paths:
                 sent = []
-                async def mock_send(msg):
-                    sent.append(msg)
+                async def mock_send(msg, target=sent):
+                    target.append(msg)
                 scope = {
                     "type": "http",
                     "method": "POST" if "token" in p or "register" in p else "GET",

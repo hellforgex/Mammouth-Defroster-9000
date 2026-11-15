@@ -5,18 +5,19 @@ controllable via FastMCP tools for Mammouth AI and the Cockpit GUI.
 Uses a thread-isolated worker pattern to ensure full thread safety across GUI and ASGI event loops.
 """
 
+import logging
 import os
 import sys
 import time
-import io
-import json
 import queue
 import re
 import threading
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Union, Tuple
+from typing import Any
+
+logger = logging.getLogger("browser_agent")
 
 try:
     from PIL import Image as PILImage
@@ -201,7 +202,7 @@ def _detect_browser_channel() -> str:
 
 
 # Mapping: internal channel key → human label + known binary paths for detection
-_BROWSER_CATALOG: List[Dict[str, Any]] = [
+_BROWSER_CATALOG: list[dict[str, Any]] = [
     {
         "channel": "msedge",
         "label": "Microsoft Edge",
@@ -338,7 +339,7 @@ def _is_playwright_engine_installed(engine_name: str) -> bool:
         return False
 
 
-def list_available_browsers() -> List[Dict[str, Any]]:
+def list_available_browsers() -> list[dict[str, Any]]:
     """Return detected browsers installed on this system, always including Playwright's built-in Chromium."""
     if sys.platform == "win32":
         platform_key = "paths_win"
@@ -347,7 +348,7 @@ def list_available_browsers() -> List[Dict[str, Any]]:
     else:
         platform_key = "paths_linux"
 
-    found: List[Dict[str, Any]] = []
+    found: list[dict[str, Any]] = []
     for entry in _BROWSER_CATALOG:
         ch = entry["channel"]
         if entry.get("always_available"):
@@ -436,7 +437,8 @@ def _check_navigation_url(url: str) -> str:
     except ValueError:
         # Browsers also accept integer / hex / octal IPv4 forms
         try:
-            import ipaddress, socket as _socket
+            import ipaddress
+            import socket as _socket
             ip = ipaddress.ip_address(_socket.inet_aton(host))
         except Exception:
             ip = None
@@ -449,16 +451,16 @@ class _BrowserWorker:
 
     def __init__(self):
         self.cmd_queue: queue.Queue = queue.Queue()
-        self.thread: Optional[threading.Thread] = None
+        self.thread: threading.Thread | None = None
         self.pw = None
         self.context = None
         self.active_page = None
         self.is_running = False
         self._lock = threading.Lock()
         self._browser = None   # non-None only for Firefox/WebKit (separate browser handle)
-        self._actual_headless: Optional[bool] = None
-        self._actual_channel: Optional[str] = None
-        self.config: Dict[str, Any] = {
+        self._actual_headless: bool | None = None
+        self._actual_channel: str | None = None
+        self.config: dict[str, Any] = {
             "channel": _detect_browser_channel(),
             "headless": False,
             "viewport_width": 1280,
@@ -467,7 +469,7 @@ class _BrowserWorker:
             "user_data_dir": str(DEFAULT_PROFILE_DIR)
         }
 
-    def start(self, config_override: Optional[Dict[str, Any]] = None):
+    def start(self, config_override: dict[str, Any] | None = None):
         with self._lock:
             if config_override:
                 self.config.update(config_override)
@@ -490,7 +492,7 @@ class _BrowserWorker:
                 raise RuntimeError(str(result))
             return result
         except queue.Empty:
-            raise TimeoutError(f"Browser operation '{cmd}' timed out after {timeout} seconds.")
+            raise TimeoutError(f"Browser operation '{cmd}' timed out after {timeout} seconds.") from None
 
     def _worker_loop(self):
         """Worker loop executing all Playwright operations on this dedicated thread."""
@@ -602,7 +604,7 @@ class _BrowserWorker:
 
                 engine = self.pw.firefox if is_firefox else self.pw.webkit
                 self._browser = engine.launch(headless=headless)
-                ctx_kwargs: Dict[str, Any] = {
+                ctx_kwargs: dict[str, Any] = {
                     "viewport": {"width": vw, "height": vh},
                     "accept_downloads": True,
                 }
@@ -654,17 +656,55 @@ class _BrowserWorker:
                 args=launch_args,
             )
             self._actual_channel = channel
-        except Exception:
-            # Fallback: Playwright's bundled Chromium (no channel= required)
-            self.context = self.pw.chromium.launch_persistent_context(
-                user_data_dir=str(profile_dir),
-                headless=headless,
-                viewport={"width": vw, "height": vh},
-                accept_downloads=True,
-                chromium_sandbox=True,
-                args=launch_args,
-            )
-            self._actual_channel = "chromium"
+        except Exception as e_primary:
+            logger.warning(f"Failed to launch browser with channel '{channel}': {e_primary}. Attempting fallback...")
+            # Fallback chain: try alternative system channels, then bundled Chromium
+            fallback_channels = []
+            if channel != "msedge":
+                fallback_channels.append("msedge")
+            if channel != "chrome":
+                fallback_channels.append("chrome")
+            fallback_channels.append(None) # Playwright bundled Chromium
+
+            launched = False
+            for fb_chan in fallback_channels:
+                try:
+                    self.context = self.pw.chromium.launch_persistent_context(
+                        user_data_dir=str(profile_dir),
+                        channel=fb_chan,
+                        headless=headless,
+                        viewport={"width": vw, "height": vh},
+                        accept_downloads=True,
+                        chromium_sandbox=True,
+                        args=launch_args,
+                    )
+                    self._actual_channel = fb_chan or "chromium"
+                    launched = True
+                    break
+                except Exception:
+                    pass
+
+            if not launched:
+                # If still failing, profile directory might be locked - try a fresh temporary profile
+                try:
+                    temp_profile = profile_dir.parent / f"{profile_dir.name}_temp"
+                    temp_profile.mkdir(parents=True, exist_ok=True)
+                    self.context = self.pw.chromium.launch_persistent_context(
+                        user_data_dir=str(temp_profile),
+                        channel=channel if channel in ("msedge", "chrome") else None,
+                        headless=headless,
+                        viewport={"width": vw, "height": vh},
+                        accept_downloads=True,
+                        chromium_sandbox=True,
+                        args=launch_args,
+                    )
+                    self._actual_channel = channel or "chromium"
+                    launched = True
+                except Exception as final_err:
+                    raise RuntimeError(
+                        f"Could not launch browser (tried '{channel}', system fallbacks, and temp profile). "
+                        f"Error: {final_err}. Run 'playwright install chromium' if browser binaries are missing."
+                    ) from final_err
 
         self.context.set_default_timeout(timeout_ms)
         try:
@@ -698,7 +738,7 @@ class _BrowserWorker:
 
     # ---- Command Handlers ----
 
-    def _cmd_navigate(self, url: str, wait_until: str = "load") -> Dict[str, Any]:
+    def _cmd_navigate(self, url: str, wait_until: str = "load") -> dict[str, Any]:
         target_url = _check_navigation_url(url)
         self.active_page.goto(target_url, wait_until=wait_until, timeout=_NAV_TIMEOUT_MS)
         return {
@@ -707,7 +747,7 @@ class _BrowserWorker:
             "title": self.active_page.title()
         }
 
-    def _cmd_snapshot(self, include_screenshot: bool = True, max_elements: int = 60, full_page: bool = False) -> Dict[str, Any]:
+    def _cmd_snapshot(self, include_screenshot: bool = True, max_elements: int = 60, full_page: bool = False) -> dict[str, Any]:
         title = self.active_page.title()
         url = self.active_page.url
 
@@ -809,7 +849,7 @@ class _BrowserWorker:
 
         raise ValueError(f"Could not find element matching target '{target}'. Use browser_snapshot() to inspect available elements.")
 
-    def _cmd_click(self, target: str, button: str = "left", double_click: bool = False) -> Dict[str, Any]:
+    def _cmd_click(self, target: str, button: str = "left", double_click: bool = False) -> dict[str, Any]:
         t0 = time.perf_counter()
         resolved = self._resolve_target(target)
         if isinstance(resolved, tuple):
@@ -854,7 +894,7 @@ class _BrowserWorker:
             res["error_code"] = "ERR_PAGE_ERROR_ALERT"
         return res
 
-    def _cmd_fill(self, target: str, text: str, press_enter: bool = False) -> Dict[str, Any]:
+    def _cmd_fill(self, target: str, text: str, press_enter: bool = False) -> dict[str, Any]:
         t0 = time.perf_counter()
         resolved = self._resolve_target(target)
         if isinstance(resolved, tuple):
@@ -898,12 +938,12 @@ class _BrowserWorker:
             "current_url": self.active_page.url
         }
 
-    def _cmd_press_key(self, key: str) -> Dict[str, Any]:
+    def _cmd_press_key(self, key: str) -> dict[str, Any]:
         self.active_page.keyboard.press(key)
         time.sleep(0.2)
         return {"status": "success", "key": key}
 
-    def _cmd_hover(self, target: str) -> Dict[str, Any]:
+    def _cmd_hover(self, target: str) -> dict[str, Any]:
         resolved = self._resolve_target(target)
         if isinstance(resolved, tuple):
             x, y = resolved
@@ -913,7 +953,7 @@ class _BrowserWorker:
             resolved.hover(timeout=10000)
         return {"status": "success", "target": str(target)}
 
-    def _cmd_scroll(self, direction: str = "down", amount: int = 500, target: str = "") -> Dict[str, Any]:
+    def _cmd_scroll(self, direction: str = "down", amount: int = 500, target: str = "") -> dict[str, Any]:
         if target:
             resolved = self._resolve_target(target)
             if not isinstance(resolved, tuple):
@@ -935,7 +975,7 @@ class _BrowserWorker:
             return content[:max_length] + f"\n\n[... Truncated, total length is {len(content)} characters ...]"
         return content if content else "(Page returned empty content)"
 
-    def _cmd_screenshot(self, full_page: bool = False) -> Tuple[bytes, str]:
+    def _cmd_screenshot(self, full_page: bool = False) -> tuple[bytes, str]:
         screenshot_bytes = self.active_page.screenshot(full_page=full_page, type="png")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"browser_{timestamp}.png"
@@ -952,7 +992,7 @@ class _BrowserWorker:
         res = self.active_page.evaluate(script)
         return {"status": "success", "result": res}
 
-    def _cmd_tabs(self, action: str = "list", tab_index: int = -1, url: str = "") -> Dict[str, Any]:
+    def _cmd_tabs(self, action: str = "list", tab_index: int = -1, url: str = "") -> dict[str, Any]:
         pages = self.context.pages
         if action == "list":
             tabs_list = []
@@ -992,7 +1032,7 @@ class _BrowserWorker:
 
         raise ValueError(f"Unknown tabs action: {action}. Supported: 'list', 'create', 'switch', 'close'.")
 
-    def _cmd_restart(self, headless: Optional[bool] = None, channel: Optional[str] = None) -> Dict[str, Any]:
+    def _cmd_restart(self, headless: bool | None = None, channel: str | None = None) -> dict[str, Any]:
         """Close the current browser (if any) and relaunch with updated headless/channel settings."""
         if headless is not None:
             self.config["headless"] = bool(headless)
@@ -1010,7 +1050,7 @@ class _BrowserWorker:
             "active_url": self.active_page.url if self.active_page else "",
         }
 
-    def _cmd_status(self) -> Dict[str, Any]:
+    def _cmd_status(self) -> dict[str, Any]:
         available_browsers = list_available_browsers()
         if not self.is_running or not self.context:
             return {
@@ -1039,14 +1079,14 @@ class _BrowserWorker:
 _WORKER = _BrowserWorker()
 
 
-def init_browser_agent(config: Optional[Dict[str, Any]] = None):
+def init_browser_agent(config: dict[str, Any] | None = None):
     """Initialize or update browser agent configuration."""
     _WORKER.start(config)
 
 
 # ---- Public MCP Tool Functions ----
 
-def browser_navigate(url: str, wait_until: str = "load") -> Dict[str, Any]:
+def browser_navigate(url: str, wait_until: str = "load") -> dict[str, Any]:
     """Navigate the automated browser to a specified URL.
     
     Args:
@@ -1059,7 +1099,7 @@ def browser_navigate(url: str, wait_until: str = "load") -> Dict[str, Any]:
         return {"error": str(e), "url": url}
 
 
-def browser_snapshot(include_screenshot: bool = True, max_elements: int = 60, full_page: bool = False) -> Dict[str, Any]:
+def browser_snapshot(include_screenshot: bool = True, max_elements: int = 60, full_page: bool = False) -> dict[str, Any]:
     """Capture a comprehensive state snapshot of the active webpage.
     Returns title, current URL, a clean text summary, and a list of indexed interactive
     elements with numeric IDs (e.g. [1] button 'Login') that can be passed directly to browser_click or browser_fill.
@@ -1100,7 +1140,7 @@ def browser_screenshot(full_page: bool = False) -> Any:
         return {"error": str(e)}
 
 
-def browser_click(target: str, button: str = "left", double_click: bool = False) -> Dict[str, Any]:
+def browser_click(target: str, button: str = "left", double_click: bool = False) -> dict[str, Any]:
     """Click on an element on the webpage.
     Target can be:
     - A numeric ID from browser_snapshot() (e.g. '1', '4', 12)
@@ -1119,7 +1159,7 @@ def browser_click(target: str, button: str = "left", double_click: bool = False)
         return {"error": str(e), "target": target}
 
 
-def browser_fill(target: str, text: str, press_enter: bool = False) -> Dict[str, Any]:
+def browser_fill(target: str, text: str, press_enter: bool = False) -> dict[str, Any]:
     """Type or fill text into an input field or textarea.
     Target can be a numeric element ID from browser_snapshot() (e.g. '2') or a CSS selector/placeholder.
     Dispatches input and change events so reactive SPAs (React, Vue) update state properly.
@@ -1135,7 +1175,7 @@ def browser_fill(target: str, text: str, press_enter: bool = False) -> Dict[str,
         return {"error": str(e), "target": target}
 
 
-def browser_press_key(key: str) -> Dict[str, Any]:
+def browser_press_key(key: str) -> dict[str, Any]:
     """Simulate a keyboard keypress in the browser.
     
     Args:
@@ -1147,7 +1187,7 @@ def browser_press_key(key: str) -> Dict[str, Any]:
         return {"error": str(e), "key": key}
 
 
-def browser_hover(target: str) -> Dict[str, Any]:
+def browser_hover(target: str) -> dict[str, Any]:
     """Hover the mouse cursor over an element (e.g. to open drop-down menus or preview tooltips).
     
     Args:
@@ -1159,7 +1199,7 @@ def browser_hover(target: str) -> Dict[str, Any]:
         return {"error": str(e), "target": target}
 
 
-def browser_scroll(direction: str = "down", amount: int = 500, target: str = "") -> Dict[str, Any]:
+def browser_scroll(direction: str = "down", amount: int = 500, target: str = "") -> dict[str, Any]:
     """Scroll the webpage or scroll a specific element into view.
     
     Args:
@@ -1199,7 +1239,7 @@ def browser_evaluate(script: str) -> Any:
         return {"error": str(e)}
 
 
-def browser_tabs(action: str = "list", tab_index: int = -1, url: str = "") -> Dict[str, Any]:
+def browser_tabs(action: str = "list", tab_index: int = -1, url: str = "") -> dict[str, Any]:
     """Manage browser tabs.
     
     Args:
@@ -1213,7 +1253,7 @@ def browser_tabs(action: str = "list", tab_index: int = -1, url: str = "") -> Di
         return {"error": str(e)}
 
 
-def browser_status() -> Dict[str, Any]:
+def browser_status() -> dict[str, Any]:
     """Get the current operational status of the automated browser agent."""
     try:
         res = _WORKER.call("status")
@@ -1224,7 +1264,7 @@ def browser_status() -> Dict[str, Any]:
         return {"running": False, "error": str(e), "available_browsers": list_available_browsers()}
 
 
-def browser_close() -> Dict[str, Any]:
+def browser_close() -> dict[str, Any]:
     """Close the automated browser session and release system resources."""
     try:
         return _WORKER.call("stop")
@@ -1232,7 +1272,7 @@ def browser_close() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-def browser_list_browsers() -> List[Dict[str, Any]]:
+def browser_list_browsers() -> list[dict[str, Any]]:
     """List all browsers available on this system that can be used by the browser agent.
 
     Returns a list of entries with:
@@ -1251,9 +1291,9 @@ def browser_list_browsers() -> List[Dict[str, Any]]:
 
 
 def browser_restart(
-    headless: Optional[bool] = None,
-    channel: Optional[str] = None,
-) -> Dict[str, Any]:
+    headless: bool | None = None,
+    channel: str | None = None,
+) -> dict[str, Any]:
     """Restart the automated browser, optionally switching browser engine or headless mode.
 
     Call browser_list_browsers() first to see which channels are available on this system.

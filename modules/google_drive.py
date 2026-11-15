@@ -10,7 +10,7 @@ import urllib.parse
 import threading
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any
 
 import httpx
 
@@ -54,7 +54,7 @@ def _encrypt_dpapi(plaintext: str) -> str:
         encrypted = win32crypt.CryptProtectData(data_bytes, "MammouthGDriveSecret", None, None, None, 0)
         return "dpapi:" + base64.b64encode(encrypted).decode("ascii")
     except Exception as ex:
-        raise RuntimeError(f"DPAPI Encryption Error: {ex}. Plaintext token storage is prohibited.")
+        raise RuntimeError(f"DPAPI Encryption Error: {ex}. Plaintext token storage is prohibited.") from ex
 
 def _decrypt_dpapi(ciphertext: str) -> str:
     """Decrypt token using Windows DPAPI."""
@@ -68,13 +68,13 @@ def _decrypt_dpapi(ciphertext: str) -> str:
         _, decrypted_blob = win32crypt.CryptUnprotectData(raw_bytes, None, None, None, 0)
         return decrypted_blob.decode("utf-8")
     except Exception as ex:
-        raise RuntimeError(f"DPAPI Decryption Error: {ex}")
+        raise RuntimeError(f"DPAPI Decryption Error: {ex}") from ex
 
 # Try importing sandbox path validator from file_ops
 try:
     from modules.file_ops import _validate_path, _get_sandbox_config
 except ImportError:
-    def _get_sandbox_config() -> Tuple[bool, Path]:
+    def _get_sandbox_config() -> tuple[bool, Path]:
         return True, (BASE_DIR / "workspace").resolve()
 
     def _validate_path(target_path_str: str, for_write: bool = False) -> Path:
@@ -87,7 +87,7 @@ except ImportError:
         return resolved
 
 
-def _load_client_credentials() -> Optional[Dict[str, Any]]:
+def _load_client_credentials() -> dict[str, Any] | None:
     """Load OAuth 2.0 client credentials from credentials.json, config.json, or environment."""
     # 1. Check credentials.json
     if CREDENTIALS_FILE.exists():
@@ -129,7 +129,7 @@ def _load_client_credentials() -> Optional[Dict[str, Any]]:
     return None
 
 
-def _load_stored_token() -> Optional[Dict[str, Any]]:
+def _load_stored_token() -> dict[str, Any] | None:
     """Load and decrypt stored OAuth token from gdrive_token.json."""
     if not TOKEN_FILE.exists():
         return None
@@ -142,19 +142,19 @@ def _load_stored_token() -> Optional[Dict[str, Any]]:
         return None
 
 
-def _save_stored_token(token_data: Dict[str, Any]) -> None:
+def _save_stored_token(token_data: dict[str, Any]) -> None:
     _invalidate_auth_cache()
     _save_stored_token_file(token_data)
 
 
-def _save_stored_token_file(token_data: Dict[str, Any]) -> None:
+def _save_stored_token_file(token_data: dict[str, Any]) -> None:
     """Save token to gdrive_token.json with DPAPI encryption."""
     serialized = json.dumps(token_data, indent=2)
     encrypted = _encrypt_dpapi(serialized)
     TOKEN_FILE.write_text(encrypted, encoding="utf-8")
 
 
-def _refresh_access_token(client_info: Dict[str, Any], token_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _refresh_access_token(client_info: dict[str, Any], token_data: dict[str, Any]) -> dict[str, Any] | None:
     """Refresh expired access token using the OAuth refresh_token."""
     refresh_token = token_data.get("refresh_token")
     if not refresh_token:
@@ -188,7 +188,7 @@ def _refresh_access_token(client_info: Dict[str, Any], token_data: Dict[str, Any
     return None
 
 
-def _get_service_account_token() -> Optional[str]:
+def _get_service_account_token() -> str | None:
     """Generate an access token using Service Account credentials if present."""
     if not SERVICE_ACCOUNT_FILE.exists():
         return None
@@ -264,7 +264,7 @@ def _get_service_account_token() -> Optional[str]:
 # Cache of the currently valid access token: avoids re-reading + DPAPI-decrypting the token file
 # and re-signing a service-account JWT (plus a token POST) on every single Drive call.
 _auth_cache_lock = threading.Lock()
-_auth_cache: Dict[str, Any] = {"token": None, "expires_at": 0.0}
+_auth_cache: dict[str, Any] = {"token": None, "expires_at": 0.0}
 
 
 def _invalidate_auth_cache() -> None:
@@ -273,7 +273,7 @@ def _invalidate_auth_cache() -> None:
         _auth_cache["expires_at"] = 0.0
 
 
-def get_drive_auth_headers() -> Tuple[Optional[Dict[str, str]], Optional[str]]:
+def get_drive_auth_headers() -> tuple[dict[str, str] | None, str | None]:
     """Get HTTP authorization headers for Google Drive requests (OAuth Bearer or Service Account).
     
     Returns (headers_dict, error_message).
@@ -289,7 +289,7 @@ def get_drive_auth_headers() -> Tuple[Optional[Dict[str, str]], Optional[str]]:
     return headers, err
 
 
-def _resolve_drive_auth() -> Tuple[Optional[Dict[str, str]], Optional[str], float]:
+def _resolve_drive_auth() -> tuple[dict[str, str] | None, str | None, float]:
     # 1. Try OAuth 2.0 User Token
     token_data = _load_stored_token()
     client_info = _load_client_credentials()
@@ -316,7 +316,7 @@ def _resolve_drive_auth() -> Tuple[Optional[Dict[str, str]], Optional[str], floa
     return None, "Google Drive is not authenticated. Please click 'Launch Login Browser' in the Cockpit GUI to sign in with your Google account.", 0.0
 
 
-def get_active_access_token() -> Tuple[Optional[str], Optional[str]]:
+def get_active_access_token() -> tuple[str | None, str | None]:
     """Get active access token."""
     headers, err = get_drive_auth_headers()
     if headers:
@@ -331,11 +331,11 @@ def get_active_access_token() -> Tuple[Optional[str], Optional[str]]:
 # =========================================================================
 
 class _OAuthCallbackHandler(BaseHTTPRequestHandler):
-    auth_code: Optional[str] = None
-    auth_error: Optional[str] = None
+    auth_code: str | None = None
+    auth_error: str | None = None
     exchange_success: bool = False
-    active_code_verifier: Optional[str] = None
-    expected_state: Optional[str] = None
+    active_code_verifier: str | None = None
+    expected_state: str | None = None
 
     def log_message(self, format, *args):
         pass  # Suppress default server console output
@@ -407,7 +407,7 @@ class _OAuthCallbackHandler(BaseHTTPRequestHandler):
             self._send_error_page(err)
 
 
-def start_oauth_flow(port: int = 8085, timeout_seconds: int = 120) -> Dict[str, Any]:
+def start_oauth_flow(port: int = 8085, timeout_seconds: int = 120) -> dict[str, Any]:
     """Start desktop loopback server and return OAuth authorization URL with PKCE."""
     import secrets
     import base64
@@ -426,7 +426,6 @@ def start_oauth_flow(port: int = 8085, timeout_seconds: int = 120) -> Dict[str, 
         }
 
     client_id = client_info.get("client_id")
-    client_secret = client_info.get("client_secret", "")
 
     redirect_uri = f"http://127.0.0.1:{port}"
 
@@ -481,7 +480,7 @@ def start_oauth_flow(port: int = 8085, timeout_seconds: int = 120) -> Dict[str, 
     }
 
 
-def complete_oauth_code_exchange(code: str, redirect_uri: str) -> Dict[str, Any]:
+def complete_oauth_code_exchange(code: str, redirect_uri: str) -> dict[str, Any]:
     """Exchange authorization code for access and refresh tokens with PKCE."""
     client_info = _load_client_credentials() or {}
 
@@ -548,7 +547,7 @@ def disconnect_gdrive() -> bool:
 # MCP TOOLS IMPLEMENTATION
 # =========================================================================
 
-def gdrive_status() -> Dict[str, Any]:
+def gdrive_status() -> dict[str, Any]:
     """Check Google Drive connectivity, authentication details, and storage quota."""
     headers, err = get_drive_auth_headers()
 
@@ -598,7 +597,7 @@ def gdrive_status() -> Dict[str, Any]:
         return {"authenticated": False, "error": str(e)}
 
 
-def _ensure_auth_headers() -> Dict[str, str]:
+def _ensure_auth_headers() -> dict[str, str]:
     """Return valid authorization headers or fail fast.
 
     MCP tool calls must not pop up a login browser on the host and block a worker for 45s while
@@ -614,7 +613,7 @@ def gdrive_list_files(
     folder_id: str = "root",
     query: str = "",
     page_size: int = 25
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """List files and folders inside a Google Drive folder or matching a custom search query.
     
     Args:
@@ -643,7 +642,7 @@ def gdrive_list_files(
         return files
 
 
-def gdrive_search_files(query: str, page_size: int = 25) -> List[Dict[str, Any]]:
+def gdrive_search_files(query: str, page_size: int = 25) -> list[dict[str, Any]]:
     """Search Google Drive files by name or full-text content across the entire drive.
     
     Args:
@@ -668,7 +667,7 @@ def gdrive_search_files(query: str, page_size: int = 25) -> List[Dict[str, Any]]
         return resp.json().get("files", [])
 
 
-def gdrive_get_metadata(file_id: str) -> Dict[str, Any]:
+def gdrive_get_metadata(file_id: str) -> dict[str, Any]:
     """Get detailed metadata of a Google Drive file or folder by ID.
     
     Args:
@@ -759,7 +758,7 @@ def gdrive_read_file(file_id: str, max_chars: int = 50000) -> str:
         return content_text
 
 
-def gdrive_download_to_workspace(file_id: str, destination_filename: str = "") -> Dict[str, Any]:
+def gdrive_download_to_workspace(file_id: str, destination_filename: str = "") -> dict[str, Any]:
     """Download any file from Google Drive directly into the sandboxed local workspace.
     
     Args:
@@ -837,7 +836,7 @@ def gdrive_upload_from_workspace(
     local_filename: str,
     folder_id: str = "root",
     drive_filename: str = ""
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Upload a file from the sandboxed local workspace to Google Drive.
     
     Args:
@@ -868,7 +867,7 @@ def gdrive_upload_from_workspace(
         f"{json.dumps(metadata)}\r\n"
         f"--{boundary}\r\n"
         "Content-Type: application/octet-stream\r\n\r\n"
-    ).encode("utf-8") + file_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    ).encode() + file_bytes + f"\r\n--{boundary}--\r\n".encode()
 
     headers = dict(headers_base)
     headers["Content-Type"] = f"multipart/related; boundary={boundary}"
@@ -898,7 +897,7 @@ def gdrive_write_file(
     content: str,
     folder_id: str = "root",
     mime_type: str = "text/plain"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a new file directly in Google Drive with text/code/markdown content.
     
     Args:
@@ -923,7 +922,7 @@ def gdrive_write_file(
         f"{json.dumps(metadata)}\r\n"
         f"--{boundary}\r\n"
         f"Content-Type: {mime_type}; charset=UTF-8\r\n\r\n"
-    ).encode("utf-8") + content_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    ).encode() + content_bytes + f"\r\n--{boundary}--\r\n".encode()
 
     headers = dict(headers_base)
     headers["Content-Type"] = f"multipart/related; boundary={boundary}"
@@ -948,7 +947,7 @@ def gdrive_write_file(
         }
 
 
-def gdrive_update_file(file_id: str, content: str) -> Dict[str, Any]:
+def gdrive_update_file(file_id: str, content: str) -> dict[str, Any]:
     """Update or overwrite the content of an existing file in Google Drive.
     
     Args:
@@ -979,7 +978,7 @@ def gdrive_update_file(file_id: str, content: str) -> Dict[str, Any]:
         }
 
 
-def gdrive_create_folder(folder_name: str, parent_id: str = "root") -> Dict[str, Any]:
+def gdrive_create_folder(folder_name: str, parent_id: str = "root") -> dict[str, Any]:
     """Create a new folder in Google Drive.
     
     Args:
@@ -1003,7 +1002,7 @@ def gdrive_create_folder(folder_name: str, parent_id: str = "root") -> Dict[str,
         return resp.json()
 
 
-def gdrive_delete_file(file_id: str, permanent: bool = False) -> Dict[str, Any]:
+def gdrive_delete_file(file_id: str, permanent: bool = False) -> dict[str, Any]:
     """Trash or permanently delete a file or folder from Google Drive.
     
     Args:

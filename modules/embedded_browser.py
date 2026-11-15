@@ -14,7 +14,8 @@ import threading
 import time
 import queue
 from pathlib import Path
-from typing import Optional, Callable, Any, Dict, List
+from typing import Any
+from collections.abc import Callable
 import customtkinter as ctk
 import pyperclip
 
@@ -121,7 +122,7 @@ def _is_download_uri(uri: str) -> bool:
     return False
 
 
-def _native_save_file_dialog(initial_dir: str, default_name: str, title: str = "Mammouth — Save File", hwnd_owner: int = 0) -> Optional[str]:
+def _native_save_file_dialog(initial_dir: str, default_name: str, title: str = "Mammouth — Save File", hwnd_owner: int = 0) -> str | None:
     """Prompts the user with native Windows SaveFileDialog on a dedicated STA thread.
     Uses WinForms SaveFileDialog which is modern, thread-safe, STA-compatible and non-blocking."""
     try:
@@ -220,7 +221,7 @@ BROWSER_VIEWPORT_BG = ("#F2EBE1", "#242428")
 BASE_THRESHOLD_CENTS = 150  # GAUGE_MAX_CENTS in Mammouth.ai ($1.50 per 3h session window)
 
 
-def parse_mammouth_quota_data(payload: Optional[Any]) -> Dict[str, Any]:
+def parse_mammouth_quota_data(payload: Any | None) -> dict[str, Any]:
     """Parses raw Mammouth quota payload into standardized UI telemetry metrics."""
     if not payload or not isinstance(payload, dict):
         return {
@@ -314,12 +315,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
     def __init__(
         self,
         master,
-        get_mcp_url_cb: Optional[Callable[[], str]] = None,
+        get_mcp_url_cb: Callable[[], str] | None = None,
         start_url: str = "https://mammouth.ai",
-        profile_dir: Optional[str] = None,
-        screenshot_cb: Optional[Callable[[], Optional[str]]] = None,
-        quota_cb: Optional[Callable[[Dict[str, Any]], None]] = None,
-        zen_toggle_cb: Optional[Callable[[], None]] = None,
+        profile_dir: str | None = None,
+        screenshot_cb: Callable[[], str | None] | None = None,
+        quota_cb: Callable[[dict[str, Any]], None] | None = None,
+        zen_toggle_cb: Callable[[], None] | None = None,
         **kwargs
     ):
         super().__init__(master, **kwargs)
@@ -328,7 +329,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         self.screenshot_cb = screenshot_cb
         self.quota_cb = quota_cb
         self.zen_toggle_cb = zen_toggle_cb
-        self._last_quota_data: Optional[Dict[str, Any]] = None
+        self._last_quota_data: dict[str, Any] | None = None
 
         # Persistent profile directory (ensures login/cookies are stored in app root, never in _internal)
         if not profile_dir:
@@ -342,9 +343,9 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
         os.makedirs(self.profile_dir, exist_ok=True)
 
-        self.edge: Optional[Any] = None
-        self.control: Optional[Any] = None
-        self.hwnd: Optional[int] = None
+        self.edge: Any | None = None
+        self.control: Any | None = None
+        self.hwnd: int | None = None
         self.is_embedded = False
         self._is_visible = True
 
@@ -829,7 +830,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                     pass
             popup_form.FormClosed += _on_form_closed
 
-        except Exception as e:
+        except Exception:
             try:
                 args.set_Handled(True)
                 if hasattr(self, "edge") and self.edge:
@@ -1418,7 +1419,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             with _DOWNLOAD_COUNT_LOCK:
                 self._active_download_count = max(0, getattr(self, "_active_download_count", 0) - 1)
 
-    def _prompt_save_file(self, initial_dir: str, suggested_name: str) -> Optional[str]:
+    def _prompt_save_file(self, initial_dir: str, suggested_name: str) -> str | None:
         """Prompts the user with native SaveFileDialog. Returns chosen file path or None if cancelled."""
         return _native_save_file_dialog(
             initial_dir=initial_dir,

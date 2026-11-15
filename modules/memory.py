@@ -3,7 +3,7 @@ import sqlite3
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union
+from typing import Any
 
 import sys
 
@@ -83,13 +83,13 @@ def _get_db():
 
 def memory_save(
     key: str = "",
-    content: Optional[str] = None,
+    content: str | None = None,
     category: str = "general",
-    value: Optional[str] = None,
-    text: Optional[str] = None,
-    note: Optional[str] = None,
-    data: Optional[str] = None,
-    name: Optional[str] = None
+    value: str | None = None,
+    text: str | None = None,
+    note: str | None = None,
+    data: str | None = None,
+    name: str | None = None
 ) -> str:
     """Save or update persistent long-term memory/knowledge that persists across chats.
     
@@ -139,12 +139,12 @@ def memory_save(
     return f"Successfully saved memory '{clean_key}' in category '{clean_category}'."
 
 def memory_recall(
-    query: Optional[str] = None,
-    search_query: Optional[str] = None,
-    q: Optional[str] = None,
-    search: Optional[str] = None,
-    keyword: Optional[str] = None
-) -> List[Dict[str, Any]]:
+    query: str | None = None,
+    search_query: str | None = None,
+    q: str | None = None,
+    search: str | None = None,
+    keyword: str | None = None
+) -> list[dict[str, Any]]:
     """Search persistent long-term memory by key or content keyword.
     
     Args:
@@ -175,7 +175,7 @@ def memory_recall(
     conn.close()
     return [dict(r) for r in rows]
 
-def memory_list(category: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+def memory_list(category: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
     """List saved memory keys, their categories, and timestamps (without full text content)."""
     conn = _get_db()
     cursor = conn.cursor()
@@ -199,7 +199,7 @@ def memory_list(category: Optional[str] = None, limit: int = 50) -> List[Dict[st
     conn.close()
     return [dict(r) for r in rows]
 
-def memory_get(key: str = "", name: Optional[str] = None, id: Optional[Union[str, int]] = None) -> Dict[str, Any]:
+def memory_get(key: str = "", name: str | None = None, id: str | int | None = None) -> dict[str, Any]:
     """Retrieve full content of a specific memory entry by exact key."""
     actual_key = str(key or name or (str(id) if id is not None else "")).strip()
     if not actual_key:
@@ -214,7 +214,7 @@ def memory_get(key: str = "", name: Optional[str] = None, id: Optional[Union[str
         return dict(row)
     return {"error": f"Memory key '{actual_key}' not found."}
 
-def memory_delete(key: str = "", name: Optional[str] = None) -> str:
+def memory_delete(key: str = "", name: str | None = None) -> str:
     """Delete a memory entry from persistent long-term storage."""
     actual_key = str(key or name or "").strip()
     if not actual_key:
@@ -227,7 +227,7 @@ def memory_delete(key: str = "", name: Optional[str] = None) -> str:
     conn.close()
     return f"Successfully deleted memory '{actual_key}'." if deleted else f"Memory key '{actual_key}' was not found."
 
-def memory_get_all(category: Optional[str] = None, limit: int = 500) -> List[Dict[str, Any]]:
+def memory_get_all(category: str | None = None, limit: int = 500) -> list[dict[str, Any]]:
     """Retrieve full content of memories for GUI cockpit management."""
     conn = _get_db()
     cursor = conn.cursor()
@@ -251,7 +251,7 @@ def memory_get_all(category: Optional[str] = None, limit: int = 500) -> List[Dic
     conn.close()
     return [dict(r) for r in rows]
 
-def memory_get_categories() -> List[str]:
+def memory_get_categories() -> list[str]:
     """Retrieve list of distinct category names present in memories table."""
     conn = _get_db()
     cursor = conn.cursor()
@@ -260,7 +260,7 @@ def memory_get_categories() -> List[str]:
     conn.close()
     return [r["category"] for r in rows if r["category"]]
 
-def memory_get_stats() -> Dict[str, Any]:
+def memory_get_stats() -> dict[str, Any]:
     """Retrieve summary telemetry: total memories, categories count, and storage bytes."""
     conn = _get_db()
     cursor = conn.cursor()

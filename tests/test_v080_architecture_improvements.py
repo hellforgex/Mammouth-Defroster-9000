@@ -7,10 +7,7 @@ Unit and integration tests for Mammouth Defroster 9000 Architecture & Robustness
 5. Read-Only System Health Probe (defroster_health_check)
 """
 
-import os
 import sys
-import json
-import pytest
 from pathlib import Path
 
 # Add src root to sys.path
@@ -19,7 +16,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 import server
-from modules.shell_processes import powershell_exec, cmd_exec
+from modules.shell_processes import powershell_exec
 from modules.task_scheduler import scheduler_create_task, scheduler_delete_task, scheduler_test_run, scheduler_get_history
 
 
@@ -38,16 +35,16 @@ def test_defroster_catalog_three_tier_metrics():
 
 def test_defroster_catalog_on_demand_tool_schema():
     """Verify on-demand machine-readable tool schema retrieval."""
-    res = server.defroster_catalog(tool_schema="powershell_exec")
+    # file_read is always registered; powershell_exec is only registered while shell_processes is enabled
+    res = server.defroster_catalog(tool_schema="file_read")
     assert res["status"] == "success"
-    assert res["tool_name"] == "powershell_exec"
+    assert res["tool_name"] == "file_read"
     assert res["status_in_active_profile"] in ("loaded", "available", "disabled")
     assert "schema" in res
-    assert res["schema"]["name"] == "powershell_exec"
+    assert res["schema"]["name"] == "file_read"
     params = res["schema"]["parameters"]
     assert params["type"] == "object"
-    assert "command" in params["properties"]
-    assert "command" in params["required"]
+    assert "file_path" in params["properties"]
 
 
 def test_defroster_health_check_read_only_probe():
@@ -83,8 +80,11 @@ def test_powershell_exec_standardized_contract():
     assert "Security Error" in blocked_res["stderr"]
 
 
-def test_task_scheduler_dry_run_and_history():
+def test_task_scheduler_dry_run_and_history(monkeypatch, tmp_path):
     """Verify task automation preview, test_run, and execution run history tracking."""
+    import modules.task_scheduler as ts
+    monkeypatch.setattr(ts, "DB_PATH", tmp_path / "tasks.db")
+    monkeypatch.setattr(ts, "_shell_module_enabled", lambda: True)
     task = scheduler_create_task(
         name="Auto Test Health Probe",
         prompt="system_get_specs",
@@ -120,8 +120,10 @@ def test_task_scheduler_dry_run_and_history():
         scheduler_delete_task(tid)
 
 
-def test_task_schedule_control_actions():
+def test_task_schedule_control_actions(monkeypatch, tmp_path):
     """Verify task_schedule_control accepts new actions."""
+    import modules.task_scheduler as ts
+    monkeypatch.setattr(ts, "DB_PATH", tmp_path / "tasks.db")
     task = server.task_schedule_create(name="Control Action Test", prompt="Echo 1", interval_minutes=5)
     tid = task["id"]
     try:

@@ -9,9 +9,9 @@ from pathlib import Path
 # Add src to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from gui import redact_secrets, MammouthControlCenter, APP_VERSION
+from gui import redact_secrets, MammouthControlCenter
 from modules.updater import check_for_update, download_and_verify_update, apply_update_and_restart
-from config import load_config, DEFAULT_CONFIG
+from config import DEFAULT_CONFIG
 
 
 class TestSecretRedaction(unittest.TestCase):
@@ -110,7 +110,7 @@ class TestAutoUpdater(unittest.TestCase):
                 
                 batch_file = os.path.join(tmp_dir, "apply_update.bat")
                 self.assertTrue(os.path.exists(batch_file))
-                with open(batch_file, "r", encoding="utf-8") as f:
+                with open(batch_file, encoding="utf-8") as f:
                     content = f.read()
                 # Verify safe update extraction logic that excludes user data
                 self.assertIn("config.json", content)
@@ -539,7 +539,7 @@ class TestSecurityAuditBlockerFixes(unittest.TestCase):
         self.assertTrue(any(m.get("type") == "http.response.start" and m.get("status") == 401 for m in res_bad))
 
         # 3. Good auth -> passes to app
-        good_auth = f"Bearer {middleware.token}".encode("utf-8")
+        good_auth = f"Bearer {middleware.token}".encode()
         async def fake_app(scope, receive, send):
             await send({"type": "http.response.start", "status": 200, "headers": []})
         middleware.app = fake_app
@@ -548,7 +548,7 @@ class TestSecurityAuditBlockerFixes(unittest.TestCase):
 
     def test_h2_updater_checksum_mandatory_and_verified(self):
         """H-2: Ensure updater refuses updates without SHA256 checksum asset or when checksum mismatches."""
-        from modules.updater import check_for_update, download_and_verify_update
+        from modules.updater import check_for_update
         import hashlib
 
         # 1. check_for_update returns None when .sha256 asset is missing
@@ -619,7 +619,7 @@ class TestSecurityAuditBlockerFixes(unittest.TestCase):
     def test_ue5_module_retired_in_v050(self):
         """Verify that retired remote_execution module is no longer bundled."""
         with self.assertRaises(ImportError):
-            import modules.remote_execution
+            import modules.remote_execution  # noqa: F401
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 import os
 import sys
+from datetime import UTC
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -33,9 +34,9 @@ class TestGuiStartServerRegression(unittest.TestCase):
         app._switch_to_mammouth_tab = MagicMock()
 
         with patch("socket.socket.connect_ex", return_value=1), \
-             patch("gui.threading.Thread") as mock_thread, \
+             patch("gui.threading.Thread"), \
              patch("uvicorn.Config") as mock_uvicorn_cfg, \
-             patch("uvicorn.Server") as mock_uvicorn_server, \
+             patch("uvicorn.Server"), \
              patch("gui.build_app") as mock_build_app:
 
             # Execute _start_server
@@ -459,8 +460,7 @@ class TestGuiStartupAndSchedulerTasksRegression(unittest.TestCase):
         from gui import MammouthControlCenter
         from modules.task_scheduler import (
             scheduler_create_task,
-            scheduler_pause_task,
-            _get_db
+            scheduler_pause_task
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -496,10 +496,10 @@ class TestGuiStartupAndSchedulerTasksRegression(unittest.TestCase):
                 app.lbl_task_stat_next = MagicMock()
 
                 # Mock CTkFrame / CTkLabel creation in _refresh_task_cards so it runs headless
-                with patch("customtkinter.CTkFrame") as mock_frame, \
-                     patch("customtkinter.CTkLabel") as mock_label, \
-                     patch("customtkinter.CTkButton") as mock_btn, \
-                     patch("customtkinter.CTkFont") as mock_font:
+                with patch("customtkinter.CTkFrame"), \
+                     patch("customtkinter.CTkLabel"), \
+                     patch("customtkinter.CTkButton"), \
+                     patch("customtkinter.CTkFont"):
 
                     app._refresh_task_cards()
 
@@ -519,7 +519,7 @@ class TestGuiStartupAndSchedulerTasksRegression(unittest.TestCase):
     def test_update_task_countdowns_with_timezone_aware_next_run(self):
         """Verify _update_task_countdowns handles timezone-aware ISO strings without raising TypeError."""
         from gui import MammouthControlCenter
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta
 
         app = MammouthControlCenter.__new__(MammouthControlCenter)
         app._log = MagicMock()
@@ -529,7 +529,7 @@ class TestGuiStartupAndSchedulerTasksRegression(unittest.TestCase):
         app.lbl_task_stat_next = MagicMock()
 
         # UTC timestamp ending with Z and timestamp with explicit +02:00 offset
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         utc_next = (now_utc + timedelta(seconds=180)).isoformat().replace("+00:00", "Z")
         offset_next = (now_utc + timedelta(seconds=300)).isoformat()
 

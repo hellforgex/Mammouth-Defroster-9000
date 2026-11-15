@@ -27,9 +27,10 @@ import queue
 import threading
 import subprocess
 import webbrowser
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC  # noqa: F401
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable
+from typing import Any
+from collections.abc import Callable
 
 
 # Ensure sys.stdout and sys.stderr are never None in frozen windowed binaries
@@ -68,15 +69,13 @@ if (BASE_DIR / "mcpserv").exists() and str(BASE_DIR / "mcpserv") not in sys.path
 if (BASE_DIR / "modules").exists() and str(BASE_DIR / "modules") not in sys.path:
     sys.path.insert(0, str(BASE_DIR / "modules"))
 
-from config import load_config, save_config, get_lan_ip, generate_secure_token, _encrypt_dpapi, _decrypt_dpapi, CONFIG_FILE
-from server import build_app, app
-from modules.embedded_browser import MammouthBrowserFrame, HAS_WEBVIEW2, parse_mammouth_quota_data
+from config import load_config, save_config, get_lan_ip, generate_secure_token, _encrypt_dpapi, _decrypt_dpapi
+from server import build_app
+from modules.embedded_browser import MammouthBrowserFrame
 from modules.updater import check_for_update, download_and_verify_update, apply_update_and_restart
 from modules.task_scheduler import (
     scheduler_create_task,
     scheduler_list_tasks,
-    scheduler_get_task,
-    scheduler_update_task,
     scheduler_delete_task,
     scheduler_pause_task,
     scheduler_resume_task,
@@ -86,10 +85,7 @@ from modules.task_scheduler import (
 )
 from modules.memory import (
     memory_save,
-    memory_recall,
-    memory_get,
     memory_delete,
-    memory_list,
     memory_get_all,
     memory_get_categories,
     memory_get_stats
@@ -125,8 +121,8 @@ def generate_self_signed_cert(cert_path: str, key_path: str, hostname: str = "lo
             .issuer_name(issuer)
             .public_key(key.public_key())
             .serial_number(x509.random_serial_number())
-            .not_valid_before(datetime.now(timezone.utc))
-            .not_valid_after(datetime.now(timezone.utc) + timedelta(days=3650))
+            .not_valid_before(datetime.now(UTC))
+            .not_valid_after(datetime.now(UTC) + timedelta(days=3650))
             .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
             .sign(key, hashes.SHA256())
         )
@@ -189,7 +185,7 @@ if is_server_binary or "--server-only" in sys.argv or "--cli" in sys.argv or "--
 
     proto = "https" if enable_tls else "http"
     print("=======================================================")
-    print(f"  Mammouth Defroster 9000 FastMCP Server (CLI Mode)")
+    print("  Mammouth Defroster 9000 FastMCP Server (CLI Mode)")
     print(f"  Listening on: {proto}://{host}:{port}/sse")
     if token:
         print(f"  Bearer Auth: ENABLED (Token: {token[:6]}...{token[-4:]})")
@@ -216,21 +212,12 @@ if is_server_binary or "--server-only" in sys.argv or "--cli" in sys.argv or "--
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox, filedialog
-import sqlite3
-import ipaddress
-import hmac
-import secrets
-import urllib.parse
 import httpx
-import psutil
 from PIL import Image as PILImage
 
-try:
-    import win32crypt
-except ImportError:
-    pass
 
-from modules.putty_ssh import ssh_save_host, ssh_list_saved_hosts, ssh_open_putty_window, ssh_exec_command
+
+from modules.putty_ssh import ssh_save_host, ssh_open_putty_window
 
 # Appearance setup
 INITIAL_CONFIG = load_config()
@@ -238,7 +225,7 @@ INITIAL_MODE = INITIAL_CONFIG.get("server", {}).get("appearance_mode", "Dark")
 ctk.set_appearance_mode(INITIAL_MODE)
 ctk.set_default_color_theme("dark-blue")
 
-from modules.global_hotkey import register_global_hotkey, unregister_global_hotkey, is_global_hotkey_registered
+from modules.global_hotkey import register_global_hotkey, unregister_global_hotkey
 
 # Mammouth AI Official Brand Design System & Unified Color Palette
 # Derived from official Mammouth AI branding kit (https://info.mammouth.ai/docs/branding-kit/)
@@ -262,11 +249,11 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.7.4"
+APP_VERSION = "v0.7.5"
 
 
 
-def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
+def find_tailscale_binary(tailscale_path: str = "") -> str | None:
     """Find the Tailscale binary path across multiple standard Windows locations."""
     candidates = [
         tailscale_path,
@@ -283,7 +270,7 @@ def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
     return None
 
 
-def find_cloudflared_binary(custom_path: str = "") -> Optional[str]:
+def find_cloudflared_binary(custom_path: str = "") -> str | None:
     """Find the cloudflared binary across custom config, app directories, siblings, and PATH."""
     candidates = [
         custom_path,
@@ -326,7 +313,7 @@ def find_cloudflared_binary(custom_path: str = "") -> Optional[str]:
 
 
 
-def get_tailscale_public_domain(tailscale_path: str = r"C:\Program Files\Tailscale\tailscale.exe") -> Optional[str]:
+def get_tailscale_public_domain(tailscale_path: str = r"C:\Program Files\Tailscale\tailscale.exe") -> str | None:
     """Attempt to detect the machine's Tailscale domain name robustly."""
     ts_bin = find_tailscale_binary(tailscale_path)
     if not ts_bin:
@@ -358,12 +345,12 @@ def get_tailscale_public_domain(tailscale_path: str = r"C:\Program Files\Tailsca
     return None
 
 
-_TS_DOMAIN_CACHE: Dict[str, Any] = {"value": None, "fetched_at": 0.0, "refreshing": False}
+_TS_DOMAIN_CACHE: dict[str, Any] = {"value": None, "fetched_at": 0.0, "refreshing": False}
 _TS_DOMAIN_LOCK = threading.Lock()
 _TS_DOMAIN_TTL = 300.0
 
 
-def get_tailscale_public_domain_cached(tailscale_path: str = "", on_update: Optional[Callable[[], None]] = None) -> Optional[str]:
+def get_tailscale_public_domain_cached(tailscale_path: str = "", on_update: Callable[[], None] | None = None) -> str | None:
     """Non-blocking variant for UI code: returns the cached domain immediately and refreshes it
     in a background thread when stale (`tailscale status` can take up to 5s)."""
     with _TS_DOMAIN_LOCK:
@@ -424,7 +411,7 @@ class GuiLogHandler(logging.Handler):
 
 class HostDialog(ctk.CTkToplevel):
     """Modern modal dialog for adding or editing an SSH host."""
-    def __init__(self, parent, host_data: Optional[Dict[str, Any]] = None, alias: str = ""):
+    def __init__(self, parent, host_data: dict[str, Any] | None = None, alias: str = ""):
         super().__init__(parent)
         self.title("Edit SSH Host" if alias else "Add New SSH Host")
         self.geometry("560x610")
@@ -597,7 +584,7 @@ class HostDialog(ctk.CTkToplevel):
 
 class MemoryDialog(ctk.CTkToplevel):
     """Modern modal dialog for adding or editing a persistent memory entry."""
-    def __init__(self, parent, memory_data: Optional[Dict[str, Any]] = None, key: str = ""):
+    def __init__(self, parent, memory_data: dict[str, Any] | None = None, key: str = ""):
         super().__init__(parent)
         self.title("Edit Memory" if key else "Add New Memory")
         self.geometry("600x560")
@@ -812,6 +799,19 @@ class SplashScreen(ctk.CTkToplevel):
         except Exception:
             pass
 
+    def destroy(self):
+        """Cancel all pending after() callbacks before destroying splash window."""
+        try:
+            if hasattr(self, "tk") and self.tk:
+                for aid in list(self.tk.call("after", "info")):
+                    try:
+                        self.tk.call("after", "cancel", aid)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        super().destroy()
+
 
 class CTkMammouthQuotaCard(ctk.CTkFrame):
     """Native CustomTkinter Sidebar Card for Mammouth.ai Quota & Telemetry."""
@@ -819,8 +819,8 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
     def __init__(
         self,
         master,
-        on_click: Optional[Callable[[], None]] = None,
-        on_refresh: Optional[Callable[[], None]] = None,
+        on_click: Callable[[], None] | None = None,
+        on_refresh: Callable[[], None] | None = None,
         **kwargs
     ):
         super().__init__(
@@ -834,7 +834,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
         )
         self.on_click = on_click
         self.on_refresh = on_refresh
-        self._parsed_data: Dict[str, Any] = {}
+        self._parsed_data: dict[str, Any] = {}
         self._last_refresh_timestamp: float = 0.0
 
         self._build_ui()
@@ -949,7 +949,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
             except Exception:
                 pass
 
-    def update_quota(self, parsed: Dict[str, Any]):
+    def update_quota(self, parsed: dict[str, Any]):
         self._parsed_data = parsed or {}
         self._last_refresh_timestamp = time.time()
 
@@ -1076,6 +1076,7 @@ class CTkMammouthQuotaCard(ctk.CTkFrame):
 
 class MammouthControlCenter(ctk.CTk):
     def __init__(self):
+        self._scheduled_after_ids: set[str] = set()
         super().__init__()
         self.withdraw()  # Hide main window during splash screen loading
         self.title(f"Mammouth Defroster 9000 🦣❄️🔥 ({APP_VERSION})")
@@ -1169,14 +1170,14 @@ class MammouthControlCenter(ctk.CTk):
             self.var_tool_profile = ctk.StringVar(value=curr_prof_label)
 
             self.uvicorn_server = None
-            self.server_thread: Optional[threading.Thread] = None
+            self.server_thread: threading.Thread | None = None
             self.is_server_running = False
-            self.dynamic_tunnel_url: Optional[str] = None
+            self.dynamic_tunnel_url: str | None = None
             self.server_start_time = None
             self.log_filter_mode = "ALL"
             self.sidebar_visible = True
             self.zen_mode_active = False
-            self.task_countdown_labels: Dict[int, ctk.CTkLabel] = {}
+            self.task_countdown_labels: dict[int, ctk.CTkLabel] = {}
             self.scheduler_engine = None
 
             if self.splash:
@@ -1251,13 +1252,22 @@ class MammouthControlCenter(ctk.CTk):
             self.after(10000, _splash_safety_timeout)
 
         except Exception:
-            # On any startup failure, immediately unmask/close splash before propagating
-            if getattr(self, "splash", None) is not None:
+            # On any startup failure, cancel scheduled afters and destroy window before propagating
+            try:
+                self.cancel_scheduled_afters()
+            except Exception:
+                pass
+            if self.__dict__.get("splash") is not None:
                 try:
                     self.splash.close()
                 except Exception:
                     pass
                 self.splash = None
+            if "tk" in self.__dict__ and self.tk:
+                try:
+                    super().destroy()
+                except Exception:
+                    pass
             raise
 
 
@@ -1750,7 +1760,7 @@ class MammouthControlCenter(ctk.CTk):
         self.tab_mammouth.configure(fg_color=THEME_BG)
         self.mammouth_browser.pack(fill="both", expand=True, padx=0, pady=0)
 
-    def toggle_zen_mode(self, enable: Optional[bool] = None):
+    def toggle_zen_mode(self, enable: bool | None = None):
         """Toggle Zen / Chat-First Mode: collapse navigation rail and give 100% viewport to Mammouth AI."""
         if enable is None:
             self.zen_mode_active = not self.zen_mode_active
@@ -2002,7 +2012,7 @@ class MammouthControlCenter(ctk.CTk):
         except Exception as ex:
             self._log(f"[QUICK-LAUNCHER] Error summoning window: {ex}")
 
-    def _on_quota_updated(self, payload: Optional[Dict[str, Any]]):
+    def _on_quota_updated(self, payload: dict[str, Any] | None):
         pass
 
     def _on_quota_manual_refresh(self):
@@ -2011,7 +2021,7 @@ class MammouthControlCenter(ctk.CTk):
     def _schedule_quota_refresh_loop(self):
         pass
 
-    def _take_and_copy_screenshot(self) -> Optional[str]:
+    def _take_and_copy_screenshot(self) -> str | None:
         try:
             # User-initiated capture: the click is the consent. Does NOT open the gate for MCP clients.
             from modules.screen_capture import screen_capture_local, copy_image_to_clipboard
@@ -2349,7 +2359,7 @@ class MammouthControlCenter(ctk.CTk):
         t = threading.Thread(target=worker, daemon=True)
         t.start()
 
-    def _on_update_found(self, update_info: Dict[str, Any]):
+    def _on_update_found(self, update_info: dict[str, Any]):
         self.available_update = update_info
         ver = update_info.get("version", "vNew")
         self.btn_update_badge.configure(text=f"🔄 Update: {ver}")
@@ -2371,7 +2381,6 @@ class MammouthControlCenter(ctk.CTk):
 
         upd = self.available_update
         ver = upd.get("version", "")
-        name = upd.get("name", ver)
         notes = upd.get("body", "No release notes available.")
         size_mb = round(upd.get("zip_size", 0) / (1024 * 1024), 1)
 
@@ -3205,7 +3214,8 @@ class MammouthControlCenter(ctk.CTk):
                 border_color=THEME_BTN_SEC_BORDER,
                 font=ctk.CTkFont(size=11, weight="bold"),
             )
-            btn_copy.configure(command=lambda c=item.get("content", ""), b=btn_copy: self._copy_memory_content(c, b))
+            content_val = item.get("content", "")
+            btn_copy.configure(command=lambda c=content_val, b=btn_copy: self._copy_memory_content(c, b))
             btn_copy.pack(side="left", padx=3)
 
             btn_edit = ctk.CTkButton(
@@ -3223,6 +3233,7 @@ class MammouthControlCenter(ctk.CTk):
             )
             btn_edit.pack(side="left", padx=3)
 
+            key_val = item.get("key", "")
             btn_del = ctk.CTkButton(
                 btn_box,
                 text="🗑️ Delete",
@@ -3234,7 +3245,7 @@ class MammouthControlCenter(ctk.CTk):
                 border_width=1,
                 border_color=("#FECACA", "#5C2B34"),
                 font=ctk.CTkFont(size=11, weight="bold"),
-                command=lambda k=item.get("key", ""): self._delete_memory(k)
+                command=lambda k=key_val: self._delete_memory(k)
             )
             btn_del.pack(side="left", padx=3)
 
@@ -3268,7 +3279,7 @@ class MammouthControlCenter(ctk.CTk):
             self.show_toast("Memory Saved", f"Successfully saved memory '{k}'.")
             self._refresh_memory_list()
 
-    def _edit_memory(self, item: Dict[str, Any]):
+    def _edit_memory(self, item: dict[str, Any]):
         dlg = MemoryDialog(self, memory_data=item, key=item.get("key", ""))
         self.wait_window(dlg)
         if dlg.result:
@@ -3442,17 +3453,25 @@ class MammouthControlCenter(ctk.CTk):
             )
             btn_copy.pack(side="right")
 
+    def _on_scheduler_changed(self):
+        if self.__dict__.get("_is_destroyed", False):
+            return
+        try:
+            self.after(0, self._refresh_task_cards)
+        except Exception:
+            pass
+
     def _init_task_scheduler(self):
         """Initialize the automated task scheduler and register event callbacks."""
         if "task_countdown_labels" not in self.__dict__ or self.task_countdown_labels is None:
-            self.task_countdown_labels: Dict[int, ctk.CTkLabel] = {}
+            self.task_countdown_labels: dict[int, ctk.CTkLabel] = {}
         try:
             self.scheduler_engine = TaskSchedulerEngine.get_instance()
             self.scheduler_engine.register_handler("mammouth_web", self._on_trigger_mammouth_web_task)
             self.scheduler_engine.register_handler("mammouth_code", self._on_trigger_mammouth_code_task)
             self.scheduler_engine.register_handler("powershell", self._on_trigger_powershell_task)
             self.scheduler_engine.register_handler("notification", self._on_trigger_notification_task)
-            self.scheduler_engine.register_listener(lambda: self.after(0, self._refresh_task_cards))
+            self.scheduler_engine.register_listener(self._on_scheduler_changed)
             self.after(1000, self._on_scheduler_tick)
         except Exception as e:
             self._log(f"[TASK SCHEDULER WARNING] Init failed: {e}")
@@ -3471,7 +3490,7 @@ class MammouthControlCenter(ctk.CTk):
             except Exception:
                 pass
 
-    def _on_trigger_mammouth_web_task(self, task: Dict[str, Any]) -> str:
+    def _on_trigger_mammouth_web_task(self, task: dict[str, Any]) -> str:
         """Trigger handler: Injects prompt into the embedded Mammouth AI Web chat."""
         prompt = task.get("prompt", "")
         name = task.get("name", "Task")
@@ -3500,7 +3519,7 @@ class MammouthControlCenter(ctk.CTk):
         self.after(0, _do_web_trigger)
         return "Dispatched to Mammouth AI Web"
 
-    def _on_trigger_mammouth_code_task(self, task: Dict[str, Any]) -> str:
+    def _on_trigger_mammouth_code_task(self, task: dict[str, Any]) -> str:
         """Trigger handler: Runs Mammouth Code CLI headlessly."""
         prompt = task.get("prompt", "")
         name = task.get("name", "Task")
@@ -3520,7 +3539,7 @@ class MammouthControlCenter(ctk.CTk):
         threading.Thread(target=_run, daemon=True, name=f"SchedMammouthCode-{task.get('id')}").start()
         return "Started in background"
 
-    def _on_trigger_powershell_task(self, task: Dict[str, Any]) -> str:
+    def _on_trigger_powershell_task(self, task: dict[str, Any]) -> str:
         """Trigger handler: Runs local PowerShell command."""
         prompt = task.get("prompt", "")
         name = task.get("name", "Task")
@@ -3543,7 +3562,7 @@ class MammouthControlCenter(ctk.CTk):
         threading.Thread(target=_run, daemon=True, name=f"SchedPowerShell-{task.get('id')}").start()
         return "Started in background"
 
-    def _on_trigger_notification_task(self, task: Dict[str, Any]) -> str:
+    def _on_trigger_notification_task(self, task: dict[str, Any]) -> str:
         """Trigger handler: Displays desktop alert & sound."""
         prompt = task.get("prompt", "")
         name = task.get("name", "Task")
@@ -3653,11 +3672,26 @@ class MammouthControlCenter(ctk.CTk):
 
     def _refresh_task_cards(self):
         """Re-render the list of scheduled tasks cards and update KPI stats."""
-        if self.__dict__.get("tasks_scroll") is None:
+        if self.__dict__.get("_is_destroyed", False):
             return
+        tasks_scroll = self.__dict__.get("tasks_scroll")
+        if tasks_scroll is None:
+            return
+        if "tk" in self.__dict__ and self.tk:
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
 
-        for w in self.tasks_scroll.winfo_children():
-            w.destroy()
+        try:
+            for w in tasks_scroll.winfo_children():
+                try:
+                    w.destroy()
+                except Exception:
+                    pass
+        except Exception:
+            return
 
         if "task_countdown_labels" not in self.__dict__ or self.task_countdown_labels is None:
             self.task_countdown_labels = {}
@@ -4032,7 +4066,7 @@ class MammouthControlCenter(ctk.CTk):
         self._select_nav_tab("⏱️ Tasks & Automation")
         self._refresh_task_cards()
 
-    def _show_new_task_dialog(self, preset_id: Optional[str] = None):
+    def _show_new_task_dialog(self, preset_id: str | None = None):
         """Modal dialog to configure and launch a new scheduled automated task."""
         dlg = ctk.CTkToplevel(self)
         dlg.title("Create New Automated Task")
@@ -4197,7 +4231,7 @@ class MammouthControlCenter(ctk.CTk):
             }
             target_str = tgt_map.get(menu_target.get(), "mammouth_web")
 
-            task = scheduler_create_task(
+            scheduler_create_task(
                 name=name,
                 prompt=prompt,
                 interval_seconds=interv_sec,
@@ -5734,10 +5768,10 @@ class MammouthControlCenter(ctk.CTk):
                     _browser_channels = ["chromium"]
                 _current_channel = b_cfg.get("channel", "msedge")
                 _current_option = next(
-                    (o for o, c in zip(_browser_options, _browser_channels) if c == _current_channel),
+                    (o for o, c in zip(_browser_options, _browser_channels, strict=False) if c == _current_channel),
                     _browser_options[0] if _browser_options else "chromium — Chromium"
                 )
-                self._browser_channel_map = dict(zip(_browser_options, _browser_channels))
+                self._browser_channel_map = dict(zip(_browser_options, _browser_channels, strict=False))
                 self.var_browser_channel = ctk.StringVar(value=_current_option)
                 opt_browser = ctk.CTkOptionMenu(
                     sub_opts,
@@ -6188,7 +6222,7 @@ class MammouthControlCenter(ctk.CTk):
 
         self._refresh_hosts_list()
 
-    def _load_hosts_file(self) -> Dict[str, Any]:
+    def _load_hosts_file(self) -> dict[str, Any]:
         if HOSTS_FILE.exists():
             try:
                 return json.loads(HOSTS_FILE.read_text(encoding="utf-8"))
@@ -6196,7 +6230,7 @@ class MammouthControlCenter(ctk.CTk):
                 return {}
         return {}
 
-    def _save_hosts_file(self, data: Dict[str, Any]):
+    def _save_hosts_file(self, data: dict[str, Any]):
         HOSTS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     def _refresh_hosts_list(self):
@@ -6314,7 +6348,7 @@ class MammouthControlCenter(ctk.CTk):
             self._refresh_hosts_list()
             self._log(f"Added new SSH Host alias (DPAPI Encrypted): {alias}")
 
-    def _edit_host(self, alias: str, info: Dict[str, Any]):
+    def _edit_host(self, alias: str, info: dict[str, Any]):
         dlg = HostDialog(self, host_data=info, alias=alias)
         self.wait_window(dlg)
         if dlg.result:
@@ -7267,7 +7301,7 @@ class MammouthControlCenter(ctk.CTk):
             pass
         return False
 
-    def _start_tunnel_for_mode(self, mode: Optional[str], port: int):
+    def _start_tunnel_for_mode(self, mode: str | None, port: int):
         if mode == "Tailscale Funnel":
             self._start_tailscale_funnel(port)
         elif mode == "Cloudflare Tunnel":
@@ -7556,6 +7590,111 @@ class MammouthControlCenter(ctk.CTk):
         self.btn_toggle_server.configure(text="▶ START SERVER", fg_color=("#059669", "#10B981"), hover_color=("#047857", "#059669"))
         self._log("Server shutdown complete.")
 
+    def after(self, ms, func=None, *args):
+        """Schedule a callback and track its ID for cleanup on destruction."""
+        if self.__dict__.get("_is_destroyed", False):
+            return None
+        if "_scheduled_after_ids" not in self.__dict__:
+            self._scheduled_after_ids = set()
+
+        if func is None:
+            if "tk" in self.__dict__ and self.tk:
+                try:
+                    return super().after(ms)
+                except Exception:
+                    return None
+            return None
+
+        after_id = None
+
+        if callable(func):
+            def wrapped_cb(*cb_args):
+                if "_scheduled_after_ids" in self.__dict__:
+                    self._scheduled_after_ids.discard(after_id)
+                if self.__dict__.get("_is_destroyed", False):
+                    return None
+                if "tk" in self.__dict__ and self.tk:
+                    try:
+                        if not self.winfo_exists():
+                            return None
+                    except Exception:
+                        return None
+                try:
+                    return func(*cb_args)
+                except Exception as e:
+                    err_msg = str(e).lower()
+                    if "application has been destroyed" in err_msg or "can't invoke" in err_msg:
+                        return None
+                    raise
+            cb = wrapped_cb
+        else:
+            cb = func
+
+        if "tk" in self.__dict__ and self.tk:
+            try:
+                after_id = super().after(ms, cb, *args)
+                if "_scheduled_after_ids" in self.__dict__:
+                    self._scheduled_after_ids.add(after_id)
+                return after_id
+            except Exception:
+                return None
+        return None
+
+    def after_cancel(self, id):
+        """Cancel a scheduled after callback and remove from tracked IDs."""
+        if id is None:
+            return
+        if "_scheduled_after_ids" in self.__dict__:
+            self._scheduled_after_ids.discard(id)
+        if "tk" in self.__dict__ and self.tk:
+            try:
+                return super().after_cancel(id)
+            except Exception:
+                pass
+
+    def cancel_scheduled_afters(self):
+        """Cancel all pending after() callbacks scheduled on this window and Tk interpreter."""
+        after_ids = self.__dict__.get("_scheduled_after_ids")
+        if after_ids:
+            for aid in list(after_ids):
+                if aid is not None and "tk" in self.__dict__ and self.tk:
+                    try:
+                        super().after_cancel(aid)
+                    except Exception:
+                        pass
+            after_ids.clear()
+
+        try:
+            if "tk" in self.__dict__ and self.tk:
+                for aid in list(self.tk.call("after", "info")):
+                    try:
+                        self.tk.call("after", "cancel", aid)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    def destroy(self):
+        """Clean up all pending after() timers and child resources before destroying window."""
+        self._is_destroyed = True
+        scheduler = self.__dict__.get("scheduler_engine")
+        if scheduler and hasattr(scheduler, "unregister_listener"):
+            try:
+                on_sched = self.__dict__.get("_on_scheduler_changed")
+                if on_sched:
+                    scheduler.unregister_listener(on_sched)
+            except Exception:
+                pass
+        try:
+            self.cancel_scheduled_afters()
+        except Exception:
+            pass
+        if "tk" in self.__dict__ and self.tk:
+            try:
+                super().destroy()
+            except Exception:
+                pass
+
     def _on_close(self, force: bool = False) -> bool:
         """Close the cockpit. Returns False if the user cancelled (app keeps running)."""
         if self.is_server_running:
@@ -7565,6 +7704,10 @@ class MammouthControlCenter(ctk.CTk):
             # os._exit below kills background threads, so turn the public funnel off synchronously
             if self.__dict__.get("_funnel_active", False):
                 self._disable_tailscale_funnel()
+        try:
+            self.cancel_scheduled_afters()
+        except Exception:
+            pass
         try:
             unregister_global_hotkey()
         except Exception:

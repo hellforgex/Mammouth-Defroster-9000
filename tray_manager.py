@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 import json
 import shutil
 import subprocess
@@ -44,7 +43,7 @@ except ImportError:
 
 import uvicorn
 from server import app, log_path
-from modules.mammouth_code import launch_mammouth_terminal, get_mammouth_code_status
+from modules.mammouth_code import launch_mammouth_terminal
 from modules.screen_capture import screen_capture
 
 

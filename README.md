@@ -18,7 +18,7 @@
   <img src="assets/cockpit_dark.png" alt="Cockpit dashboard (dark mode)" width="95%">
 </p>
 
-**Contents:** [Quickstart](#-quickstart) · [Connect to Mammouth.ai](#-connect-to-mammouthai) · [Exposure modes](#-exposure-modes) · [Safety defaults](#%EF%B8%8F-safety-defaults) · [What's new](#-whats-new-in-v070) · [Modules](#%EF%B8%8F-modules--tools) · [FAQ](#-faq) · [Developers](#-for-developers) · [Disclaimer](#%EF%B8%8F-disclaimer)
+**Contents:** [Quickstart](#-quickstart) · [Connect to Mammouth.ai](#-connect-to-mammouthai) · [Exposure modes](#-exposure-modes) · [Safety defaults](#%EF%B8%8F-safety-defaults) · [What's new](#-whats-new-in-v075-cumulative-since-v072) · [Modules](#%EF%B8%8F-modules--tools) · [FAQ](#-faq) · [Developers](#-for-developers) · [Disclaimer](#%EF%B8%8F-disclaimer)
 
 ---
 
@@ -26,7 +26,7 @@
 
 No Python, Git or terminal needed — the release is a self-contained package.
 
-1. **Download** [`MammouthDefroster9000-v0.7.0-windows-x64.zip`](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest) (~128 MB).
+1. **Download** [`MammouthDefroster9000-v0.7.5-windows-x64.zip`](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest) (~133 MB).
 2. **Extract** it anywhere, e.g. `C:\MammouthDefroster9000`.
 3. **Start** `start_gui.bat` (or `MammouthDefroster9000.exe`).
 4. **Pick an exposure mode** ([see below](#-exposure-modes)) and click **`▶ Start Server`**.
@@ -85,13 +85,23 @@ Tunnels are **never started automatically** unless you enable `auto_tunnel` your
 
 ---
 
-## ✨ What's New in v0.7.0
+## ✨ What's New in v0.7.5 (Cumulative since v0.7.2)
 
-- **Self-tooling:** If no built-in tool fits, the assistant can write its own Python or PowerShell script into `workspace/skills/` and run it locally. Running a script costs no API tokens; writing it does. Requires the **PowerShell & daemons** module.
-- **`defroster_catalog`:** Token-budget-friendly tool discovery for Mammouth's on-demand mode — the model looks up tools by category or search term instead of loading all schemas at once.
-- **Multi-browser agent:** Playwright with Chromium, Firefox and WebKit plus detection of installed Edge, Chrome and Brave. The model can switch engine and headless mode via `browser_restart`.
-- **Persistent browser logins:** Cookies and LocalStorage are saved per browser channel (`data/browser_states/`), so web logins survive restarts.
-- **Security fix:** Stricter workspace containment for `type` and `findstr` in the shell module.
+Since the last public release (`v0.7.2`), Defroster has received major upgrades across security, multilingual tool discovery, and background task automation:
+
+- **Security & Integrity Hardening (v0.7.5):**
+  - Parameterized process execution in terminal tools via child environment variables to prevent command injection.
+  - Profile authorization gating for on-demand tool execution (`defroster_execute_tool`).
+  - Origin-validated CORS preflights; URL query-string tokens (`?token=...`) are disabled by default (opt-in via `server.allow_query_token`).
+  - Upgraded dependencies (`fastmcp>=4.1.4`, `starlette>=1.10.0`, `pillow>=13.0.0`) remediating all known vulnerabilities (`0` pip-audit findings).
+- **Multilingual Tool Discovery & Profile Switching (v0.7.4):**
+  - Integrated `_MULTILINGUAL_TOOL_HINTS` across all Defroster tools (German, French, English) for instant tool search recognition.
+  - Dedicated Tool Profile selectors on Dashboard Hero Card and Navigation Sidebar with live bidirectional synchronization.
+  - Real-time `notifications/tools/list_changed` broadcast to active MCP sessions upon profile change.
+- **Autonomous Web Chat Prompt Automation (v0.7.3):**
+  - Asynchronous input polling (`pollAndInject`) eliminating prompt drops during scheduled tasks.
+  - Multilingual action button detection and full pointer/mouse event sequencing (`pointerdown`, `mousedown`, `pointerup`, `mouseup`, `click`) compatible with modern React 18 interfaces.
+  - Upgraded updater engine using Microsoft Robocopy with automatic SmartScreen unblocking.
 
 Full history: [`CHANGELOG.md`](CHANGELOG.md) · [`RELEASE_NOTES.md`](RELEASE_NOTES.md)
 

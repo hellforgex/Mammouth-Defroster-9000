@@ -39,7 +39,7 @@ class TestDPAPIConfig(unittest.TestCase):
             cfg_data = {"server": {"api_token": "original_secret_key_456"}}
             save_config(cfg_data)
 
-            with open(tmp_path, "r", encoding="utf-8") as f:
+            with open(tmp_path, encoding="utf-8") as f:
                 saved = json.load(f)
             self.assertTrue(saved["server"]["api_token"].startswith("dpapi:"))
             self.assertEqual(_decrypt_dpapi(saved["server"]["api_token"]), "original_secret_key_456")
@@ -69,7 +69,7 @@ class TestDPAPIConfig(unittest.TestCase):
             self.assertFalse(loaded["server"]["api_token"].startswith("dpapi:"))
 
             # And on disk it remains protected by DPAPI
-            with open(tmp_path, "r", encoding="utf-8") as f:
+            with open(tmp_path, encoding="utf-8") as f:
                 on_disk = json.load(f)
             self.assertTrue(on_disk["server"]["api_token"].startswith("dpapi:"))
         finally:

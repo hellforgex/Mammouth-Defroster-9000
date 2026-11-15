@@ -8,7 +8,7 @@ import logging
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
 
 logger = logging.getLogger("claude_code")
 
@@ -79,13 +79,13 @@ def _strip_jsonc(text: str) -> str:
     return "".join(out)
 
 
-def _merge_claude_mcp_entry(config_file: Path, entry: Dict[str, Any], server_name: str = SERVER_NAME) -> None:
+def _merge_claude_mcp_entry(config_file: Path, entry: dict[str, Any], server_name: str = SERVER_NAME) -> None:
     """Merge an MCP server entry into a Claude Code configuration file (.mcp.json or ~/.claude.json).
     
     Preserves all existing user configurations and other MCP servers.
     Creates a .bak backup and performs atomic replacement via temporary file.
     """
-    config_data: Dict[str, Any] = {}
+    config_data: dict[str, Any] = {}
     original_text = None
     if config_file.is_file():
         original_text = config_file.read_text(encoding="utf-8-sig")
@@ -96,7 +96,7 @@ def _merge_claude_mcp_entry(config_file: Path, entry: Dict[str, Any], server_nam
                 try:
                     config_data = json.loads(_strip_jsonc(original_text))
                 except json.JSONDecodeError as ex:
-                    raise ValueError(f"Cannot parse existing configuration at {config_file} ({ex})")
+                    raise ValueError(f"Cannot parse existing configuration at {config_file} ({ex})") from ex
         if not isinstance(config_data, dict):
             raise ValueError(f"Existing file {config_file} is not a valid JSON object")
 
@@ -122,7 +122,7 @@ def _merge_claude_mcp_entry(config_file: Path, entry: Dict[str, Any], server_nam
     os.replace(tmp_file, config_file)
 
 
-def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
+def find_tailscale_binary(tailscale_path: str = "") -> str | None:
     """Find the Tailscale binary path across multiple standard Windows locations."""
     candidates = [
         tailscale_path,
@@ -139,7 +139,7 @@ def find_tailscale_binary(tailscale_path: str = "") -> Optional[str]:
     return None
 
 
-def get_tailscale_public_domain(tailscale_path: str = "") -> Optional[str]:
+def get_tailscale_public_domain(tailscale_path: str = "") -> str | None:
     """Attempt to detect the machine's Tailscale public domain name."""
     ts_bin = find_tailscale_binary(tailscale_path)
     if not ts_bin:
@@ -165,7 +165,7 @@ def get_tailscale_public_domain(tailscale_path: str = "") -> Optional[str]:
     return None
 
 
-def save_active_tunnel_info(tunnel_url: Optional[str], tunnel_mode: str = "") -> None:
+def save_active_tunnel_info(tunnel_url: str | None, tunnel_mode: str = "") -> None:
     """Persist active tunnel information so other processes/tools can access live tunnel URL."""
     try:
         TUNNEL_INFO_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -179,7 +179,7 @@ def save_active_tunnel_info(tunnel_url: Optional[str], tunnel_mode: str = "") ->
         logger.debug(f"Failed to save tunnel info: {ex}")
 
 
-def get_active_tunnel_info() -> Dict[str, Any]:
+def get_active_tunnel_info() -> dict[str, Any]:
     """Retrieve persisted active tunnel information."""
     if TUNNEL_INFO_FILE.is_file():
         try:
@@ -189,7 +189,7 @@ def get_active_tunnel_info() -> Dict[str, Any]:
     return {"tunnel_url": None, "tunnel_mode": "", "updated_at": 0.0}
 
 
-def resolve_public_tunnel_url(endpoint_path: str = "/mcp") -> Optional[str]:
+def resolve_public_tunnel_url(endpoint_path: str = "/mcp") -> str | None:
     """Determine the active or configured public tunnel endpoint for Claude Code Cloud Sessions."""
     if not endpoint_path.startswith("/"):
         endpoint_path = "/" + endpoint_path
@@ -267,7 +267,7 @@ def resolve_active_server_url(target_cloud: bool = True, endpoint_path: str = "/
     return f"http://{host}:{port}{endpoint_path}"
 
 
-def get_claude_executable() -> Optional[str]:
+def get_claude_executable() -> str | None:
     """Find path to claude CLI executable on the host machine.
     
     Checks in order:
@@ -320,7 +320,7 @@ def get_claude_executable() -> Optional[str]:
     return None
 
 
-def get_claude_code_status(workspace_path: Optional[str] = None) -> Dict[str, Any]:
+def get_claude_code_status(workspace_path: str | None = None) -> dict[str, Any]:
     """Inspect and return current installation, version, and MCP bridge status for Claude Code."""
     exe = get_claude_executable()
     installed = exe is not None and os.path.isfile(exe)
@@ -438,15 +438,15 @@ def update_workspace_claude_md(workspace_path: Path) -> bool:
 
 
 def sync_claude_code_mcp(
-    workspace_path: Optional[str] = None,
-    server_url: Optional[str] = None,
-    api_token: Optional[str] = None,
+    workspace_path: str | None = None,
+    server_url: str | None = None,
+    api_token: str | None = None,
     target_cloud: bool = True,
-    use_env_var: bool = False,
+    use_env_var: bool = True,
     sync_global: bool = True,
     update_claude_md: bool = True,
     use_oauth: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Write/merge Mammouth Defroster 9000 MCP server entry into Claude Code configurations (.mcp.json and ~/.claude.json).
     
     When target_cloud=True (recommended for Claude Code Cloud Sessions):
@@ -508,9 +508,9 @@ def sync_claude_code_mcp(
 
     # 5. Build MCP entries
     # In .mcp.json, Claude Code uses type: "http" for Streamable HTTP remote endpoints
-    auth_header_val = f"Bearer {api_token}" if not use_env_var else f"Bearer ${{MAMMOUTH_DEFROSTER_TOKEN}}"
+    auth_header_val = f"Bearer {api_token}" if not use_env_var else "Bearer ${MAMMOUTH_DEFROSTER_TOKEN}"
     
-    workspace_entry: Dict[str, Any] = {
+    workspace_entry: dict[str, Any] = {
         "type": "http",
         "url": server_url
     }
@@ -534,12 +534,12 @@ def sync_claude_code_mcp(
             DEFAULT_CLAUDE_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
             # Global config is on the local user machine; always use local server URL for local sessions
             local_url = resolve_active_server_url(target_cloud=False, endpoint_path="/mcp")
-            global_entry: Dict[str, Any] = {
+            global_entry: dict[str, Any] = {
                 "type": "http",
                 "url": local_url
             }
-            if not use_oauth and api_token:
-                global_entry["headers"] = {"Authorization": f"Bearer {api_token}"}
+            if not use_oauth and (api_token or use_env_var):
+                global_entry["headers"] = {"Authorization": auth_header_val}
             _merge_claude_mcp_entry(DEFAULT_CLAUDE_CONFIG_FILE, global_entry, server_name=SERVER_NAME)
             updated_files.append(str(DEFAULT_CLAUDE_CONFIG_FILE))
         except Exception as ex:
@@ -585,7 +585,7 @@ def sync_claude_code_mcp(
     }
 
 
-def _find_windows_terminal() -> Optional[str]:
+def _find_windows_terminal() -> str | None:
     """Locate wt.exe (Windows Terminal)."""
     wt = shutil.which("wt.exe") or shutil.which("wt")
     if wt:
@@ -599,12 +599,12 @@ def _find_windows_terminal() -> Optional[str]:
 
 
 def launch_claude_terminal(
-    workspace_path: Optional[str] = None,
+    workspace_path: str | None = None,
     cloud: bool = True,
     continue_session: bool = False,
-    preferred_terminal: Optional[str] = None,
-    prompt: Optional[str] = None
-) -> Dict[str, Any]:
+    preferred_terminal: str | None = None,
+    prompt: str | None = None
+) -> dict[str, Any]:
     """Launch an interactive Claude Code terminal session (local or cloud) in a new desktop window."""
     try:
         from config import load_config
@@ -642,6 +642,13 @@ def launch_claude_terminal(
         except Exception:
             workspace_path = os.getcwd()
 
+    if any(c in str(workspace_path) for c in ("\x00", "\r", "\n")):
+        return {
+            "success": False,
+            "error": "workspace_path contains invalid control characters",
+            "workspace": str(workspace_path)
+        }
+
     if not os.path.isdir(workspace_path):
         os.makedirs(workspace_path, exist_ok=True)
 
@@ -669,26 +676,32 @@ def launch_claude_terminal(
         except Exception:
             preferred_terminal = "powershell"
 
-    safe_ws = str(workspace_path).replace("'", "''")
-    safe_exe = str(exe).replace("'", "''")
-
-    args_list = []
-    if cloud:
-        args_list.append("--cloud")
-    if continue_session:
-        args_list.append("-c")
-    if prompt and prompt.strip():
-        safe_p = prompt.strip().replace("'", "''")
-        args_list.append(f"-p '{safe_p}'")
-
-    args_str = " " + " ".join(args_list) if args_list else ""
     title_str = "Claude Code (Cloud Session)" if cloud else "Claude Code"
 
+    # Eliminate user input interpolation into PowerShell script strings
+    # Pass inputs via child_env environment variables
+    child_env["MD_CLAUDE_WS"] = str(workspace_path)
+    child_env["MD_CLAUDE_EXE"] = str(exe)
+    child_env["MD_CLAUDE_TITLE"] = title_str
+
+    pwsh_args = []
+    if cloud:
+        pwsh_args.append("--cloud")
+    if continue_session:
+        pwsh_args.append("-c")
+    if prompt and prompt.strip():
+        child_env["MD_CLAUDE_PROMPT"] = prompt.strip()
+        pwsh_args.append("-p $env:MD_CLAUDE_PROMPT")
+
+    # Script contains ONLY constants
     pwsh_statements = [
-        f"Set-Location -LiteralPath '{safe_ws}'",
-        f"[System.Console]::Title = '{title_str}'",
-        f"& '{safe_exe}'{args_str}"
+        "Set-Location -LiteralPath $env:MD_CLAUDE_WS",
+        "[System.Console]::Title = $env:MD_CLAUDE_TITLE"
     ]
+    exe_invocation = "& $env:MD_CLAUDE_EXE"
+    if pwsh_args:
+        exe_invocation += " " + " ".join(pwsh_args)
+    pwsh_statements.append(exe_invocation)
 
     full_script = "; ".join(pwsh_statements)
     encoded_cmd = base64.b64encode(full_script.encode("utf-16le")).decode("ascii")
@@ -697,8 +710,8 @@ def launch_claude_terminal(
         wt_exe = _find_windows_terminal() if (preferred_terminal == "wt") else None
 
         if preferred_terminal == "wt" and wt_exe:
+            # Direct launch of wt.exe eliminates cmd.exe metacharacter injection on workspace_path
             cmd = [
-                "cmd.exe", "/c", "start", "",
                 wt_exe,
                 "--title", title_str,
                 "-d", workspace_path,
@@ -741,10 +754,10 @@ def launch_claude_terminal(
 
 def run_claude_task(
     prompt: str,
-    workspace_path: Optional[str] = None,
+    workspace_path: str | None = None,
     cloud: bool = True,
     timeout_seconds: int = 180
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute a task non-interactively via Claude Code CLI ('claude -p' or 'claude --cloud -p')."""
     try:
         from config import load_config

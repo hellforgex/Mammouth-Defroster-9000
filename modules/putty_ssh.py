@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import re
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 if getattr(sys, "frozen", False):
     BASE_DIR = Path(sys.executable).parent.resolve()
@@ -41,7 +41,7 @@ def _validate_remote_command(command: str) -> str:
     return clean
 
 
-def _sanitize_param(val: Optional[str], name: str) -> str:
+def _sanitize_param(val: str | None, name: str) -> str:
     """Sanitize input parameters to prevent command injection."""
     if not val:
         return ""
@@ -71,9 +71,9 @@ def _encrypt_dpapi(plaintext: str) -> str:
         )
         return "dpapi:" + base64.b64encode(encrypted_blob).decode("utf-8")
     except ImportError:
-        raise RuntimeError("Windows DPAPI (pywin32) is required for password encryption. Plaintext password storage is prohibited.")
+        raise RuntimeError("Windows DPAPI (pywin32) is required for password encryption. Plaintext password storage is prohibited.") from None
     except Exception as ex:
-        raise RuntimeError(f"DPAPI Encryption Error: {ex}. Plaintext password fallback is prohibited.")
+        raise RuntimeError(f"DPAPI Encryption Error: {ex}. Plaintext password fallback is prohibited.") from ex
 
 
 def _decrypt_dpapi(ciphertext: str) -> str:
@@ -92,21 +92,21 @@ def _decrypt_dpapi(ciphertext: str) -> str:
             0
         )
         return decrypted_blob.decode("utf-8")
-    except Exception as ex:
+    except Exception:
         return ""
 
 
-def _load_hosts() -> Dict[str, Any]:
+def _load_hosts() -> dict[str, Any]:
     if not HOSTS_FILE.exists():
         return {}
     try:
-        with open(HOSTS_FILE, "r", encoding="utf-8") as f:
+        with open(HOSTS_FILE, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {}
 
 
-def _save_hosts(data: Dict[str, Any]):
+def _save_hosts(data: dict[str, Any]):
     with open(HOSTS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
@@ -115,10 +115,10 @@ def ssh_save_host(
     alias: str,
     host: str,
     username: str = "root",
-    password: Optional[str] = None,
-    private_key_path: Optional[str] = None,
+    password: str | None = None,
+    private_key_path: str | None = None,
     port: int = 22,
-    description: Optional[str] = None,
+    description: str | None = None,
     clear_password: bool = False
 ) -> str:
     """Save an SSH server login profile encrypted with Windows DPAPI.
@@ -157,7 +157,7 @@ def ssh_save_host(
     return f"Successfully saved host alias '{clean_alias}' ({clean_user}@{clean_host}:{port}) with DPAPI hardware encryption."
 
 
-def ssh_list_saved_hosts() -> Dict[str, Any]:
+def ssh_list_saved_hosts() -> dict[str, Any]:
     """List all saved SSH hosts."""
     hosts = _load_hosts()
     sanitized = {}
@@ -195,13 +195,13 @@ def _secure_temp_pwfile(temp_pw_path: str) -> None:
 def ssh_exec_command(
     host: str,
     command: str,
-    username: Optional[str] = None,
-    password: Optional[str] = None,
-    private_key_path: Optional[str] = None,
-    port: Optional[int] = None,
-    session_name: Optional[str] = None,
+    username: str | None = None,
+    password: str | None = None,
+    private_key_path: str | None = None,
+    port: int | None = None,
+    session_name: str | None = None,
     timeout_seconds: int = 60
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute a remote shell command on any SSH server via PuTTY plink."""
     try:
         from config import load_config
@@ -304,11 +304,11 @@ def ssh_exec_command(
 
 def ssh_open_putty_window(
     host_or_alias: str,
-    username: Optional[str] = None,
-    password: Optional[str] = None,
-    private_key_path: Optional[str] = None,
-    port: Optional[int] = None
-) -> Dict[str, Any]:
+    username: str | None = None,
+    password: str | None = None,
+    private_key_path: str | None = None,
+    port: int | None = None
+) -> dict[str, Any]:
     """Launch an interactive GUI PuTTY terminal window for a saved alias or host."""
     putty_bin = shutil.which("putty") or r"C:\Program Files\PuTTY\putty.exe"
     if not os.path.exists(putty_bin) and not shutil.which("putty"):
@@ -357,11 +357,11 @@ def ssh_transfer_file(
     local_path: str,
     remote_path: str,
     direction: str = "upload",
-    username: Optional[str] = None,
-    password: Optional[str] = None,
-    private_key_path: Optional[str] = None,
-    port: Optional[int] = None
-) -> Dict[str, Any]:
+    username: str | None = None,
+    password: str | None = None,
+    private_key_path: str | None = None,
+    port: int | None = None
+) -> dict[str, Any]:
     """Securely upload or download files via pscp."""
     try:
         from config import load_config
@@ -458,7 +458,7 @@ def ssh_transfer_file(
                 pass
 
 
-def _get_putty_registry_sessions_list() -> List[str]:
+def _get_putty_registry_sessions_list() -> list[str]:
     """Helper to read PuTTY saved sessions from Windows Registry."""
     if os.name != 'nt':
         return []
@@ -480,7 +480,7 @@ def _get_putty_registry_sessions_list() -> List[str]:
         return []
 
 
-def ssh_list_putty_registry_sessions() -> Dict[str, Any]:
+def ssh_list_putty_registry_sessions() -> dict[str, Any]:
     """List all saved sessions configured directly in PuTTY's Windows Registry."""
     sessions = _get_putty_registry_sessions_list()
     return {"sessions": sessions, "count": len(sessions)}

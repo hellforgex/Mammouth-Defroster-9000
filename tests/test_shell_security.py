@@ -198,7 +198,7 @@ class TestShellSecurity(unittest.TestCase):
     def test_process_spawn_execution(self):
         """Test process_spawn creates background process, captures output, and tracks pid/task_id."""
         import time
-        from modules.shell_processes import process_spawn, process_get_output, process_kill_background
+        from modules.shell_processes import process_spawn, process_get_output
         res = process_spawn("Write-Output 'MCP Background Log Capture Test'", name="test-bg-task")
         self.assertEqual(res["status"], "started")
         self.assertGreater(res["pid"], 0)

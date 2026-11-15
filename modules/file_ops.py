@@ -1,10 +1,9 @@
 import itertools
 import os
 import re
-import json
 import fnmatch
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 import sys
 
@@ -83,9 +82,7 @@ def _normalize_and_resolve_path(raw_path_str: str) -> str:
     # Strip UNC device namespace prefixes (\\?\UNC\server\share -> \\server\share, \\?\C:\ -> C:\, \\.\C:\ -> C:\)
     if clean_str.startswith("\\\\?\\UNC\\") or clean_str.startswith("\\\\?\\unc\\"):
         clean_str = "\\\\" + clean_str[8:]
-    elif clean_str.startswith("\\\\?\\") or clean_str.startswith("\\\\.\\"):
-        clean_str = clean_str[4:]
-    elif clean_str.startswith("//?/"):
+    elif clean_str.startswith("\\\\?\\") or clean_str.startswith("\\\\.\\") or clean_str.startswith("//?/"):
         clean_str = clean_str[4:]
 
     # Resolve 8.3 short names and symlinks on Windows
@@ -181,11 +178,11 @@ def _validate_path(target_path_str: str, for_write: bool = False) -> Path:
 
 
 def file_read(
-    file_path: Optional[str] = None,
-    start_line: Optional[int] = None,
-    end_line: Optional[int] = None,
+    file_path: str | None = None,
+    start_line: int | None = None,
+    end_line: int | None = None,
     max_chars: int = 50000,
-    path: Optional[str] = None
+    path: str | None = None
 ) -> str:
     """Read a text file with optional line slicing within allowed workspace boundaries.
     Defroster tool hub: use defroster_catalog() to discover and activate specialized capabilities.
@@ -214,7 +211,7 @@ def file_read(
     try:
         max_chars = max(1, int(max_chars))
         # Stream instead of loading the whole file: only the requested lines / first max_chars are read
-        with open(validated_path, "r", encoding="utf-8", errors="replace") as fh:
+        with open(validated_path, encoding="utf-8", errors="replace") as fh:
             if start_line is not None or end_line is not None:
                 s = max(0, (start_line - 1) if start_line else 0)
                 e = end_line if end_line else None
@@ -231,10 +228,10 @@ def file_read(
 
 
 def file_write(
-    file_path: Optional[str] = None,
+    file_path: str | None = None,
     content: str = "",
     overwrite: bool = True,
-    path: Optional[str] = None
+    path: str | None = None
 ) -> str:
     """Write or overwrite a file on disk within allowed workspace boundaries.
     
@@ -266,10 +263,10 @@ def file_write(
 
 
 def file_replace_chunk(
-    file_path: Optional[str] = None,
+    file_path: str | None = None,
     target_chunk: str = "",
     replacement_chunk: str = "",
-    path: Optional[str] = None
+    path: str | None = None
 ) -> str:
     """Replace an exact block of text/code in a file.
     
@@ -307,14 +304,14 @@ def file_replace_chunk(
 
 
 def file_search_text(
-    directory_path: Optional[str] = None,
-    search_query: Optional[str] = None,
+    directory_path: str | None = None,
+    search_query: str | None = None,
     file_pattern: str = "*",
     is_regex: bool = False,
     max_matches: int = 50,
-    path: Optional[str] = None,
-    query: Optional[str] = None
-) -> List[Dict[str, Any]]:
+    path: str | None = None,
+    query: str | None = None
+) -> list[dict[str, Any]]:
     """Search for text inside files in a directory (like grep/ripgrep).
     
     Args:
@@ -355,7 +352,7 @@ def file_search_text(
                 if _is_binary_file(fp):
                     continue
                 try:
-                    with open(fp, "r", encoding="utf-8", errors="ignore") as file_handle:
+                    with open(fp, encoding="utf-8", errors="ignore") as file_handle:
                         for line_num, line in enumerate(file_handle, 1):
                             matched = False
                             if is_regex and compiled_re:
@@ -381,9 +378,9 @@ def file_search_text(
 
 
 def directory_list(
-    directory_path: Optional[str] = None,
-    path: Optional[str] = None
-) -> List[Dict[str, Any]]:
+    directory_path: str | None = None,
+    path: str | None = None
+) -> list[dict[str, Any]]:
     """List all files and folders inside a directory.
     
     Args:
@@ -414,10 +411,10 @@ def directory_list(
 
 
 def directory_tree(
-    directory_path: Optional[str] = None,
+    directory_path: str | None = None,
     max_depth: int = 3,
-    path: Optional[str] = None
-) -> Dict[str, Any]:
+    path: str | None = None
+) -> dict[str, Any]:
     """Generate a nested directory hierarchy tree up to max_depth.
     
     Args:
@@ -431,7 +428,7 @@ def directory_tree(
     except Exception as e:
         return {"error": f"Security/Validation Error: {e}"}
 
-    def build_tree(current_path: Path, depth: int) -> Dict[str, Any]:
+    def build_tree(current_path: Path, depth: int) -> dict[str, Any]:
         if depth > max_depth:
             return {"name": current_path.name, "type": "directory", "children": "[Depth Limit Reached]"}
             

@@ -4,7 +4,7 @@ import io
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
+from typing import Any
 
 try:
     from PIL import Image as PILImage, ImageGrab
@@ -46,7 +46,7 @@ def get_workspace_screenshots_dir() -> Path:
 WORKSPACE_DIR = get_workspace_screenshots_dir()
 
 
-def _cleanup_old_screenshots(target_dir: Optional[Path] = None, max_keep: int = 25, max_age_hours: int = 24):
+def _cleanup_old_screenshots(target_dir: Path | None = None, max_keep: int = 25, max_age_hours: int = 24):
     """Keep only the most recent screenshots and clean up files older than max_age_hours."""
     try:
         folder = target_dir or get_workspace_screenshots_dir()
@@ -80,7 +80,7 @@ def _cleanup_old_screenshots(target_dir: Optional[Path] = None, max_keep: int = 
     except Exception:
         pass
 
-def screen_list_monitors() -> List[Dict[str, Any]]:
+def screen_list_monitors() -> list[dict[str, Any]]:
     """List all detected monitors, their screen resolutions, and primary display status."""
     monitors_info = []
     if mss is not None:
@@ -117,9 +117,9 @@ _consent_mode: str = "none"  # "none", "once", "always"
 _consent_prompt_callback = None
 
 # Multimodal Screen Copilot tracking state
-_tracked_target_hwnd: Optional[int] = None
-_tracked_target_title: Optional[str] = None
-_tracked_target_process: Optional[str] = None
+_tracked_target_hwnd: int | None = None
+_tracked_target_title: str | None = None
+_tracked_target_process: str | None = None
 _tracked_mode: str = "auto"  # "auto", "window", "monitor", "snip"
 
 
@@ -129,7 +129,7 @@ def set_consent_prompt_callback(callback):
     _consent_prompt_callback = callback
 
 
-def screen_grant_consent(duration: str = "once") -> Dict[str, Any]:
+def screen_grant_consent(duration: str = "once") -> dict[str, Any]:
     """Grant explicit user consent for desktop screenshot capture.
     
     Args:
@@ -145,7 +145,7 @@ def screen_grant_consent(duration: str = "once") -> Dict[str, Any]:
     }
 
 
-def screen_revoke_consent() -> Dict[str, Any]:
+def screen_revoke_consent() -> dict[str, Any]:
     """Revoke desktop screenshot consent."""
     global _user_consent_granted, _consent_mode
     _user_consent_granted = False
@@ -173,7 +173,7 @@ def _check_screen_capture_rate_limit(min_interval: float = 0.5):
 
 def screen_capture(
     monitor: int = 1,
-    max_width: Optional[int] = 1920,
+    max_width: int | None = 1920,
     quality: int = 85,
     save_to_workspace: bool = True
 ) -> Any:
@@ -190,7 +190,7 @@ def screen_capture(
 
 def screen_capture_local(
     monitor: int = 1,
-    max_width: Optional[int] = 1920,
+    max_width: int | None = 1920,
     quality: int = 85,
     save_to_workspace: bool = True
 ) -> Any:
@@ -202,7 +202,7 @@ def screen_capture_local(
     return _screen_capture_impl(monitor, max_width, quality, save_to_workspace, local_ui=True)
 
 
-def _screen_capture_impl(monitor: int, max_width: Optional[int], quality: int, save_to_workspace: bool, local_ui: bool) -> Any:
+def _screen_capture_impl(monitor: int, max_width: int | None, quality: int, save_to_workspace: bool, local_ui: bool) -> Any:
     global _user_consent_granted, _consent_mode
 
     # M-07: Consent-Gate Check (skipped only for captures the human triggered in the GUI)
@@ -329,7 +329,9 @@ def copy_image_to_clipboard(image_or_path) -> bool:
         return False
     try:
         from PIL import Image
-        import win32clipboard, io, time
+        import win32clipboard
+        import io
+        import time
         if isinstance(image_or_path, (str, Path)):
             img = Image.open(str(image_or_path))
         else:
@@ -386,7 +388,7 @@ def get_clipboard_image():
     return None
 
 
-def save_clipboard_image(dest_path: Optional[str] = None) -> Optional[str]:
+def save_clipboard_image(dest_path: str | None = None) -> str | None:
     """Saves the current clipboard image to workspace/screenshots/ and returns the path."""
     img = get_clipboard_image()
     if img is None:
@@ -407,7 +409,7 @@ def save_clipboard_image(dest_path: Optional[str] = None) -> Optional[str]:
         return None
 
 
-def get_window_info(hwnd: Optional[int] = None) -> Dict[str, Any]:
+def get_window_info(hwnd: int | None = None) -> dict[str, Any]:
     """Inspect a window (or active foreground window if hwnd is None) on Windows using Win32 API.
     
     Returns:
@@ -570,13 +572,13 @@ def is_defroster_window(hwnd: int) -> bool:
     return False
 
 
-def get_topmost_external_window() -> Optional[Dict[str, Any]]:
+def get_topmost_external_window() -> dict[str, Any] | None:
     """Find the top-most visible, non-minimized window in Z-order that is NOT Defroster."""
     wins = screen_list_windows(include_minimized=False, include_system=False, exclude_self=True)
     return wins[0] if wins else None
 
 
-def get_target_window_info(hwnd: Optional[int] = None, exclude_defroster: bool = True) -> Dict[str, Any]:
+def get_target_window_info(hwnd: int | None = None, exclude_defroster: bool = True) -> dict[str, Any]:
     """Resolve target window to capture: explicit target_hwnd -> tracked window -> top external window -> foreground window."""
     global _tracked_target_hwnd
     _ensure_dpi_awareness()
@@ -605,7 +607,7 @@ def get_target_window_info(hwnd: Optional[int] = None, exclude_defroster: bool =
     return fg_info
 
 
-def capture_window_via_printwindow(hwnd: int) -> Optional[Any]:
+def capture_window_via_printwindow(hwnd: int) -> Any | None:
     """Capture a window directly via Win32 PrintWindow (PW_RENDERFULLCONTENT).
     Works cleanly even when the target window is partially or completely obscured by other windows.
     """
@@ -706,7 +708,7 @@ def capture_window_via_printwindow(hwnd: int) -> Optional[Any]:
         return None
 
 
-def screen_set_tracked_window(target: Union[str, int] = "auto") -> Dict[str, Any]:
+def screen_set_tracked_window(target: str | int = "auto") -> dict[str, Any]:
     """Set the target application or window to track for screenshots.
 
     Args:
@@ -775,7 +777,7 @@ def screen_set_tracked_window(target: Union[str, int] = "auto") -> Dict[str, Any
     }
 
 
-def screen_get_tracked_window() -> Dict[str, Any]:
+def screen_get_tracked_window() -> dict[str, Any]:
     """Get the currently tracked target window or tracking mode."""
     global _tracked_target_hwnd, _tracked_target_title, _tracked_target_process, _tracked_mode
     if _tracked_target_hwnd:
@@ -811,7 +813,7 @@ def screen_get_tracked_window() -> Dict[str, Any]:
     }
 
 
-def get_foreground_window_info() -> Dict[str, Any]:
+def get_foreground_window_info() -> dict[str, Any]:
     """Inspect the active foreground window on Windows using Win32 API."""
     return get_window_info(None)
 
@@ -820,7 +822,7 @@ def screen_list_windows(
     include_minimized: bool = False,
     include_system: bool = False,
     exclude_self: bool = False
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """List all currently visible, interactive desktop windows with title, process name, and HWND.
 
     Filters out hidden, zero-sized, and background system windows so AI tools or users
@@ -959,10 +961,10 @@ def screen_list_windows(
 
 
 def screen_capture_active_window(
-    target_hwnd: Optional[int] = None,
+    target_hwnd: int | None = None,
     save_to_workspace: bool = True,
     include_metadata: bool = True,
-    max_width: Optional[int] = 1920,
+    max_width: int | None = 1920,
     quality: int = 85
 ) -> Any:
     """Capture a screenshot of the currently active foreground window or a specific window by target_hwnd.
@@ -985,10 +987,10 @@ def screen_capture_active_window(
 
 
 def screen_capture_active_window_local(
-    target_hwnd: Optional[int] = None,
+    target_hwnd: int | None = None,
     save_to_workspace: bool = True,
     include_metadata: bool = True,
-    max_width: Optional[int] = 1920,
+    max_width: int | None = 1920,
     quality: int = 85
 ) -> Any:
     """Active window capture initiated locally from desktop GUI / hotkey (bypasses MCP consent gate)."""
@@ -1003,10 +1005,10 @@ def screen_capture_active_window_local(
 
 
 def screen_capture_window(
-    target_hwnd: Optional[int] = None,
+    target_hwnd: int | None = None,
     save_to_workspace: bool = True,
     include_metadata: bool = True,
-    max_width: Optional[int] = 1920,
+    max_width: int | None = 1920,
     quality: int = 85
 ) -> Any:
     """Alias for screen_capture_active_window supporting specific target_hwnd targeting."""
@@ -1022,10 +1024,10 @@ def screen_capture_window(
 def _screen_capture_active_window_impl(
     save_to_workspace: bool,
     include_metadata: bool,
-    max_width: Optional[int],
+    max_width: int | None,
     quality: int,
     local_ui: bool,
-    target_hwnd: Optional[int] = None
+    target_hwnd: int | None = None
 ) -> Any:
     global _user_consent_granted, _consent_mode
 

@@ -9,13 +9,11 @@ Zero external API dependencies, reliable on Windows 11.
 import sys
 import json
 import csv
-import io
-import re
 import time
 import ctypes
 import ctypes.wintypes
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Any
 
 logger = logging.getLogger("smart_clipboard")
 
@@ -160,7 +158,7 @@ def set_clipboard_text(text: str, max_retries: int = 5, retry_delay: float = 0.0
 # Deterministic Formatters & Transformers
 # ---------------------------------------------------------------------------
 
-def _try_format_json(text: str) -> Optional[str]:
+def _try_format_json(text: str) -> str | None:
     """Attempt parsing and pretty-printing JSON text."""
     stripped = text.strip()
     if (stripped.startswith("{") and stripped.endswith("}")) or (stripped.startswith("[") and stripped.endswith("]")):
@@ -172,7 +170,7 @@ def _try_format_json(text: str) -> Optional[str]:
     return None
 
 
-def _try_format_csv_to_markdown(text: str) -> Optional[str]:
+def _try_format_csv_to_markdown(text: str) -> str | None:
     """Attempt converting CSV/TSV data into a clean Markdown table."""
     lines = [line for line in text.strip().splitlines() if line.strip()]
     if len(lines) < 2:
@@ -251,7 +249,7 @@ def _generate_conventional_commit_heuristic(diff_or_text: str) -> str:
 # MCP Tools
 # ---------------------------------------------------------------------------
 
-def clipboard_get_text() -> Dict[str, Any]:
+def clipboard_get_text() -> dict[str, Any]:
     """Retrieve the current unicode text content from the Windows clipboard.
     
     Returns:
@@ -266,7 +264,7 @@ def clipboard_get_text() -> Dict[str, Any]:
     }
 
 
-def clipboard_set_text(text: str) -> Dict[str, Any]:
+def clipboard_set_text(text: str) -> dict[str, Any]:
     """Write unicode text directly to the Windows clipboard.
 
     Args:
@@ -287,11 +285,11 @@ def clipboard_set_text(text: str) -> Dict[str, Any]:
 
 def clipboard_transform(
     action: str,
-    text: Optional[str] = None,
+    text: str | None = None,
     target_lang: str = "English",
-    custom_prompt: Optional[str] = None,
+    custom_prompt: str | None = None,
     update_clipboard: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Perform smart AI transformations or deterministic formatting on clipboard text.
 
     Args:
@@ -323,7 +321,7 @@ def clipboard_transform(
     if len(input_text) > MAX_CLIPBOARD_CHARS:
         input_text = input_text[:MAX_CLIPBOARD_CHARS] + "\n... [truncated due to size limit]"
 
-    deterministic_result: Optional[str] = None
+    deterministic_result: str | None = None
     prepared_prompt: str = ""
 
     if action_clean == "explain":

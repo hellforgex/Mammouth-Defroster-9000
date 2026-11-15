@@ -1,7 +1,5 @@
 """Generate high-resolution, privacy-safe official screenshots for Mammouth Defroster 9000 v0.7.0."""
 
-import sys
-import os
 import time
 import ctypes
 import ctypes.wintypes

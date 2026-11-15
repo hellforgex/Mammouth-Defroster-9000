@@ -2,13 +2,12 @@ import unittest
 import os
 import sys
 from unittest.mock import patch
-from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from server import require_module, defroster_catalog
-from modules.file_ops import directory_list, directory_tree, file_read, file_write, file_search_text
-from modules.tasks_kanban import task_update, task_delete, task_list
-from modules.memory import memory_recall, memory_list
+from modules.file_ops import directory_list, directory_tree, file_search_text
+from modules.tasks_kanban import task_delete
+from modules.memory import memory_recall
 from mcp.types import TextContent
 
 class TestMcpToolSchemas(unittest.TestCase):

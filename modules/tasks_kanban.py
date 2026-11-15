@@ -2,7 +2,7 @@ import threading
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 import sys
 
@@ -46,7 +46,7 @@ def _get_db():
                 _schema_ready_paths.add(db_key)
     return conn
 
-def task_create(title: str, description: str = "", priority: str = "medium") -> Dict[str, Any]:
+def task_create(title: str, description: str = "", priority: str = "medium") -> dict[str, Any]:
     """Create a new task in the persistent todo/Kanban board.
     
     Args:
@@ -82,13 +82,13 @@ def task_create(title: str, description: str = "", priority: str = "medium") -> 
     }
 
 def task_update(
-    task_id: Optional[int] = None,
-    status: Optional[str] = None,
-    title: Optional[str] = None,
-    description: Optional[str] = None,
-    priority: Optional[str] = None,
-    id: Optional[int] = None
-) -> Dict[str, Any]:
+    task_id: int | None = None,
+    status: str | None = None,
+    title: str | None = None,
+    description: str | None = None,
+    priority: str | None = None,
+    id: int | None = None
+) -> dict[str, Any]:
     """Update task status ('todo', 'in_progress', 'done', 'blocked') or details."""
     updates = []
     params = []
@@ -139,7 +139,7 @@ def task_update(
     finally:
         conn.close()
 
-def task_list(status: Optional[str] = None, priority: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+def task_list(status: str | None = None, priority: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
     """List persistent tasks filtered by status or priority."""
     conn = _get_db()
     cursor = conn.cursor()
@@ -167,7 +167,7 @@ def task_list(status: Optional[str] = None, priority: Optional[str] = None, limi
     conn.close()
     return [dict(r) for r in rows]
 
-def task_delete(task_id: Optional[int] = None, id: Optional[int] = None) -> str:
+def task_delete(task_id: int | None = None, id: int | None = None) -> str:
     """Delete a task from the persistent database."""
     effective_id = task_id if task_id is not None else id
     if effective_id is None:

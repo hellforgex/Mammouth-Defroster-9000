@@ -4,6 +4,7 @@
     "host": "127.0.0.1",
     "enforce_auth": true,
     "api_token": "",
+    "allow_query_token": false,
     "allow_admin_shell": false,
     "enable_tls": false,
     "ssl_certfile": "",

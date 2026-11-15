@@ -1,7 +1,6 @@
 """Unit tests for Claude Code & Cloud Sessions integration (modules/claude_code.py and server tools).
 """
 
-import os
 import sys
 import json
 import shutil
@@ -18,7 +17,6 @@ if str(SRC_DIR) not in sys.path:
 from modules.claude_code import (
     _strip_jsonc,
     _merge_claude_mcp_entry,
-    find_tailscale_binary,
     get_tailscale_public_domain,
     save_active_tunnel_info,
     get_active_tunnel_info,
@@ -29,8 +27,6 @@ from modules.claude_code import (
     sync_claude_code_mcp,
     launch_claude_terminal,
     run_claude_task,
-    SERVER_NAME,
-    DEFROSTER_TOKEN_ENV,
 )
 
 
@@ -167,12 +163,34 @@ class TestClaudeCodeModule(unittest.TestCase):
     def test_sync_claude_code_mcp_workspace_cloud_vs_local(self):
         ws_mcp = self.workspace_dir / ".mcp.json"
         
-        # Cloud sync with public URL
+        # Cloud sync with public URL defaults to secure env_var mode
         res = sync_claude_code_mcp(
             workspace_path=str(self.workspace_dir),
             server_url="https://cloud-tunnel.mammouth.ai/mcp",
             api_token="mc_live_12345",
             target_cloud=True,
+            sync_global=False
+        )
+        self.assertTrue(res["success"])
+        self.assertTrue(res["cloud_ready"])
+        self.assertEqual(res["auth_mode"], "env_var")
+
+        data = json.loads(ws_mcp.read_text(encoding="utf-8"))
+        entry = data["mcpServers"]["mammouth-defroster-9000"]
+        self.assertEqual(entry["type"], "http")
+        self.assertEqual(entry["url"], "https://cloud-tunnel.mammouth.ai/mcp")
+        self.assertEqual(entry["headers"]["Authorization"], "Bearer ${MAMMOUTH_DEFROSTER_TOKEN}")
+
+    def test_sync_claude_code_mcp_explicit_token_mode(self):
+        ws_mcp = self.workspace_dir / ".mcp.json"
+        
+        # Explicit opt-out of env_var mode uses static token
+        res = sync_claude_code_mcp(
+            workspace_path=str(self.workspace_dir),
+            server_url="https://cloud-tunnel.mammouth.ai/mcp",
+            api_token="mc_live_12345",
+            target_cloud=True,
+            use_env_var=False,
             sync_global=False
         )
         self.assertTrue(res["success"])

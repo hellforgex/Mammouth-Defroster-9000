@@ -1,8 +1,7 @@
 import ctypes
 import os
-import sys
 import time
-from typing import Dict, Any, Optional, List
+from typing import Any
 
 # Try importing pyautogui if available, with failsafe disabled for server stability
 try:
@@ -62,7 +61,7 @@ def _get_screen_bounds() -> tuple:
     return 1920, 1080
 
 
-def desktop_get_screen_info() -> Dict[str, Any]:
+def desktop_get_screen_info() -> dict[str, Any]:
     """Get primary screen resolution and current mouse cursor coordinates."""
     w, h = _get_screen_bounds()
     cur_x, cur_y = 0, 0
@@ -109,7 +108,7 @@ def _win32_interpolate_move(from_x: int, from_y: int, to_x: int, to_y: int, dura
     user32.SetCursorPos(to_x, to_y)
 
 
-def mouse_move(x: int, y: int, smooth: bool = False, duration: float = 0.2) -> Dict[str, Any]:
+def mouse_move(x: int, y: int, smooth: bool = False, duration: float = 0.2) -> dict[str, Any]:
     """Move the mouse cursor to the specified desktop coordinates.
     
     Args:
@@ -144,12 +143,12 @@ def mouse_move(x: int, y: int, smooth: bool = False, duration: float = 0.2) -> D
 
 
 def mouse_click(
-    x: Optional[int] = None,
-    y: Optional[int] = None,
+    x: int | None = None,
+    y: int | None = None,
     button: str = "left",
     clicks: int = 1,
     interval: float = 0.1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Click the mouse button at current position or specified coordinates.
     
     Args:
@@ -200,15 +199,15 @@ def mouse_click(
 
 
 def mouse_drag(
-    start_x: Optional[int] = None,
-    start_y: Optional[int] = None,
-    end_x: Optional[int] = None,
-    end_y: Optional[int] = None,
+    start_x: int | None = None,
+    start_y: int | None = None,
+    end_x: int | None = None,
+    end_y: int | None = None,
     button: str = "left",
     duration: float = 0.5,
-    x: Optional[int] = None,
-    y: Optional[int] = None
-) -> Dict[str, Any]:
+    x: int | None = None,
+    y: int | None = None
+) -> dict[str, Any]:
     """Drag the mouse from a starting position to an ending position with a button held down.
     
     If start coordinates are omitted, drags from the current mouse position.
@@ -311,7 +310,7 @@ def mouse_drag(
     return {"status": "error", "error": "Native input subsystem unavailable."}
 
 
-def mouse_scroll(clicks: int) -> Dict[str, Any]:
+def mouse_scroll(clicks: int) -> dict[str, Any]:
     """Scroll the mouse wheel up or down at the current cursor position.
     
     Args:
@@ -341,7 +340,7 @@ def mouse_scroll(clicks: int) -> Dict[str, Any]:
     return {"status": "error", "error": "Native input subsystem unavailable."}
 
 
-def mouse_get_position() -> Dict[str, Any]:
+def mouse_get_position() -> dict[str, Any]:
     """Get current mouse cursor position."""
     if user32:
         pt = wintypes.POINT()
@@ -405,7 +404,7 @@ def _send_unicode_char(char: str) -> None:
     user32.SendInput(len(events), arr, ctypes.sizeof(_INPUT))
 
 
-def keyboard_type(text: str, delay: float = 0.01) -> Dict[str, Any]:
+def keyboard_type(text: str, delay: float = 0.01) -> dict[str, Any]:
     """Type arbitrary text into the currently active window using native Unicode events.
     
     Reliably types letters, numbers, symbols, spaces, and international Unicode characters without layout mismatch.
@@ -444,7 +443,7 @@ def keyboard_type(text: str, delay: float = 0.01) -> Dict[str, Any]:
     return {"status": "error", "error": "Native input subsystem unavailable."}
 
 
-def keyboard_press(key: str, presses: int = 1, interval: float = 0.05) -> Dict[str, Any]:
+def keyboard_press(key: str, presses: int = 1, interval: float = 0.05) -> dict[str, Any]:
     """Press and release a keyboard key (e.g. 'enter', 'f', 'space', 'esc', 'tab', 'backspace', 'down', 'up').
     
     Args:
@@ -502,7 +501,7 @@ def keyboard_press(key: str, presses: int = 1, interval: float = 0.05) -> Dict[s
     return {"status": "error", "error": f"Unrecognized key '{key}'."}
 
 
-def keyboard_hotkey(keys: str) -> Dict[str, Any]:
+def keyboard_hotkey(keys: str) -> dict[str, Any]:
     """Trigger a keyboard hotkey combination (e.g. 'ctrl+t', 'ctrl+w', 'ctrl+l', 'alt+f4', 'ctrl+c', 'ctrl+v').
     
     Args:

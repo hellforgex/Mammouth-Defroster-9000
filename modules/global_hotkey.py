@@ -11,7 +11,8 @@ import ctypes
 import ctypes.wintypes
 import threading
 import logging
-from typing import Callable, Optional, Dict, Any, List
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger("global_hotkey")
 
@@ -79,7 +80,7 @@ class _HotkeyEntry:
         key: str,
         modifiers: str,
         thread: threading.Thread,
-        thread_id: Optional[int]
+        thread_id: int | None
     ):
         self.hotkey_id = hotkey_id
         self.callback = callback
@@ -93,7 +94,7 @@ class GlobalHotkeyManager:
     """Manages background registration and message loop for Win32 global hotkeys."""
 
     def __init__(self):
-        self._hotkeys: Dict[int, _HotkeyEntry] = {}
+        self._hotkeys: dict[int, _HotkeyEntry] = {}
         self._lock = threading.RLock()
 
     def register(
@@ -143,7 +144,7 @@ class GlobalHotkeyManager:
 
             ready_event = threading.Event()
             success_flag = [False]
-            thread_id_box: List[Optional[int]] = [None]
+            thread_id_box: list[int | None] = [None]
 
             def _listener_loop():
                 try:
@@ -211,7 +212,7 @@ class GlobalHotkeyManager:
                 return True
             return False
 
-    def unregister(self, hotkey_id: Optional[int] = None) -> None:
+    def unregister(self, hotkey_id: int | None = None) -> None:
         """Unregister active global hotkey(s) and terminate message loop thread cleanly."""
         with self._lock:
             if hotkey_id is not None:
@@ -240,14 +241,14 @@ class GlobalHotkeyManager:
         with self._lock:
             return len(self._hotkeys) > 0
 
-    def is_hotkey_registered(self, hotkey_id: Optional[int] = None) -> bool:
+    def is_hotkey_registered(self, hotkey_id: int | None = None) -> bool:
         """Check if a specific hotkey_id (or any hotkey if None) is registered."""
         with self._lock:
             if hotkey_id is None:
                 return len(self._hotkeys) > 0
             return hotkey_id in self._hotkeys
 
-    def list_hotkeys(self) -> List[Dict[str, Any]]:
+    def list_hotkeys(self) -> list[dict[str, Any]]:
         """List all currently registered hotkeys and their specs."""
         with self._lock:
             return [
@@ -275,16 +276,16 @@ def register_global_hotkey(
     return _manager.register(callback, key=key, modifiers=modifiers, hotkey_id=hotkey_id)
 
 
-def unregister_global_hotkey(hotkey_id: Optional[int] = None) -> None:
+def unregister_global_hotkey(hotkey_id: int | None = None) -> None:
     """Convenience function to unregister global hotkey (or all if hotkey_id is None)."""
     _manager.unregister(hotkey_id=hotkey_id)
 
 
-def is_global_hotkey_registered(hotkey_id: Optional[int] = None) -> bool:
+def is_global_hotkey_registered(hotkey_id: int | None = None) -> bool:
     """Check if global hotkey is currently registered and active."""
     return _manager.is_hotkey_registered(hotkey_id=hotkey_id)
 
 
-def list_registered_hotkeys() -> List[Dict[str, Any]]:
+def list_registered_hotkeys() -> list[dict[str, Any]]:
     """List all registered hotkeys."""
     return _manager.list_hotkeys()

@@ -3,7 +3,7 @@ import ipaddress
 import socket
 import urllib.parse
 import httpx
-from typing import Dict, Any
+from typing import Any
 
 
 def _resolve_and_validate_ip(hostname: str) -> str:
@@ -26,7 +26,7 @@ def _resolve_and_validate_ip(hostname: str) -> str:
     except PermissionError:
         raise
     except Exception as e:
-        raise ValueError(f"Could not resolve hostname '{hostname}': {e}")
+        raise ValueError(f"Could not resolve hostname '{hostname}': {e}") from e
 
 
 def _validate_url_ssrf_safe(url: str) -> str:
@@ -46,7 +46,7 @@ _MAX_REDIRECTS = 5
 _MAX_BODY_BYTES = 5 * 1024 * 1024  # 5 MB: more than enough for any page we turn into text
 
 
-def _pinned_get(url: str, timeout: float, headers: Dict[str, str], max_bytes: int = _MAX_BODY_BYTES):
+def _pinned_get(url: str, timeout: float, headers: dict[str, str], max_bytes: int = _MAX_BODY_BYTES):
     """GET with DNS pinning: connect to the IP that was validated, not to a fresh DNS answer.
 
     Validating a hostname and then letting httpx resolve it again allows DNS rebinding (a TTL-0
@@ -149,7 +149,7 @@ def web_fetch_url(url: str, max_length: int = 25000) -> str:
         return f"Error fetching {url}: {e}"
 
 
-def web_check_status(url: str) -> Dict[str, Any]:
+def web_check_status(url: str) -> dict[str, Any]:
     """Check HTTP response status, headers, and latency of any public endpoint (SSRF Protected)."""
     try:
         _validate_url_ssrf_safe(url)

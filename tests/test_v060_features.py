@@ -7,7 +7,6 @@ Feature 3: Smart Clipboard AI & Quick-Actions (Unicode Win32 clipboard, formatte
 
 import os
 import sys
-import time
 import shutil
 import tempfile
 import unittest
@@ -19,16 +18,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from modules.global_hotkey import (
     GlobalHotkeyManager,
-    register_global_hotkey,
-    unregister_global_hotkey,
-    is_global_hotkey_registered,
-    list_registered_hotkeys
+    unregister_global_hotkey
 )
 from modules.screen_capture import (
     get_foreground_window_info,
-    get_window_info,
     get_target_window_info,
-    get_topmost_external_window,
     is_defroster_window,
     screen_list_windows,
     screen_capture_active_window,
@@ -150,8 +144,10 @@ class TestV060ScreenCopilot(unittest.TestCase):
         """Test screen_capture_active_window succeeds when consent is granted."""
         screen_grant_consent("once")
         mock_img = RealPILImage.new("RGB", (800, 600), color=(50, 50, 50))
+        no_window = {"hwnd": None, "rect": {}, "is_minimized": False}
         with patch("modules.screen_capture.ImageGrab") as mock_grab, \
-             patch("modules.screen_capture.mss", None):
+             patch("modules.screen_capture.mss", None), \
+             patch("modules.screen_capture.get_target_window_info", return_value=no_window):
             mock_grab.grab.return_value = mock_img
             res = screen_capture_active_window(save_to_workspace=False, include_metadata=True)
             self.assertIsInstance(res, dict)

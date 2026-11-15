@@ -8,7 +8,7 @@ import secrets
 import sys
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
 
 logger = logging.getLogger("config")
 
@@ -20,7 +20,7 @@ else:
 CONFIG_FILE = BASE_DIR / "config.json"
 CONFIG_EXAMPLE_FILE = BASE_DIR / "config.example.json"
 
-DEFAULT_CONFIG: Dict[str, Any] = {
+DEFAULT_CONFIG: dict[str, Any] = {
     "server": {
         "host": "127.0.0.1",
         "port": 8000,
@@ -182,16 +182,17 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 }
 
 
-TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
+TOOL_PROFILES: dict[str, dict[str, Any]] = {
     "mammouth_safe": {
         "id": "mammouth_safe",
         "name": "Mammouth Chat Safe",
-        "label": "🛡️ Mammouth Chat Safe (14 Tools - Recommended)",
-        "description": "Recommended for Mammouth AI Chat. Core file, directory listing, browser, shell and system tools (~3,000 tokens) guaranteed within platform session limits.",
+        "label": "🛡️ Mammouth Chat Safe (23 Tools - Recommended)",
+        "description": "Recommended default for Mammouth AI Chat. Core file, shell, browser, desktop vision & input automation (~5,800 tokens) guaranteed within platform session limits.",
         "icon": "🛡️",
-        "token_estimate": 3000,
+        "token_estimate": 5800,
         "tools": [
             "defroster_catalog",
+            "defroster_execute_tool",
             "directory_list",
             "file_read",
             "file_write",
@@ -199,8 +200,16 @@ TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
             "powershell_exec",
             "desktop_open",
             "screen_capture",
+            "screen_capture_active_window",
+            "desktop_get_screen_info",
+            "mouse_click",
+            "mouse_move",
+            "keyboard_type",
+            "keyboard_hotkey",
             "browser_navigate",
             "browser_snapshot",
+            "browser_click",
+            "browser_fill",
             "memory_save",
             "memory_recall",
             "system_get_specs",
@@ -210,12 +219,13 @@ TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
     "developer": {
         "id": "developer",
         "name": "Developer & Scripting",
-        "label": "💻 Developer & Scripting (16 Tools)",
-        "description": "File search, chunk replacement, directory trees, local PowerShell execution, desktop launcher, and diagnostics (~4,100 tokens).",
+        "label": "💻 Developer & Scripting (22 Tools)",
+        "description": "File search, chunk replacement, directory trees, local PowerShell execution, desktop launcher, vision & input automation, and diagnostics (~6,000 tokens).",
         "icon": "💻",
-        "token_estimate": 4100,
+        "token_estimate": 6000,
         "tools": [
             "defroster_catalog",
+            "defroster_execute_tool",
             "file_read",
             "file_write",
             "file_replace_chunk",
@@ -225,6 +235,11 @@ TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
             "command_run",
             "powershell_exec",
             "desktop_open",
+            "screen_capture",
+            "screen_capture_active_window",
+            "desktop_get_screen_info",
+            "mouse_click",
+            "keyboard_type",
             "system_get_specs",
             "system_get_processes",
             "memory_save",
@@ -236,12 +251,13 @@ TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
     "web_vision": {
         "id": "web_vision",
         "name": "Web & Vision",
-        "label": "👁️ Web & Vision (13 Tools)",
-        "description": "Browser automation (navigate, snapshot, click, fill), multi-monitor screen capture, and desktop input (~3,300 tokens).",
+        "label": "👁️ Web & Vision (14 Tools)",
+        "description": "Browser automation (navigate, snapshot, click, fill), multi-monitor screen capture, and desktop input (~3,500 tokens).",
         "icon": "👁️",
-        "token_estimate": 3300,
+        "token_estimate": 3500,
         "tools": [
             "defroster_catalog",
+            "defroster_execute_tool",
             "browser_navigate",
             "browser_snapshot",
             "browser_screenshot",
@@ -259,12 +275,13 @@ TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
     "automation": {
         "id": "automation",
         "name": "Tasks & Automation",
-        "label": "⏱️ Tasks & Automation (11 Tools)",
-        "description": "Scheduled background prompt triggers and Kanban project management (~2,900 tokens).",
+        "label": "⏱️ Tasks & Automation (12 Tools)",
+        "description": "Scheduled background prompt triggers and Kanban project management (~3,100 tokens).",
         "icon": "⏱️",
-        "token_estimate": 2900,
+        "token_estimate": 3100,
         "tools": [
             "defroster_catalog",
+            "defroster_execute_tool",
             "task_create",
             "task_update",
             "task_list",
@@ -280,10 +297,10 @@ TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
     "all": {
         "id": "all",
         "name": "Full Defroster (All Enabled Modules)",
-        "label": "⚡ Full Defroster (All 85+ Tools - Uncapped)",
-        "description": "Exposes all 85+ tools across all enabled modules (~16,461 tokens). Recommended for Claude Desktop or Cursor.",
+        "label": "⚡ Full Defroster (All 86+ Tools - Uncapped)",
+        "description": "Exposes all 86+ tools across all enabled modules (~21,500 tokens). Recommended for Claude Desktop or Cursor.",
         "icon": "⚡",
-        "token_estimate": 16461,
+        "token_estimate": 21500,
         "tools": []
     },
     "custom": {
@@ -298,7 +315,7 @@ TOOL_PROFILES: Dict[str, Dict[str, Any]] = {
 }
 
 
-def get_tool_profile(profile_id: Optional[str] = None) -> Dict[str, Any]:
+def get_tool_profile(profile_id: str | None = None) -> dict[str, Any]:
     """Retrieve metadata for a specific tool profile (defaults to 'mammouth_safe')."""
     p_id = str(profile_id or '').strip().lower()
     return TOOL_PROFILES.get(p_id, TOOL_PROFILES['mammouth_safe'])
@@ -326,7 +343,7 @@ def _encrypt_dpapi(data_str: str) -> str:
         encrypted = win32crypt.CryptProtectData(data_bytes, "Mammouth_Token", None, None, None, 0)
         return "dpapi:" + base64.b64encode(encrypted).decode('ascii')
     except Exception as ex:
-        raise RuntimeError(f"DPAPI encryption failed: {ex}")
+        raise RuntimeError(f"DPAPI encryption failed: {ex}") from ex
 
 
 def _decrypt_dpapi(encrypted_str: str) -> str:
@@ -343,7 +360,7 @@ def _decrypt_dpapi(encrypted_str: str) -> str:
         decrypted = win32crypt.CryptUnprotectData(raw_bytes, None, None, None, 0)[1]
         return decrypted.decode('utf-8')
     except Exception as ex:
-        raise RuntimeError(f"DPAPI decryption failed: {ex}")
+        raise RuntimeError(f"DPAPI decryption failed: {ex}") from ex
 
 
 def generate_secure_token() -> str:
@@ -367,14 +384,14 @@ def get_lan_ip() -> str:
 # In-memory cache: load_config() is called on every MCP tool call, so re-reading the file and
 # DPAPI-decrypting secrets each time is wasteful. The cache is invalidated by the file's mtime/size.
 _config_lock = threading.RLock()
-_config_cache: Optional[Dict[str, Any]] = None
-_config_cache_stamp: Optional[tuple] = None
+_config_cache: dict[str, Any] | None = None
+_config_cache_stamp: tuple | None = None
 
 # Top-level sections that are merged key-by-key from config.json over DEFAULT_CONFIG.
 _MERGED_SECTIONS = ("server", "browser_agent", "mammouth_code", "embedded_browser")
 
 
-def _config_file_stamp() -> Optional[tuple]:
+def _config_file_stamp() -> tuple | None:
     try:
         st = CONFIG_FILE.stat()
         return (str(CONFIG_FILE), st.st_mtime_ns, st.st_size)
@@ -382,13 +399,13 @@ def _config_file_stamp() -> Optional[tuple]:
         return None
 
 
-def _read_config_from_disk() -> Dict[str, Any]:
+def _read_config_from_disk() -> dict[str, Any]:
     """Build the effective configuration from defaults + config.json. Raises on unreadable JSON."""
     cfg = copy.deepcopy(DEFAULT_CONFIG)
     token_was_present = False
     needs_save = False
     if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
             user_cfg = json.load(f)
         for section in _MERGED_SECTIONS:
             if isinstance(user_cfg.get(section), dict):
@@ -445,7 +462,7 @@ def _read_config_from_disk() -> Dict[str, Any]:
     return cfg
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> dict[str, Any]:
     """Load configuration from config.json, merging with defaults if keys are missing.
 
     Returns a private deep copy (callers may mutate it). A config.json that cannot be parsed —
@@ -473,7 +490,7 @@ def load_config() -> Dict[str, Any]:
         return copy.deepcopy(cfg)
 
 
-def save_config(config_data: Dict[str, Any]) -> bool:
+def save_config(config_data: dict[str, Any]) -> bool:
     """Save configuration to config.json atomically (temp file + os.replace), secrets DPAPI-encrypted."""
     global _config_cache, _config_cache_stamp
     try:

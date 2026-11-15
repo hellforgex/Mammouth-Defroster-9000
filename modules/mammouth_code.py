@@ -8,7 +8,7 @@ import logging
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
 
 logger = logging.getLogger("mammouth_code")
 
@@ -24,7 +24,7 @@ POWERSHELL_INSTALL_CMD = (
 )
 
 
-def get_mammouth_executable() -> Optional[str]:
+def get_mammouth_executable() -> str | None:
     """Find path to mammouth.exe binary on the host machine.
     
     Checks in order:
@@ -59,7 +59,7 @@ def get_mammouth_executable() -> Optional[str]:
 DEFROSTER_TOKEN_ENV = "MAMMOUTH_DEFROSTER_TOKEN"
 
 
-def _build_child_env(api_key: str) -> Dict[str, str]:
+def _build_child_env(api_key: str) -> dict[str, str]:
     """Environment for Mammouth Code child processes: API key + Defroster token (for {env:} refs)."""
     child_env = os.environ.copy()
     if api_key:
@@ -107,13 +107,13 @@ def _strip_jsonc(text: str) -> str:
     return re.sub(r",(\s*[}\]])", r"\1", "".join(out))
 
 
-def _merge_opencode_mcp_entry(config_file: Path, entry: Dict[str, Any]) -> None:
+def _merge_opencode_mcp_entry(config_file: Path, entry: dict[str, Any]) -> None:
     """Merge the Defroster MCP entry into an opencode config without ever losing the user's settings.
 
     Unparseable files are left untouched (raises instead of overwriting with an almost empty file),
     a .bak copy is kept, and the write is atomic.
     """
-    config_data: Dict[str, Any] = {}
+    config_data: dict[str, Any] = {}
     original_text = None
     if config_file.is_file():
         original_text = config_file.read_text(encoding="utf-8-sig")
@@ -124,7 +124,7 @@ def _merge_opencode_mcp_entry(config_file: Path, entry: Dict[str, Any]) -> None:
                 try:
                     config_data = json.loads(_strip_jsonc(original_text))
                 except json.JSONDecodeError as ex:
-                    raise ValueError(f"cannot parse existing file, left unchanged ({ex})")
+                    raise ValueError(f"cannot parse existing file, left unchanged ({ex})") from ex
         if not isinstance(config_data, dict):
             raise ValueError("existing file is not a JSON object, left unchanged")
 
@@ -159,7 +159,7 @@ def get_configured_api_key() -> str:
     return api_key
 
 
-def get_mammouth_code_status() -> Dict[str, Any]:
+def get_mammouth_code_status() -> dict[str, Any]:
     """Inspect and return current installation, version, and bridge status of Mammouth Code."""
     exe = get_mammouth_executable()
     installed = exe is not None and os.path.isfile(exe)
@@ -201,7 +201,7 @@ def get_mammouth_code_status() -> Dict[str, Any]:
     mcp_synced = False
     if DEFAULT_OPENCODE_CONFIG_FILE.exists():
         try:
-            with open(DEFAULT_OPENCODE_CONFIG_FILE, "r", encoding="utf-8") as f:
+            with open(DEFAULT_OPENCODE_CONFIG_FILE, encoding="utf-8") as f:
                 data = json.load(f)
                 if "mammouth-defroster-9000" in data.get("mcp", {}):
                     mcp_synced = True
@@ -220,7 +220,7 @@ def get_mammouth_code_status() -> Dict[str, Any]:
     }
 
 
-def install_or_update_mammouth_code() -> Dict[str, Any]:
+def install_or_update_mammouth_code() -> dict[str, Any]:
     """Execute official PowerShell installer for Mammouth Code."""
     try:
         from config import load_config
@@ -296,7 +296,7 @@ def install_or_update_mammouth_code() -> Dict[str, Any]:
         }
 
 
-def _find_windows_terminal() -> Optional[str]:
+def _find_windows_terminal() -> str | None:
     """Locate wt.exe (Windows Terminal)."""
     wt = shutil.which("wt.exe") or shutil.which("wt")
     if wt:
@@ -310,10 +310,10 @@ def _find_windows_terminal() -> Optional[str]:
 
 
 def launch_mammouth_terminal(
-    workspace_path: Optional[str] = None,
+    workspace_path: str | None = None,
     continue_session: bool = False,
-    preferred_terminal: Optional[str] = None
-) -> Dict[str, Any]:
+    preferred_terminal: str | None = None
+) -> dict[str, Any]:
     """Launch an interactive Mammouth Code terminal session in a new desktop window."""
     try:
         from config import load_config
@@ -430,10 +430,10 @@ def launch_mammouth_terminal(
 
 def run_mammouth_task(
     prompt: str,
-    workspace_path: Optional[str] = None,
+    workspace_path: str | None = None,
     timeout_seconds: int = 180,
     auto_approve: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute a multi-turn autonomous coding task headless via Mammouth Code CLI ('mammouth run').
     
     NOTE: This invokes an external autonomous LLM agent loop which consumes API budget quota.
@@ -553,10 +553,10 @@ def run_mammouth_task(
 
 
 def sync_opencode_mcp_config(
-    workspace_path: Optional[str] = None,
-    server_url: Optional[str] = None,
-    api_token: Optional[str] = None
-) -> Dict[str, Any]:
+    workspace_path: str | None = None,
+    server_url: str | None = None,
+    api_token: str | None = None
+) -> dict[str, Any]:
     """Write/merge Mammouth Defroster 9000 MCP server entry into opencode.json configurations."""
     # Determine server URL and API Token
     try:
@@ -578,12 +578,12 @@ def sync_opencode_mcp_config(
     # 0.0.0.0 is a bind address, not a connect address on Windows
     server_url = re.sub(r"^(https?://)(0\.0\.0\.0|\[::\])(?=[:/])", r"\g<1>127.0.0.1", server_url)
 
-    global_entry: Dict[str, Any] = {
+    global_entry: dict[str, Any] = {
         "type": "remote",
         "url": server_url,
         "enabled": True
     }
-    workspace_entry: Dict[str, Any] = dict(global_entry)
+    workspace_entry: dict[str, Any] = dict(global_entry)
     if api_token:
         # Global config lives in the user profile: real token is acceptable there.
         global_entry["headers"] = {"Authorization": f"Bearer {api_token}"}

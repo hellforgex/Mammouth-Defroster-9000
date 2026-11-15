@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from config import DEFAULT_CONFIG, load_config
+from config import DEFAULT_CONFIG
 from modules.embedded_browser import MammouthBrowserFrame
 
 

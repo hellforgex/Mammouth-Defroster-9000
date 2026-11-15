@@ -18,7 +18,7 @@ from server import (
     _is_valid_oauth_token,
     _refresh_oauth_token,
 )
-from config import _encrypt_dpapi, _decrypt_dpapi
+from config import _decrypt_dpapi
 
 
 class TestOAuthDPAPIEncryption(unittest.TestCase):
@@ -42,7 +42,7 @@ class TestOAuthDPAPIEncryption(unittest.TestCase):
 
         self.assertGreaterEqual(len(rows), 1)
         found = False
-        for stored_at, stored_rt, cid in rows:
+        for stored_at, stored_rt, _cid in rows:
             # Must be DPAPI encrypted
             self.assertTrue(stored_at.startswith("dpapi:"), "access_token must start with dpapi:")
             self.assertTrue(stored_rt.startswith("dpapi:"), "refresh_token must start with dpapi:")
@@ -128,9 +128,8 @@ class TestOAuthDPAPIEncryption(unittest.TestCase):
         fake_refresh = f"mcp_rt_fail_closed_test_{secrets.token_urlsafe(16)}"
 
         # Mock CryptProtectData to raise an exception
-        with patch("config.HAS_DPAPI", False):
-            with self.assertRaises(RuntimeError):
-                _save_oauth_token(fake_token, fake_refresh, "fail_closed_client", time.time() + 3600)
+        with patch("config.HAS_DPAPI", False), self.assertRaises(RuntimeError):
+            _save_oauth_token(fake_token, fake_refresh, "fail_closed_client", time.time() + 3600)
 
         # Verify NOTHING was inserted into SQLite in plaintext
         with sqlite3.connect(OAUTH_DB_PATH) as conn:

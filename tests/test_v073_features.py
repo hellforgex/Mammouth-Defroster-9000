@@ -2,7 +2,6 @@ import os
 import sys
 import unittest
 from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import gui
@@ -13,8 +12,8 @@ from modules.updater import apply_update_and_restart
 class TestV073Features(unittest.TestCase):
     def test_version_bump_v073(self):
         """Verify version strings are properly aligned to v0.7.3."""
-        self.assertIn(gui.APP_VERSION, ["v0.7.3", "v0.7.4"])
-        self.assertTrue("v0.7.3" in (server.mcp.instructions or "") or "v0.7.4" in (server.mcp.instructions or ""))
+        self.assertRegex(gui.APP_VERSION, r"^v0\.7\.([3-9]|\d{2,})$")
+        self.assertIn(gui.APP_VERSION, server.mcp.instructions or "")
 
     def test_apply_update_and_restart_script_robustness(self):
         """Verify apply_update_and_restart generates robust robocopy batch script with process wait and logging."""
@@ -32,7 +31,7 @@ class TestV073Features(unittest.TestCase):
             # Read the generated batch script
             bat_path = os.path.join(tmpdir, "apply_update.bat")
             self.assertTrue(os.path.exists(bat_path), "apply_update.bat should be created")
-            with open(bat_path, "r", encoding="utf-8") as f:
+            with open(bat_path, encoding="utf-8") as f:
                 script = f.read()
 
             self.assertIn("WaitForExit(15000)", script, "Must wait cleanly for process PID to exit")
