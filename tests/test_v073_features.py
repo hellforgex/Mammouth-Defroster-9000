@@ -11,8 +11,8 @@ from modules.updater import apply_update_and_restart
 
 class TestV073Features(unittest.TestCase):
     def test_version_bump_v073(self):
-        """Verify version strings are properly aligned to v0.7.3."""
-        self.assertRegex(gui.APP_VERSION, r"^v0\.7\.([3-9]|\d{2,})$")
+        """Verify version strings are properly aligned (>= v0.7.3)."""
+        self.assertRegex(gui.APP_VERSION, r"^v0\.(7\.([3-9]|\d{2,})|(8|9)\.\d+)$")
         self.assertIn(gui.APP_VERSION, server.mcp.instructions or "")
 
     def test_apply_update_and_restart_script_robustness(self):

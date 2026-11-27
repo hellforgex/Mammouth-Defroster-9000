@@ -13,7 +13,7 @@ import time
 import sqlite3
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 logger = logging.getLogger("workspace_indexer")
 
@@ -639,3 +639,35 @@ def workspace_get_stats() -> dict[str, Any]:
         }
     finally:
         conn.close()
+
+
+def workspace_code_search(
+    action: Literal["search", "symbols", "index", "stats"] = "search",
+    query: str = "",
+    symbol_type: str = "",
+    file_pattern: str = "",
+    directory_path: str = "",
+    force_reindex: bool = False,
+    limit: int = 20
+) -> dict[str, Any]:
+    """Local SQLite FTS5 code search, AST symbol lookup, indexing, and index stats.
+
+    Args:
+        action: 'search' (FTS5 full-text), 'symbols' (functions/classes), 'index', or 'stats'.
+        query: Search phrase for 'search', or symbol name filter for 'symbols'.
+        symbol_type: Optional filter for 'symbols' ('function', 'class', 'method', 'async_function').
+        file_pattern: Optional path substring filter (e.g. '.py', 'modules/').
+        directory_path: Target directory for 'index' (defaults to workspace root).
+        force_reindex: Force full reindex when action='index'.
+        limit: Max matches or symbols to return (default 20).
+    """
+    act = str(action or "search").strip().lower()
+    if act == "search":
+        return workspace_search(query=query, limit=limit, file_pattern=file_pattern)
+    if act == "symbols":
+        return workspace_find_symbols(symbol_name=query, symbol_type=symbol_type, file_pattern=file_pattern, limit=limit)
+    if act == "index":
+        return workspace_index_directory(directory_path=directory_path, force_reindex=force_reindex)
+    if act == "stats":
+        return workspace_get_stats()
+    return {"status": "error", "error": f"Unknown workspace_code_search action '{action}'."}

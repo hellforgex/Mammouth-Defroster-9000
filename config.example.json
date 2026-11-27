@@ -1,11 +1,12 @@
 {
   "server": {
-    "port": 8000,
+    "port": 8742,
     "host": "127.0.0.1",
     "enforce_auth": true,
     "api_token": "",
     "allow_query_token": false,
     "allow_admin_shell": false,
+    "allow_shell_downloads": false,
     "enable_tls": false,
     "ssl_certfile": "",
     "ssl_keyfile": "",
@@ -24,6 +25,8 @@
     "custom_public_url": "",
     "appearance_mode": "Dark",
     "enforce_workspace_sandbox": true,
+    "protect_secret_files": true,
+    "expose_tool_annotations": false,
     "workspace_root": "./workspace",
     "start_in_web_tab": false,
     "global_hotkey_enabled": true,
@@ -35,10 +38,17 @@
     "allowed_origins": [
       "https://mammouth.ai",
       "https://app.mammouth.ai",
+      "https://chatgpt.com",
+      "https://chat.openai.com",
+      "https://platform.openai.com",
+      "https://openai.com",
+      "https://claude.ai",
+      "https://claude.com",
+      "https://www.claude.com",
       "http://localhost",
       "http://127.0.0.1",
       "http://localhost:3000",
-      "http://localhost:8000"
+      "http://localhost:8742"
     ],
     "tool_profile": "mammouth_safe"
   },
@@ -117,10 +127,21 @@
   "embedded_browser": {
     "enabled": true,
     "start_page": "https://mammouth.ai",
+    "default_chat_tab": "chatgpt",
     "auto_open_on_server_start": true,
     "user_data_dir": "./data/browser_profile",
     "quota_sidebar_enabled": true,
     "quota_refresh_interval_seconds": 300,
     "zen_mode": false
+  },
+  "chatgpt_browser": {
+    "enabled": true,
+    "start_page": "https://chatgpt.com",
+    "user_data_dir": "./data/chatgpt_browser_profile"
+  },
+  "claude_browser": {
+    "enabled": true,
+    "start_page": "https://claude.ai",
+    "user_data_dir": "./data/claude_browser_profile"
   }
 }

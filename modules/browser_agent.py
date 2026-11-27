@@ -15,7 +15,7 @@ import threading
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 logger = logging.getLogger("browser_agent")
 
@@ -1145,7 +1145,7 @@ def browser_click(target: str, button: str = "left", double_click: bool = False)
     Target can be:
     - A numeric ID from browser_snapshot() (e.g. '1', '4', 12)
     - A CSS selector (e.g. 'button.submit-btn' or '#login')
-    - Visible button/link text (e.g. 'Anmelden' or 'Search')
+    - Visible button/link text (e.g. 'Sign in' or 'Search')
     - Pixel coordinates 'x,y' (e.g. '450,220')
     
     Args:
@@ -1316,3 +1316,101 @@ def browser_restart(
         return _WORKER.call("restart", headless=headless, channel=channel, timeout=60.0)
     except Exception as e:
         return {"error": str(e)}
+
+
+def browser_inspect(
+    mode: Literal["snapshot", "screenshot", "markdown", "text", "html"] = "snapshot",
+    full_page: bool = False,
+    include_screenshot: bool = True,
+    max_elements: int = 60,
+    max_length: int = 30000
+) -> Any:
+    """Inspect the active browser page via DOM snapshot, screenshot, or extracted content.
+
+    Args:
+        mode: 'snapshot' (indexed elements + text), 'screenshot' (image), 'markdown', 'text', or 'html'.
+        full_page: Capture full scrollable page for 'snapshot'/'screenshot'.
+        include_screenshot: Include screenshot file in 'snapshot' mode.
+        max_elements: Max interactive elements for 'snapshot'.
+        max_length: Max characters for 'markdown'/'text'/'html'.
+    """
+    m = str(mode or "snapshot").strip().lower()
+    if m == "snapshot":
+        return browser_snapshot(include_screenshot=include_screenshot, max_elements=max_elements, full_page=full_page)
+    if m == "screenshot":
+        return browser_screenshot(full_page=full_page)
+    if m in ("markdown", "text", "html"):
+        return browser_get_content(format=m, max_length=max_length)
+    return {"error": f"Unknown inspect mode '{mode}'. Valid: 'snapshot', 'screenshot', 'markdown', 'text', 'html'."}
+
+
+def browser_interact(
+    action: Literal["click", "double_click", "right_click", "fill", "press_key", "hover", "scroll"] = "click",
+    target: str = "",
+    text: str = "",
+    key: str = "",
+    direction: Literal["up", "down", "left", "right"] = "down",
+    amount: int = 500,
+    press_enter: bool = False
+) -> dict[str, Any]:
+    """Interact with elements or input on the active browser page.
+
+    Args:
+        action: 'click', 'double_click', 'right_click', 'fill', 'press_key', 'hover', or 'scroll'.
+        target: Element ID from browser_inspect, CSS selector, visible text, or 'x,y' coordinates.
+        text: Text to enter when action='fill'.
+        key: Key name when action='press_key' (e.g. 'Enter', 'Tab', 'Escape').
+        direction: Scroll direction ('up', 'down', 'left', 'right') when action='scroll'.
+        amount: Scroll pixels when action='scroll'.
+        press_enter: Submit with Enter after typing when action='fill'.
+    """
+    act = str(action or "click").strip().lower()
+    if act == "click":
+        return browser_click(target=target, button="left", double_click=False)
+    if act == "double_click":
+        return browser_click(target=target, button="left", double_click=True)
+    if act == "right_click":
+        return browser_click(target=target, button="right", double_click=False)
+    if act == "fill":
+        return browser_fill(target=target, text=text, press_enter=press_enter)
+    if act == "press_key":
+        return browser_press_key(key=key or text)
+    if act == "hover":
+        return browser_hover(target=target)
+    if act == "scroll":
+        return browser_scroll(direction=direction, amount=amount, target=target)
+    return {"error": f"Unknown browser_interact action '{action}'."}
+
+
+def browser_session(
+    action: Literal["status", "tabs", "new_tab", "switch_tab", "close_tab", "restart", "close"] = "status",
+    tab_index: int = -1,
+    url: str = "",
+    channel: str | None = None,
+    headless: bool | None = None
+) -> dict[str, Any]:
+    """Manage browser session, available engines, and tabs.
+
+    Args:
+        action: 'status' (includes available_browsers), 'tabs', 'new_tab', 'switch_tab', 'close_tab', 'restart', or 'close'.
+        tab_index: Target tab index for 'switch_tab' or 'close_tab'.
+        url: URL to open for 'new_tab'.
+        channel: Engine for 'restart' ('msedge', 'chrome', 'firefox', 'chromium', 'webkit').
+        headless: Headless override for 'restart'.
+    """
+    act = str(action or "status").strip().lower()
+    if act == "status":
+        return browser_status()
+    if act == "tabs":
+        return browser_tabs(action="list")
+    if act == "new_tab":
+        return browser_tabs(action="create", url=url)
+    if act == "switch_tab":
+        return browser_tabs(action="switch", tab_index=tab_index)
+    if act == "close_tab":
+        return browser_tabs(action="close", tab_index=tab_index)
+    if act == "restart":
+        return browser_restart(headless=headless, channel=channel)
+    if act == "close":
+        return browser_close()
+    return {"error": f"Unknown browser_session action '{action}'."}

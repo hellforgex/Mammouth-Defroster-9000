@@ -81,6 +81,7 @@ from modules.task_scheduler import (
     scheduler_resume_task,
     scheduler_trigger_task_now,
     scheduler_get_presets,
+    scheduler_update_run_result,
     TaskSchedulerEngine
 )
 from modules.memory import (
@@ -159,7 +160,7 @@ if is_server_binary or "--server-only" in sys.argv or "--cli" in sys.argv or "--
 
     cfg = load_config()
     server_cfg = cfg.get("server", {})
-    port = int(os.environ.get("PORT", server_cfg.get("port", 8000)))
+    port = int(os.environ.get("PORT", server_cfg.get("port", 8742)))
     host = os.environ.get("HOST", server_cfg.get("host", "127.0.0.1"))
     enable_tls = bool(server_cfg.get("enable_tls", False))
     cert_file = server_cfg.get("ssl_certfile")
@@ -249,7 +250,7 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.7.5"
+APP_VERSION = "v0.8.2"
 
 
 
@@ -799,15 +800,25 @@ class SplashScreen(ctk.CTkToplevel):
         except Exception:
             pass
 
+    def after(self, ms, func=None, *args):
+        """Track only SplashScreen-owned after IDs so destroy() never cancels main-window timers."""
+        if not hasattr(self, "_splash_after_ids"):
+            self._splash_after_ids = set()
+        aid = super().after(ms, func, *args) if func is not None else super().after(ms)
+        if aid is not None:
+            self._splash_after_ids.add(aid)
+        return aid
+
     def destroy(self):
-        """Cancel all pending after() callbacks before destroying splash window."""
+        """Cancel only SplashScreen's own pending after() callbacks before destroying splash window."""
         try:
-            if hasattr(self, "tk") and self.tk:
-                for aid in list(self.tk.call("after", "info")):
-                    try:
-                        self.tk.call("after", "cancel", aid)
-                    except Exception:
-                        pass
+            for aid in list(getattr(self, "_splash_after_ids", ())):
+                try:
+                    super().after_cancel(aid)
+                except Exception:
+                    pass
+            if hasattr(self, "_splash_after_ids"):
+                self._splash_after_ids.clear()
         except Exception:
             pass
         super().destroy()
@@ -1177,13 +1188,23 @@ class MammouthControlCenter(ctk.CTk):
             self.log_filter_mode = "ALL"
             self.sidebar_visible = True
             self.zen_mode_active = False
+            default_chat = str(self.config_data.get("embedded_browser", {}).get("default_chat_tab", "chatgpt")).strip().lower()
+            if default_chat == "mammouth":
+                self.active_chat_tab_key = "💬 Mammouth AI Web"
+            elif default_chat == "claude":
+                self.active_chat_tab_key = "🟠 Claude Web"
+            else:
+                self.active_chat_tab_key = "🤖 ChatGPT Web"
             self.task_countdown_labels: dict[int, ctk.CTkLabel] = {}
             self.scheduler_engine = None
+            import queue as _queue_mod
+            self._bg_after_queue = _queue_mod.SimpleQueue()
 
             if self.splash:
                 self.splash.set_progress(0.50, "Setting up system logging and audit streams...")
 
             self._setup_logging()
+            self.after(50, self._pump_bg_after_queue)
 
             if self.splash:
                 self.splash.set_progress(0.75, "Building desktop cockpit user interface...")
@@ -1223,7 +1244,7 @@ class MammouthControlCenter(ctk.CTk):
                     if self.config_data.get("server", {}).get("start_in_web_tab", False) or self.config_data.get("embedded_browser", {}).get("zen_mode", False):
                         self.after(400, lambda: self.toggle_zen_mode(True))
                     elif self.config_data.get("embedded_browser", {}).get("auto_open_on_server_start", True):
-                        self.after(550, self._switch_to_mammouth_tab)
+                        self.after(550, self._switch_to_active_chat_tab)
 
                 self.after(350, finish_loading)
             else:
@@ -1235,7 +1256,7 @@ class MammouthControlCenter(ctk.CTk):
                 if self.config_data.get("server", {}).get("start_in_web_tab", False) or self.config_data.get("embedded_browser", {}).get("zen_mode", False):
                     self.after(400, lambda: self.toggle_zen_mode(True))
                 elif self.config_data.get("embedded_browser", {}).get("auto_open_on_server_start", True):
-                    self.after(550, self._switch_to_mammouth_tab)
+                    self.after(550, self._switch_to_active_chat_tab)
 
             # Safety fallback: unmask/close splash if still open after timeout
             def _splash_safety_timeout():
@@ -1409,11 +1430,37 @@ class MammouthControlCenter(ctk.CTk):
         self.btn_screen_target.pack(side="left", padx=(0, 8))
         self.btn_screen_target.bind("<Button-3>", self._show_screen_target_menu)
 
-        # Quick Mammouth.ai Connect Button
+        # Quick ChatGPT, Claude & Mammouth.ai Connect Buttons
+        self.btn_open_chatgpt = ctk.CTkButton(
+            right_box,
+            text="🤖 ChatGPT",
+            width=96,
+            height=32,
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._switch_to_chatgpt_tab
+        )
+        self.btn_open_chatgpt.pack(side="left", padx=(0, 5))
+
+        self.btn_open_claude = ctk.CTkButton(
+            right_box,
+            text="🟠 Claude",
+            width=92,
+            height=32,
+            fg_color=("#D97757", "#E07A5F"),
+            hover_color=("#C25E3F", "#D97757"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._switch_to_claude_tab
+        )
+        self.btn_open_claude.pack(side="left", padx=(0, 5))
+
         self.btn_open_mammouth = ctk.CTkButton(
             right_box,
             text="💬 Mammouth AI",
-            width=125,
+            width=118,
             height=32,
             fg_color=THEME_BTN_SEC_BG,
             hover_color=THEME_BTN_SEC_HOVER,
@@ -1503,6 +1550,8 @@ class MammouthControlCenter(ctk.CTk):
         self.tab_tasks = self.tabview.add("⏱️ Tasks & Automation")
         self.tab_hosts = self.tabview.add("🔑 SSH Fleet & PuTTY Manager")
         self.tab_settings = self.tabview.add("⚙️ Security & Settings")
+        self.tab_chatgpt = self.tabview.add("🤖 ChatGPT Web")
+        self.tab_claude = self.tabview.add("🟠 Claude Web")
         self.tab_mammouth = self.tabview.add("💬 Mammouth AI Web")
 
         # Remove horizontal segmented button bar in favor of modern Left Rail (MUST be called after add)
@@ -1520,6 +1569,8 @@ class MammouthControlCenter(ctk.CTk):
         self._setup_tasks_tab()
         self._setup_hosts_tab()
         self._setup_settings_tab()
+        self._setup_chatgpt_tab()
+        self._setup_claude_tab()
         self._setup_mammouth_tab()
 
         self._update_nav_highlight("📊 Dashboard & Live Console")
@@ -1556,6 +1607,8 @@ class MammouthControlCenter(ctk.CTk):
             ("⏱️ Tasks & Automation", "⏱️ Scheduled Tasks"),
             ("🔑 SSH Fleet & PuTTY Manager", "🔑 SSH & PuTTY Fleet"),
             ("⚙️ Security & Settings", "⚙️ Settings"),
+            ("🤖 ChatGPT Web", "🤖 ChatGPT WebApp"),
+            ("🟠 Claude Web", "🟠 Claude WebApp"),
             ("💬 Mammouth AI Web", "💬 Mammouth WebApp"),
         ]
 
@@ -1565,7 +1618,7 @@ class MammouthControlCenter(ctk.CTk):
                 self.sidebar,
                 text=f"  {label}",
                 anchor="w",
-                height=38,
+                height=35,
                 corner_radius=8,
                 font=ctk.CTkFont(size=12, weight="bold"),
                 fg_color="transparent",
@@ -1573,7 +1626,7 @@ class MammouthControlCenter(ctk.CTk):
                 text_color=THEME_TEXT_MUTED,
                 command=lambda k=tab_key: self._select_nav_tab(k)
             )
-            btn.pack(fill="x", padx=10, pady=3)
+            btn.pack(fill="x", padx=10, pady=2)
             self._nav_buttons[tab_key] = btn
 
         # Bottom Mini Telemetry Card & Tool Profile
@@ -1742,6 +1795,46 @@ class MammouthControlCenter(ctk.CTk):
                     border_width=0
                 )
 
+    def _setup_chatgpt_tab(self):
+        cg_cfg = self.config_data.get("chatgpt_browser", {})
+        start_url = cg_cfg.get("start_page", "https://chatgpt.com")
+        user_data_dir = cg_cfg.get("user_data_dir", "./data/chatgpt_browser_profile")
+        if not os.path.isabs(user_data_dir):
+            user_data_dir = str(BASE_DIR / user_data_dir)
+
+        self.chatgpt_browser = MammouthBrowserFrame(
+            self.tab_chatgpt,
+            get_mcp_url_cb=self._calculate_active_endpoint_url,
+            start_url=start_url,
+            profile_dir=user_data_dir,
+            screenshot_cb=self._take_and_copy_screenshot,
+            zen_toggle_cb=self.toggle_zen_mode,
+            brand_name="ChatGPT",
+            log_cb=self._log
+        )
+        self.tab_chatgpt.configure(fg_color=THEME_BG)
+        self.chatgpt_browser.pack(fill="both", expand=True, padx=0, pady=0)
+
+    def _setup_claude_tab(self):
+        cl_cfg = self.config_data.get("claude_browser", {})
+        start_url = cl_cfg.get("start_page", "https://claude.ai")
+        user_data_dir = cl_cfg.get("user_data_dir", "./data/claude_browser_profile")
+        if not os.path.isabs(user_data_dir):
+            user_data_dir = str(BASE_DIR / user_data_dir)
+
+        self.claude_browser = MammouthBrowserFrame(
+            self.tab_claude,
+            get_mcp_url_cb=self._calculate_active_endpoint_url,
+            start_url=start_url,
+            profile_dir=user_data_dir,
+            screenshot_cb=self._take_and_copy_screenshot,
+            zen_toggle_cb=self.toggle_zen_mode,
+            brand_name="Claude",
+            log_cb=self._log
+        )
+        self.tab_claude.configure(fg_color=THEME_BG)
+        self.claude_browser.pack(fill="both", expand=True, padx=0, pady=0)
+
     def _setup_mammouth_tab(self):
         browser_cfg = self.config_data.get("embedded_browser", {})
         start_url = browser_cfg.get("start_page", "https://mammouth.ai")
@@ -1755,27 +1848,54 @@ class MammouthControlCenter(ctk.CTk):
             start_url=start_url,
             profile_dir=user_data_dir,
             screenshot_cb=self._take_and_copy_screenshot,
-            zen_toggle_cb=self.toggle_zen_mode
+            zen_toggle_cb=self.toggle_zen_mode,
+            brand_name="Mammouth.ai",
+            log_cb=self._log
         )
         self.tab_mammouth.configure(fg_color=THEME_BG)
         self.mammouth_browser.pack(fill="both", expand=True, padx=0, pady=0)
 
+    def _get_active_chat_tab_key(self) -> str:
+        key = self.__dict__.get("active_chat_tab_key")
+        tab_browser_map = {
+            "🤖 ChatGPT Web": "chatgpt_browser",
+            "🟠 Claude Web": "claude_browser",
+            "💬 Mammouth AI Web": "mammouth_browser",
+        }
+        if key in tab_browser_map and tab_browser_map[key] in self.__dict__:
+            return key
+        for tab_k, attr_name in tab_browser_map.items():
+            if attr_name in self.__dict__:
+                return tab_k
+        return "💬 Mammouth AI Web"
+
+    def _get_active_chat_browser(self):
+        tab_key = self._get_active_chat_tab_key()
+        if tab_key == "🤖 ChatGPT Web" and "chatgpt_browser" in self.__dict__:
+            return self.__dict__.get("chatgpt_browser")
+        if tab_key == "🟠 Claude Web" and "claude_browser" in self.__dict__:
+            return self.__dict__.get("claude_browser")
+        return self.__dict__.get("mammouth_browser")
+
     def toggle_zen_mode(self, enable: bool | None = None):
-        """Toggle Zen / Chat-First Mode: collapse navigation rail and give 100% viewport to Mammouth AI."""
+        """Toggle Zen / Chat-First Mode: collapse navigation rail and give 100% viewport to active AI chat."""
         if enable is None:
             self.zen_mode_active = not self.zen_mode_active
         else:
             self.zen_mode_active = bool(enable)
 
+        active_tab_key = self._get_active_chat_tab_key()
+        active_browser = self._get_active_chat_browser()
+
         if self.zen_mode_active:
             if self.sidebar_visible:
-                if hasattr(self, "sidebar"):
+                if "sidebar" in self.__dict__ and self.sidebar:
                     self.sidebar.pack_forget()
                 self.sidebar_visible = False
-                if hasattr(self, "btn_toggle_sidebar"):
+                if "btn_toggle_sidebar" in self.__dict__ and self.btn_toggle_sidebar:
                     self.btn_toggle_sidebar.configure(text="☰")
-            self._select_nav_tab("💬 Mammouth AI Web")
-            if hasattr(self, "btn_zen_header"):
+            self._select_nav_tab(active_tab_key)
+            if "btn_zen_header" in self.__dict__ and self.btn_zen_header:
                 self.btn_zen_header.configure(
                     text="🧘 Normal",
                     fg_color=THEME_ACCENT,
@@ -1783,17 +1903,17 @@ class MammouthControlCenter(ctk.CTk):
                     text_color="#FFFFFF",
                     border_color=THEME_ACCENT_HOVER
                 )
-            if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "set_zen_state"):
-                self.mammouth_browser.set_zen_state(True)
-            self._log("[ZEN MODE] Activated Chat-First Zen Mode (Sidebar collapsed).")
+            if active_browser and hasattr(active_browser, "set_zen_state"):
+                active_browser.set_zen_state(True)
+            self._log(f"[ZEN MODE] Activated Chat-First Zen Mode ({active_tab_key}, Sidebar collapsed).")
         else:
             if not self.sidebar_visible:
-                if hasattr(self, "sidebar") and hasattr(self, "content_area"):
+                if "sidebar" in self.__dict__ and "content_area" in self.__dict__:
                     self.sidebar.pack(side="left", fill="y", before=self.content_area)
                 self.sidebar_visible = True
-                if hasattr(self, "btn_toggle_sidebar"):
+                if "btn_toggle_sidebar" in self.__dict__ and self.btn_toggle_sidebar:
                     self.btn_toggle_sidebar.configure(text="◀")
-            if hasattr(self, "btn_zen_header"):
+            if "btn_zen_header" in self.__dict__ and self.btn_zen_header:
                 self.btn_zen_header.configure(
                     text="🧘 Zen",
                     fg_color=THEME_BTN_SEC_BG,
@@ -1801,8 +1921,9 @@ class MammouthControlCenter(ctk.CTk):
                     text_color=THEME_TEXT_PRIMARY,
                     border_color=THEME_BTN_SEC_BORDER
                 )
-            if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "set_zen_state"):
-                self.mammouth_browser.set_zen_state(False)
+            for br in (self.__dict__.get("chatgpt_browser"), self.__dict__.get("claude_browser"), self.__dict__.get("mammouth_browser")):
+                if br and hasattr(br, "set_zen_state"):
+                    br.set_zen_state(False)
             self._log("[ZEN MODE] Deactivated Zen Mode (Standard Cockpit layout restored).")
 
     def _init_global_hotkey(self):
@@ -1877,7 +1998,7 @@ class MammouthControlCenter(ctk.CTk):
             self.focus_force()
             user32.ShowWindow(top_hwnd, 9)  # SW_RESTORE
             user32.SetForegroundWindow(top_hwnd)
-            self._select_nav_tab("💬 Mammouth AI Web")
+            self._select_nav_tab(self._get_active_chat_tab_key())
         except Exception as e:
             self._log(f"[SUMMON] Error bringing window to front: {e}")
 
@@ -1964,10 +2085,11 @@ class MammouthControlCenter(ctk.CTk):
         self._log(f"[COPILOT] Captured active window '{win_title}'{disp_proc} -> {saved_path}")
         self.show_toast("📸 Screen Copilot", f"Captured '{win_title[:35]}'{disp_proc} — In clipboard & Chat ready!")
 
-        # Summon window to front and focus Mammouth chat
+        # Summon window to front and focus active chat (ChatGPT or Mammouth)
         self._summon_cockpit_to_foreground()
-        if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
-            self.mammouth_browser.focus_and_paste(delay_ms=100)
+        active_browser = self._get_active_chat_browser()
+        if active_browser and hasattr(active_browser, "focus_and_paste"):
+            active_browser.focus_and_paste(delay_ms=100)
 
     def _on_smart_clipboard_hotkey(self):
         """Handle Smart Clipboard hotkey (Ctrl+Shift+K).
@@ -1985,13 +2107,14 @@ class MammouthControlCenter(ctk.CTk):
                 self.show_toast("📋 Smart Clipboard", "Clipboard is currently empty.")
 
             self._summon_cockpit_to_foreground()
-            if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
-                self.mammouth_browser.focus_and_paste(delay_ms=100)
+            active_browser = self._get_active_chat_browser()
+            if active_browser and hasattr(active_browser, "focus_and_paste"):
+                active_browser.focus_and_paste(delay_ms=100)
         except Exception as ex:
             self._log(f"[SMART CLIPBOARD ERROR] Hotkey execution error: {ex}")
 
     def _on_global_hotkey_summon(self):
-        """Handle global hotkey trigger: summon Cockpit to front and focus Mammouth chat prompt."""
+        """Handle global hotkey trigger: summon Cockpit to front and focus active chat prompt."""
         try:
             import ctypes
             user32 = ctypes.windll.user32
@@ -2007,8 +2130,9 @@ class MammouthControlCenter(ctk.CTk):
 
             # Otherwise, summon window to front
             self._summon_cockpit_to_foreground()
-            if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
-                self.mammouth_browser.focus_and_paste(delay_ms=100)
+            active_browser = self._get_active_chat_browser()
+            if active_browser and hasattr(active_browser, "focus_and_paste"):
+                active_browser.focus_and_paste(delay_ms=100)
         except Exception as ex:
             self._log(f"[QUICK-LAUNCHER] Error summoning window: {ex}")
 
@@ -2154,9 +2278,10 @@ class MammouthControlCenter(ctk.CTk):
             if saved and hasattr(self, "btn_header_screen"):
                 self.btn_header_screen.configure(text="✓ In Clipboard & Chat!", fg_color="#10B981")
                 self.after(3000, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG))
-                self._switch_to_mammouth_tab()
-                if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
-                    self.mammouth_browser.focus_and_paste(delay_ms=300)
+                self._switch_to_active_chat_tab()
+                active_browser = self._get_active_chat_browser()
+                if active_browser and hasattr(active_browser, "focus_and_paste"):
+                    active_browser.focus_and_paste(delay_ms=300)
             else:
                 if hasattr(self, "btn_header_screen"):
                     self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG)
@@ -2192,9 +2317,10 @@ class MammouthControlCenter(ctk.CTk):
             self.btn_header_screen.configure(text="✓ In Clipboard & Chat!", fg_color="#10B981")
             self.after(3000, lambda: self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG))
 
-        self._switch_to_mammouth_tab()
-        if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
-            self.mammouth_browser.focus_and_paste(delay_ms=250)
+        self._switch_to_active_chat_tab()
+        active_browser = self._get_active_chat_browser()
+        if active_browser and hasattr(active_browser, "focus_and_paste"):
+            active_browser.focus_and_paste(delay_ms=250)
 
     def _on_window_capture_ui_failed(self, err_msg: str):
         self._log(f"[VISION ERROR] Capture failed: {err_msg}")
@@ -2285,26 +2411,46 @@ class MammouthControlCenter(ctk.CTk):
         except Exception:
             pass
 
-        # 2. Switch to Mammouth WebApp tab
-        self._switch_to_mammouth_tab()
+        # 2. Switch to active AI WebApp tab
+        self._switch_to_active_chat_tab()
 
         # 3. Focus chat input and trigger Ctrl+V paste safely on UI thread
-        if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "focus_and_paste"):
-            self.mammouth_browser.focus_and_paste(delay_ms=300)
+        active_browser = self._get_active_chat_browser()
+        if active_browser and hasattr(active_browser, "focus_and_paste"):
+            active_browser.focus_and_paste(delay_ms=300)
 
     def _on_snip_cancelled(self):
         if hasattr(self, "btn_header_screen"):
             self.btn_header_screen.configure(text="📸 Screenshot (Ctrl+V)", fg_color=THEME_BTN_SEC_BG)
 
-    def _switch_to_mammouth_tab(self):
-        self.tabview.set("💬 Mammouth AI Web")
+    def _switch_to_chat_tab(self, tab_key: str):
+        self.active_chat_tab_key = tab_key
+        self.tabview.set(tab_key)
         if hasattr(self.tabview, "_segmented_button"):
             try:
                 self.tabview._segmented_button.grid_remove()
             except Exception:
                 pass
-        self._update_nav_highlight("💬 Mammouth AI Web")
+        self._update_nav_highlight(tab_key)
         self._on_tab_changed()
+
+    def _switch_to_chatgpt_tab(self):
+        self._switch_to_chat_tab("🤖 ChatGPT Web")
+
+    def _switch_to_claude_tab(self):
+        self._switch_to_chat_tab("🟠 Claude Web")
+
+    def _switch_to_mammouth_tab(self):
+        self._switch_to_chat_tab("💬 Mammouth AI Web")
+
+    def _switch_to_active_chat_tab(self):
+        active_key = self._get_active_chat_tab_key()
+        if active_key == "🤖 ChatGPT Web" and "chatgpt_browser" in self.__dict__:
+            self._switch_to_chatgpt_tab()
+        elif active_key == "🟠 Claude Web" and "claude_browser" in self.__dict__:
+            self._switch_to_claude_tab()
+        else:
+            self._switch_to_mammouth_tab()
 
     def _on_tab_changed(self):
         current = self.tabview.get()
@@ -2313,12 +2459,20 @@ class MammouthControlCenter(ctk.CTk):
             self._refresh_task_cards()
         elif current == "🧠 Memory Vault" and hasattr(self, "_refresh_memory_list"):
             self._refresh_memory_list()
-        if hasattr(self, "mammouth_browser"):
-            if current == "💬 Mammouth AI Web":
-                self.mammouth_browser.ensure_initialized()
-                self.mammouth_browser.set_tab_visible(True)
-            else:
-                self.mammouth_browser.set_tab_visible(False)
+        if current in ("🤖 ChatGPT Web", "🟠 Claude Web", "💬 Mammouth AI Web"):
+            self.active_chat_tab_key = current
+        for tab_name, attr_name in (
+            ("🤖 ChatGPT Web", "chatgpt_browser"),
+            ("🟠 Claude Web", "claude_browser"),
+            ("💬 Mammouth AI Web", "mammouth_browser"),
+        ):
+            if hasattr(self, attr_name):
+                br = getattr(self, attr_name)
+                if current == tab_name:
+                    br.ensure_initialized()
+                    br.set_tab_visible(True)
+                else:
+                    br.set_tab_visible(False)
 
     def _check_updates_async(self, manual: bool = False):
         server_cfg = self.config_data.get("server", {})
@@ -2704,6 +2858,36 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_copy_json.pack(side="left", padx=3)
 
+        btn_copy_chatgpt = ctk.CTkButton(
+            btn_box1,
+            text="🤖 ChatGPT URL",
+            width=112,
+            height=28,
+            fg_color=("#ECFDF5", "#122B24"),
+            hover_color=("#D1FAE5", "#1B3F35"),
+            text_color=("#047857", "#10B981"),
+            font=ctk.CTkFont(weight="bold"),
+            border_width=1,
+            border_color=("#A7F3D0", "#244E38"),
+            command=self._copy_chatgpt_connector_url
+        )
+        btn_copy_chatgpt.pack(side="left", padx=3)
+
+        btn_copy_claude = ctk.CTkButton(
+            btn_box1,
+            text="🟠 Claude URL",
+            width=105,
+            height=28,
+            fg_color=("#FFF7ED", "#2D1E18"),
+            hover_color=("#FFEDD5", "#3D2920"),
+            text_color=("#C2410C", "#E07A5F"),
+            font=ctk.CTkFont(weight="bold"),
+            border_width=1,
+            border_color=("#FDBA74", "#5C3A2E"),
+            command=self._copy_claude_connector_url
+        )
+        btn_copy_claude.pack(side="left", padx=3)
+
         # Localhost Endpoint Row
         row2 = ctk.CTkFrame(card, fg_color="transparent")
         row2.pack(fill="x", padx=15, pady=(4, 6))
@@ -2820,10 +3004,36 @@ class MammouthControlCenter(ctk.CTk):
         actions_bar = ctk.CTkFrame(self.tab_dashboard, fg_color="transparent")
         actions_bar.pack(fill="x", padx=15, pady=(0, 8))
 
+        btn_open_chatgpt_dash = ctk.CTkButton(
+            actions_bar,
+            text="🤖 ChatGPT",
+            width=105,
+            height=30,
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._switch_to_chatgpt_tab
+        )
+        btn_open_chatgpt_dash.pack(side="left", padx=(0, 6))
+
+        btn_open_claude_dash = ctk.CTkButton(
+            actions_bar,
+            text="🟠 Claude",
+            width=100,
+            height=30,
+            fg_color=("#D97757", "#E07A5F"),
+            hover_color=("#C25E3F", "#D97757"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._switch_to_claude_tab
+        )
+        btn_open_claude_dash.pack(side="left", padx=(0, 6))
+
         btn_open_mammouth_dash = ctk.CTkButton(
             actions_bar,
             text="💬 Mammouth AI",
-            width=140,
+            width=130,
             height=30,
             fg_color=THEME_ACCENT,
             hover_color=THEME_ACCENT_HOVER,
@@ -3319,13 +3529,13 @@ class MammouthControlCenter(ctk.CTk):
         title_box.pack(side="left")
         ctk.CTkLabel(
             title_box,
-            text="📖 Mammouth.ai Prompt Catalog",
+            text="📖 AI Prompt Catalog (ChatGPT, Claude & Mammouth.ai)",
             font=ctk.CTkFont(size=17, weight="bold"),
             text_color=THEME_TEXT_PRIMARY
         ).pack(anchor="w")
         ctk.CTkLabel(
             title_box,
-            text="Optimized prompts for Mammouth.ai. Copy to clipboard with 1 click & send in chat.",
+            text="Optimized prompts for ChatGPT, Claude & Mammouth.ai. Copy to clipboard or send directly into the active chat.",
             font=ctk.CTkFont(size=12),
             text_color=THEME_TEXT_MUTED
         ).pack(anchor="w")
@@ -3338,7 +3548,7 @@ class MammouthControlCenter(ctk.CTk):
                 "🖥️ Screen Inspection & OCR",
                 "Vision",
                 "Captures your screen for Mammouth to inspect menus, errors, and visual content.",
-                "Use the screen_capture tool (monitor=1) to take a screenshot of my screen and analyze currently visible windows, error messages, and contents."
+                "Use the screen_capture tool (target='fullscreen', monitor=1) to take a screenshot of my screen and analyze currently visible windows, error messages, and contents."
             ),
             (
                 "📊 System Diagnostics & Top Processes",
@@ -3356,19 +3566,19 @@ class MammouthControlCenter(ctk.CTk):
                 "💻 Mammouth Code CLI Task",
                 "Coding Agent",
                 "Launches a coding task headlessly or in an interactive terminal with Mammouth Code.",
-                "Use mammouth_code_run_task to start a task: 'Analyze the current project and scaffold a modular REST API with tests'."
+                "Use mammouth_code (action='run_task') to start a task: 'Analyze the current project and scaffold a modular REST API with tests'."
             ),
             (
                 "☁️ Google Drive File Search",
                 "Cloud",
                 "Searches connected Google Drive documents for keywords.",
-                "Use gdrive_list_files to search for recent documents and summarize file names, links, and last modified dates in a table."
+                "Use gdrive_list to search for recent documents and summarize file names, links, and last modified dates in a table."
             ),
             (
                 "🐧 SSH Linux Server Health Check",
                 "Remote",
                 "Executes status commands on saved PuTTY/SSH host profiles.",
-                "Use putty_ssh_exec on my saved Linux host to run 'uptime && df -h && free -m' and summarize the server health status."
+                "Use ssh_exec_command on my saved Linux host to run 'uptime && df -h && free -m' and summarize the server health status."
             ),
         ]
 
@@ -3440,10 +3650,23 @@ class MammouthControlCenter(ctk.CTk):
             btn_box = ctk.CTkFrame(card, fg_color="transparent")
             btn_box.pack(side="right", padx=15, pady=12)
 
+            btn_send_chat = ctk.CTkButton(
+                btn_box,
+                text="🚀 Send to Chat",
+                width=130,
+                height=32,
+                fg_color=THEME_ACCENT,
+                hover_color=THEME_ACCENT_HOVER,
+                text_color="#FFFFFF",
+                font=ctk.CTkFont(weight="bold"),
+                command=lambda p=prompt_text: self._send_prompt_to_active_chat(p)
+            )
+            btn_send_chat.pack(side="right", padx=(6, 0))
+
             btn_copy = ctk.CTkButton(
                 btn_box,
                 text="📋 Copy Prompt",
-                width=140,
+                width=130,
                 height=32,
                 fg_color=("#059669", "#10B981"),
                 hover_color=("#047857", "#059669"),
@@ -3452,6 +3675,14 @@ class MammouthControlCenter(ctk.CTk):
                 command=lambda p=prompt_text: self._copy_to_clipboard(p, "Prompt")
             )
             btn_copy.pack(side="right")
+
+    def _send_prompt_to_active_chat(self, prompt_text: str):
+        """Switch to active AI web chat (ChatGPT, Claude or Mammouth) and inject + submit the prompt."""
+        self._switch_to_active_chat_tab()
+        active_browser = self._get_active_chat_browser()
+        if active_browser and hasattr(active_browser, "send_chat_prompt"):
+            active_browser.send_chat_prompt(prompt_text, auto_submit=True, delay_ms=350)
+            self._log(f"[CHAT] Dispatched prompt to {self._get_active_chat_tab_key()}: '{prompt_text[:50]}...'")
 
     def _on_scheduler_changed(self):
         if self.__dict__.get("_is_destroyed", False):
@@ -3468,79 +3699,126 @@ class MammouthControlCenter(ctk.CTk):
         try:
             self.scheduler_engine = TaskSchedulerEngine.get_instance()
             self.scheduler_engine.register_handler("mammouth_web", self._on_trigger_mammouth_web_task)
+            self.scheduler_engine.register_handler("chatgpt_web", self._on_trigger_chatgpt_web_task)
+            self.scheduler_engine.register_handler("claude_web", self._on_trigger_claude_web_task)
             self.scheduler_engine.register_handler("mammouth_code", self._on_trigger_mammouth_code_task)
             self.scheduler_engine.register_handler("powershell", self._on_trigger_powershell_task)
             self.scheduler_engine.register_handler("notification", self._on_trigger_notification_task)
             self.scheduler_engine.register_listener(self._on_scheduler_changed)
+            # Only spawn the live background thread for real Tk windows (not headless __new__ test mocks)
+            if "tk" in self.__dict__ and self.tk:
+                self.scheduler_engine.start_background_loop(poll_interval=1.0)
+                self._owns_scheduler_loop = True
             self.after(1000, self._on_scheduler_tick)
+            self._log("[TASK SCHEDULER] Initialized and background loop started.")
         except Exception as e:
             self._log(f"[TASK SCHEDULER WARNING] Init failed: {e}")
 
     def _on_scheduler_tick(self):
-        """Runs every 1 second on the Tkinter UI thread to check due tasks and update countdowns."""
+        """Runs every 1 second on the Tkinter UI thread to update countdowns (and run fallback check if loop inactive)."""
+        if self.__dict__.get("_is_destroyed", False):
+            return
         try:
-            if hasattr(self, "scheduler_engine") and self.scheduler_engine:
-                self.scheduler_engine.check_and_run_due_tasks()
+            eng = self.__dict__.get("scheduler_engine")
+            if eng and not getattr(eng, "_running", False):
+                eng.check_and_run_due_tasks()
             self._update_task_countdowns()
+        except Exception as e:
+            if not self.__dict__.get("_is_destroyed", False) and hasattr(self, "_log"):
+                self._log(f"[TASK SCHEDULER TICK WARNING] {e}")
+        finally:
+            if not self.__dict__.get("_is_destroyed", False):
+                try:
+                    self.after(1000, self._on_scheduler_tick)
+                except Exception:
+                    pass
+
+    def _restore_window_for_task(self):
+        """Bring Cockpit out of minimized/withdrawn state so the embedded browser can render and focus."""
+        try:
+            if hasattr(self, "state") and self.state() == "iconic":
+                self.state("normal")
         except Exception:
             pass
-        finally:
-            try:
-                self.after(1000, self._on_scheduler_tick)
-            except Exception:
-                pass
+        try:
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+        except Exception:
+            pass
 
-    def _on_trigger_mammouth_web_task(self, task: dict[str, Any]) -> str:
-        """Trigger handler: Injects prompt into the embedded Mammouth AI Web chat."""
+    def _dispatch_web_chat_task(self, task: dict[str, Any], browser_attr: str, switch_fn, label: str) -> str:
+        """Shared UI-thread dispatcher for embedded AI web chat targets."""
         prompt = task.get("prompt", "")
         name = task.get("name", "Task")
         runs_done = task.get("runs_done", 0) + 1
         switch_tab = bool(task.get("switch_tab", 1))
         auto_submit = bool(task.get("auto_submit", 1))
 
-        self._log(f"[TASK SCHEDULER] ⏱️ Triggering '{name}' (Run #{runs_done}) -> Mammouth Web Chat")
+        self._log(f"[TASK SCHEDULER] ⏱️ Triggering '{name}' (Run #{runs_done}) -> {label} Chat")
 
-        def _do_web_trigger():
+        def _do_trigger():
             try:
-                try:
-                    self.deiconify()
-                    self.lift()
-                    self.focus_force()
-                except Exception:
-                    pass
-
+                self._restore_window_for_task()
                 if switch_tab:
-                    self._switch_to_mammouth_tab()
-                if hasattr(self, "mammouth_browser") and hasattr(self.mammouth_browser, "send_chat_prompt"):
-                    self.mammouth_browser.send_chat_prompt(prompt, auto_submit=auto_submit, delay_ms=450 if switch_tab else 50)
+                    switch_fn()
+                browser = self.__dict__.get(browser_attr) or getattr(self, browser_attr, None)
+                if browser and hasattr(browser, "send_chat_prompt"):
+                    ok = browser.send_chat_prompt(prompt, auto_submit=auto_submit, delay_ms=450 if switch_tab else 50)
+                    if not ok:
+                        self._log(f"[TASK WARNING] {label} browser unavailable for '{name}'.")
+                else:
+                    self._log(f"[TASK WARNING] {label} browser unavailable for '{name}'.")
             except Exception as ex:
-                self._log(f"[TASK WARNING] Web trigger error: {ex}")
+                self._log(f"[TASK WARNING] {label} trigger error: {ex}")
 
-        self.after(0, _do_web_trigger)
-        return "Dispatched to Mammouth AI Web"
+        self.after(0, _do_trigger)
+        return f"Dispatched to {label}"
+
+    def _on_trigger_mammouth_web_task(self, task: dict[str, Any]) -> str:
+        """Trigger handler: Injects prompt into the embedded Mammouth AI Web chat."""
+        return self._dispatch_web_chat_task(task, "mammouth_browser", self._switch_to_mammouth_tab, "Mammouth AI Web")
+
+    def _on_trigger_chatgpt_web_task(self, task: dict[str, Any]) -> str:
+        """Trigger handler: Injects prompt into the embedded ChatGPT Web chat."""
+        return self._dispatch_web_chat_task(task, "chatgpt_browser", self._switch_to_chatgpt_tab, "ChatGPT Web")
+
+    def _on_trigger_claude_web_task(self, task: dict[str, Any]) -> str:
+        """Trigger handler: Injects prompt into the embedded Claude Web chat."""
+        return self._dispatch_web_chat_task(task, "claude_browser", self._switch_to_claude_tab, "Claude Web")
 
     def _on_trigger_mammouth_code_task(self, task: dict[str, Any]) -> str:
         """Trigger handler: Runs Mammouth Code CLI headlessly."""
+        task_id = task.get("id")
         prompt = task.get("prompt", "")
         name = task.get("name", "Task")
         runs_done = task.get("runs_done", 0) + 1
         self._log(f"[TASK SCHEDULER] 💻 Triggering '{name}' (Run #{runs_done}) -> Mammouth Code CLI")
 
         def _run():
+            t0 = time.perf_counter()
             try:
                 from modules.mammouth_code import run_mammouth_task
                 res = run_mammouth_task(task_prompt=prompt, stream_output=False, timeout_seconds=180)
-                status_str = "Success" if res.get("success") else f"Failed: {res.get('error', 'unknown')}"
+                dur = round((time.perf_counter() - t0) * 1000)
+                ok = bool(res.get("success"))
+                status_str = "Success" if ok else f"Error: {res.get('error', 'unknown')}"
                 self._log(f"[TASK SCHEDULER] Mammouth Code Run #{runs_done} finished: {status_str}")
+                if task_id is not None:
+                    scheduler_update_run_result(task_id, runs_done, "success" if ok else "error", 0 if ok else -1, status_str, duration_ms=dur)
             except Exception as e:
+                dur = round((time.perf_counter() - t0) * 1000)
                 self._log(f"[TASK WARNING] Mammouth Code trigger error: {e}")
+                if task_id is not None:
+                    scheduler_update_run_result(task_id, runs_done, "error", -1, f"Error: {e}", duration_ms=dur)
 
         # Runs up to 180s: never block the Tk scheduler tick with it
-        threading.Thread(target=_run, daemon=True, name=f"SchedMammouthCode-{task.get('id')}").start()
+        threading.Thread(target=_run, daemon=True, name=f"SchedMammouthCode-{task_id}").start()
         return "Started in background"
 
     def _on_trigger_powershell_task(self, task: dict[str, Any]) -> str:
         """Trigger handler: Runs local PowerShell command."""
+        task_id = task.get("id")
         prompt = task.get("prompt", "")
         name = task.get("name", "Task")
         runs_done = task.get("runs_done", 0) + 1
@@ -3549,17 +3827,34 @@ class MammouthControlCenter(ctk.CTk):
         cfg = load_config()
         if not cfg.get("modules", {}).get("shell_processes", {}).get("enabled", False):
             self._log(f"[TASK SCHEDULER] PowerShell task '{name}' skipped: module 'shell_processes' is disabled.")
-            return "Skipped: shell_processes module disabled"
+            return "Error: shell_processes module disabled"
 
         def _run():
+            t0 = time.perf_counter()
             try:
                 from modules.shell_processes import command_run
                 res = command_run(command=prompt)
-                self._log(f"[TASK SCHEDULER] PowerShell Run #{runs_done} finished (exit {res.get('exit_code')}).")
+                dur = round((time.perf_counter() - t0) * 1000)
+                exit_code = res.get("exit_code", -1)
+                status = res.get("status", "error")
+                out = (res.get("stdout") or "").strip()
+                err = (res.get("stderr") or res.get("error") or "").strip()
+                self._log(f"[TASK SCHEDULER] PowerShell Run #{runs_done} finished (exit {exit_code}).")
+                if status == "permission_denied" or exit_code != 0:
+                    summary = f"Error (exit {exit_code}): {err or out or status}"
+                    run_st = "error"
+                else:
+                    summary = f"Exit 0: {out[:200]}" if out else "Exit 0 (OK)"
+                    run_st = "success"
+                if task_id is not None:
+                    scheduler_update_run_result(task_id, runs_done, run_st, exit_code, summary, duration_ms=dur)
             except Exception as e:
+                dur = round((time.perf_counter() - t0) * 1000)
                 self._log(f"[TASK WARNING] PowerShell trigger error: {e}")
+                if task_id is not None:
+                    scheduler_update_run_result(task_id, runs_done, "error", -1, f"Error: {e}", duration_ms=dur)
 
-        threading.Thread(target=_run, daemon=True, name=f"SchedPowerShell-{task.get('id')}").start()
+        threading.Thread(target=_run, daemon=True, name=f"SchedPowerShell-{task_id}").start()
         return "Started in background"
 
     def _on_trigger_notification_task(self, task: dict[str, Any]) -> str:
@@ -3807,6 +4102,8 @@ class MammouthControlCenter(ctk.CTk):
 
             # Target badge
             target_labels = {
+                "chatgpt_web": ("🤖 ChatGPT Web", ("#ECFDF5", "#122B24"), ("#059669", "#10B981")),
+                "claude_web": ("🟠 Claude Web", ("#FFF7ED", "#2D1E18"), ("#C2410C", "#E07A5F")),
                 "mammouth_web": ("💬 Mammouth AI Web", ("#F2EBE1", "#2F241D"), ("#754533", "#C8A37C")),
                 "mammouth_code": ("💻 Mammouth Code", ("#EDE3D4", "#3D2B1F"), ("#9F6C45", "#B88557")),
                 "powershell": ("⚡ PowerShell", ("#EFF6FF", "#1E293B"), ("#2563EB", "#60A5FA")),
@@ -3951,6 +4248,18 @@ class MammouthControlCenter(ctk.CTk):
                 anchor="w"
             ).pack(fill="x", padx=10, pady=8)
 
+            last_res = str(task.get("last_result") or "").strip()
+            if last_res and last_res != "Scheduled":
+                is_err = last_res.lower().startswith("error") or "skipped" in last_res.lower()
+                res_color = ("#DC2626", "#F87171") if is_err else ("#059669", "#34D399")
+                ctk.CTkLabel(
+                    inner,
+                    text=f"Status: {last_res[:140]}",
+                    font=ctk.CTkFont(size=10, weight="bold" if is_err else "normal"),
+                    text_color=res_color,
+                    anchor="w"
+                ).pack(fill="x", pady=(4, 0))
+
         # Trigger countdown calculation immediately
         self._update_task_countdowns()
 
@@ -4035,7 +4344,11 @@ class MammouthControlCenter(ctk.CTk):
                     pass
 
     def _trigger_task_now_ui(self, task_id: int):
-        scheduler_trigger_task_now(task_id)
+        res = scheduler_trigger_task_now(task_id)
+        if isinstance(res, dict) and "error" in res:
+            self._log(f"[TASK WARNING] Could not trigger task #{task_id}: {res['error']}")
+        else:
+            self._log(f"[TASK SCHEDULER] ⚡ Immediate trigger queued for task #{task_id}.")
         self._refresh_task_cards()
 
     def _pause_task_ui(self, task_id: int):
@@ -4052,17 +4365,26 @@ class MammouthControlCenter(ctk.CTk):
 
     def _quick_start_football_live_task(self):
         """1-Click shortcut: Creates and launches the 5-minute football live ticker task immediately."""
+        active_tab = self._get_active_chat_tab_key()
+        target_web = {
+            "🤖 ChatGPT Web": "chatgpt_web",
+            "🟠 Claude Web": "claude_web",
+            "💬 Mammouth AI Web": "mammouth_web",
+        }.get(active_tab, "mammouth_web")
         task = scheduler_create_task(
             name="⚽ Live Match Report: Football",
             prompt="Provide a detailed live report of the ongoing football match: Search the web for current score, goals, cards, substitutions, and match events over the last 5 minutes.",
             interval_seconds=300,
             repeat_count=20,
-            target="mammouth_web",
+            target=target_web,
             auto_submit=True,
             switch_tab=True,
             start_immediately=True
         )
-        self._log(f"[TASK SCHEDULER] ⚽ Football live report started (ID #{task.get('id')}). Next trigger in 2s, then every 5 minutes.")
+        if isinstance(task, dict) and "error" in task:
+            messagebox.showerror("Task Creation Error", task["error"], parent=self)
+            return
+        self._log(f"[TASK SCHEDULER] ⚽ Football live report started (ID #{task.get('id')}, target={target_web}). Next trigger in 1-2s, then every 5 minutes.")
         self._select_nav_tab("⏱️ Tasks & Automation")
         self._refresh_task_cards()
 
@@ -4122,12 +4444,19 @@ class MammouthControlCenter(ctk.CTk):
                     entry_repeats.insert(0, str(p.get("repeat_count", 0)))
 
                     tgt_labels_rev = {
+                        "chatgpt_web": "🤖 ChatGPT Web Chat",
+                        "claude_web": "🟠 Claude Web Chat",
                         "mammouth_web": "💬 Mammouth AI Web Chat",
                         "mammouth_code": "💻 Mammouth Code CLI",
                         "powershell": "⚡ PowerShell",
                         "notification": "🔔 Notification"
                     }
-                    menu_target.set(tgt_labels_rev.get(p.get("target", "mammouth_web"), "💬 Mammouth AI Web Chat"))
+                    default_web_label = {
+                        "🤖 ChatGPT Web": "🤖 ChatGPT Web Chat",
+                        "🟠 Claude Web": "🟠 Claude Web Chat",
+                    }.get(self._get_active_chat_tab_key(), "💬 Mammouth AI Web Chat")
+                    raw_tgt = p.get("target", "mammouth_web")
+                    menu_target.set(default_web_label if raw_tgt == "mammouth_web" else tgt_labels_rev.get(raw_tgt, default_web_label))
                     break
 
         menu_presets = ctk.CTkOptionMenu(content, values=preset_names, command=on_preset_selected, width=600)
@@ -4168,12 +4497,18 @@ class MammouthControlCenter(ctk.CTk):
         col3.pack(side="left", fill="x", expand=True, padx=(6, 0))
         ctk.CTkLabel(col3, text="Execution Target:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
         target_options = [
+            "🤖 ChatGPT Web Chat",
+            "🟠 Claude Web Chat",
             "💬 Mammouth AI Web Chat",
             "💻 Mammouth Code CLI",
             "⚡ PowerShell",
             "🔔 Notification"
         ]
         menu_target = ctk.CTkOptionMenu(col3, values=target_options)
+        menu_target.set({
+            "🤖 ChatGPT Web": "🤖 ChatGPT Web Chat",
+            "🟠 Claude Web": "🟠 Claude Web Chat",
+        }.get(self._get_active_chat_tab_key(), "💬 Mammouth AI Web Chat"))
         menu_target.pack(fill="x", pady=(2, 0))
 
         # Checkbox: Start immediately
@@ -4224,14 +4559,16 @@ class MammouthControlCenter(ctk.CTk):
                 repeats = 0
 
             tgt_map = {
+                "🤖 ChatGPT Web Chat": "chatgpt_web",
+                "🟠 Claude Web Chat": "claude_web",
                 "💬 Mammouth AI Web Chat": "mammouth_web",
                 "💻 Mammouth Code CLI": "mammouth_code",
                 "⚡ PowerShell": "powershell",
                 "🔔 Notification": "notification"
             }
-            target_str = tgt_map.get(menu_target.get(), "mammouth_web")
+            target_str = tgt_map.get(menu_target.get(), "chatgpt_web")
 
-            scheduler_create_task(
+            res = scheduler_create_task(
                 name=name,
                 prompt=prompt,
                 interval_seconds=interv_sec,
@@ -4241,8 +4578,11 @@ class MammouthControlCenter(ctk.CTk):
                 switch_tab=True,
                 start_immediately=chk_immediate_var.get()
             )
+            if isinstance(res, dict) and "error" in res:
+                messagebox.showerror("Task Creation Error", res["error"], parent=dlg)
+                return
 
-            self._log(f"[TASK SCHEDULER] ✅ New task created: '{name}' (Interval: {interv_sec}s).")
+            self._log(f"[TASK SCHEDULER] ✅ New task created: '{name}' (ID #{res.get('id')}, target={target_str}, interval={interv_sec}s).")
             dlg.destroy()
             self._refresh_task_cards()
 
@@ -4272,24 +4612,30 @@ class MammouthControlCenter(ctk.CTk):
     def _count_active_tools(self) -> str:
         prof_id = str(self.config_data.get("server", {}).get("tool_profile", "mammouth_safe")).strip().lower()
         from config import TOOL_PROFILES
+        try:
+            from server import get_streamlined_tool_counts
+            mod_counts, total_tools = get_streamlined_tool_counts()
+        except Exception:
+            mod_counts = {
+                "memory": 3, "tasks_kanban": 1, "task_scheduler": 2, "file_ops": 5,
+                "shell_processes": 3, "putty_ssh": 3, "system_monitor": 3, "web_tools": 1,
+                "screen_capture": 2, "mammouth_code": 1, "claude_code": 1, "desktop_input": 3,
+                "google_drive": 4, "browser_agent": 5, "workspace_memory": 1, "smart_clipboard": 1,
+            }
+            total_tools = 3 + sum(mod_counts.values())
+
         if prof_id in TOOL_PROFILES and prof_id not in ("all", "custom"):
             p_tools = len(TOOL_PROFILES[prof_id].get("tools", []))
-            return f"{p_tools} Promoted (86 Total)"
+            return f"{p_tools} Promoted ({total_tools} Total)"
         elif prof_id == "custom":
             mods = self.config_data.get("modules", {})
-            cnt = 1
-            tool_counts = {
-                "memory": 5, "tasks_kanban": 4, "task_scheduler": 5, "file_ops": 6,
-                "shell_processes": 8, "putty_ssh": 6, "system_monitor": 5, "web_tools": 2,
-                "screen_capture": 7, "mammouth_code": 5, "claude_code": 4, "desktop_input": 9, "google_drive": 11,
-                "browser_agent": 14, "workspace_memory": 4, "smart_clipboard": 3
-            }
+            cnt = 3  # core tools
             for k, v in mods.items():
                 if v.get("enabled", True):
-                    cnt += tool_counts.get(k, 1)
-            return f"{cnt} Custom (90 Total)"
+                    cnt += mod_counts.get(k, 1)
+            return f"{cnt} Custom ({total_tools} Total)"
         else:
-            return "90 Promoted (Uncapped)"
+            return f"{total_tools} Promoted (All)"
 
     def _copy_mcp_client_config(self):
         url = self._calculate_active_endpoint_url()
@@ -4531,7 +4877,7 @@ class MammouthControlCenter(ctk.CTk):
         self.opt_tunnel_mode.set(choice)
         save_config(self.config_data)
         if self.is_server_running:
-            port = self.config_data.get("server", {}).get("port", 8000)
+            port = self.config_data.get("server", {}).get("port", 8742)
             # Close whatever tunnel was exposing the port before, otherwise it stays public
             self._stop_all_tunnels()
             self._start_tunnel_for_mode(choice, port)
@@ -4584,7 +4930,7 @@ class MammouthControlCenter(ctk.CTk):
 
         elif mode == "Direct / LAN IP":
             lan_ip = get_lan_ip()
-            port = cfg.get("port", 8000)
+            port = cfg.get("port", 8742)
             return f"http://{lan_ip}:{port}{path}"
 
         elif mode == "Custom Domain":
@@ -4593,12 +4939,12 @@ class MammouthControlCenter(ctk.CTk):
                 return f"{custom_url.rstrip('/')}{path}"
             return f"https://mcp.yourdomain.com{path}"
 
-        port = cfg.get("port", 8000)
+        port = cfg.get("port", 8742)
         return f"http://127.0.0.1:{port}{path}"
 
     def _calculate_local_endpoint_url(self) -> str:
         cfg = self.config_data.get("server", {})
-        port = cfg.get("port", 8000)
+        port = cfg.get("port", 8742)
         path = cfg.get("endpoint_path", "/sse")
         return f"http://127.0.0.1:{port}{path}"
 
@@ -4637,12 +4983,12 @@ class MammouthControlCenter(ctk.CTk):
             if domain:
                 self._log(f"[DISCOVERY] Successfully detected Tailscale domain: {domain}")
                 if self.is_server_running:
-                    port = cfg.get("port", 8000)
+                    port = cfg.get("port", 8742)
                     self._start_tailscale_funnel(port)
                 self._refresh_all_endpoint_labels()
                 msg = f"Successfully detected your Tailscale domain:\n\n{domain}"
                 if self.is_server_running:
-                    msg += f"\n\nTailscale Funnel proxy activated on port {cfg.get('port', 8000)}."
+                    msg += f"\n\nTailscale Funnel proxy activated on port {cfg.get('port', 8742)}."
                 messagebox.showinfo("Tailscale Discovered", msg, parent=self)
             else:
                 self._log("[DISCOVERY WARNING] Could not detect active Tailscale domain.")
@@ -4659,7 +5005,7 @@ class MammouthControlCenter(ctk.CTk):
                     messagebox.showwarning("cloudflared Not Found", "Could not locate cloudflared binary.\n\nPlease place cloudflared.exe in the app directory or ensure it is on PATH.", parent=self)
                 else:
                     self._log(f"[DISCOVERY] Found cloudflared at: {cf_bin}. Connecting Cloudflare tunnel now...")
-                    port = cfg.get("port", 8000)
+                    port = cfg.get("port", 8742)
                     self._start_cloudflare_tunnel(port)
                     messagebox.showinfo("Cloudflare Tunnel Starting", f"Located cloudflared at:\n{cf_bin}\n\nConnecting quick tunnel in the background. The Public URL will update automatically once established.", parent=self)
             else:
@@ -4673,7 +5019,7 @@ class MammouthControlCenter(ctk.CTk):
                 self._refresh_all_endpoint_labels()
                 messagebox.showinfo(f"{mode} Discovered", f"{mode} is active:\n\n{url}", parent=self)
             elif self.is_server_running:
-                port = cfg.get("port", 8000)
+                port = cfg.get("port", 8742)
                 if mode == "Serveo (Public SSH Tunnel)":
                     self._start_serveo_tunnel(port)
                 else:
@@ -5403,27 +5749,76 @@ class MammouthControlCenter(ctk.CTk):
             err_msg = "\n".join(res.get("errors", ["Unknown error"]))
             messagebox.showerror("Error", f"Could not sync Claude Code configuration:\n\n{err_msg}", parent=self)
 
+    def _resolve_connector_mcp_url(self) -> tuple[str, bool]:
+        """Resolve canonical /mcp endpoint URL and whether a public tunnel is active."""
+        from modules.claude_code import resolve_public_tunnel_url, resolve_active_server_url, get_active_tunnel_info
+        live_info = get_active_tunnel_info()
+        live_tunnel = live_info.get("tunnel_url") if isinstance(live_info, dict) else None
+        url = (
+            getattr(self, "dynamic_tunnel_url", None)
+            or resolve_public_tunnel_url(endpoint_path="/mcp")
+            or resolve_active_server_url(target_cloud=False, endpoint_path="/mcp")
+        )
+        if url:
+            clean = url.rstrip("/")
+            if clean.endswith("/sse"):
+                clean = clean[:-4] + "/mcp"
+            elif not clean.endswith("/mcp"):
+                clean = clean + "/mcp"
+            url = clean
+        tunnel_is_live = bool(
+            getattr(self, "dynamic_tunnel_url", None)
+            or live_tunnel
+            or getattr(self, "_funnel_active", False)
+            or self.config_data.get("server", {}).get("custom_public_url", "").strip()
+            or self.config_data.get("server", {}).get("cloudflare_custom_url", "").strip()
+            or self.config_data.get("server", {}).get("ngrok_custom_url", "").strip()
+        )
+        return url, tunnel_is_live
+
+    def _connector_tunnel_warning(self, provider: str, url: str, tunnel_is_live: bool) -> str:
+        if not url.startswith("https://") or "127.0.0.1" in url or "localhost" in url:
+            return (
+                f"\n\n⚠️ Notice: The copied URL points to a local address. {provider} web connectors "
+                "require a public HTTPS endpoint. Select 'Cloudflare Tunnel' (or 'Tailscale Funnel') "
+                "and enable Auto-Tunnel / Start Server first."
+            )
+        if not tunnel_is_live:
+            return (
+                f"\n\n⚠️ Notice: No active public tunnel was detected yet! Make sure your chosen tunnel "
+                f"(Cloudflare Tunnel or Tailscale Funnel) is running before connecting in {provider}."
+            )
+        return ""
+
     def _copy_claude_connector_url(self):
-        from modules.claude_code import resolve_public_tunnel_url, resolve_active_server_url
-        url = resolve_public_tunnel_url(endpoint_path="/mcp") or resolve_active_server_url(target_cloud=False, endpoint_path="/mcp")
+        url, tunnel_is_live = self._resolve_connector_mcp_url()
         self.clipboard_clear()
         self.clipboard_append(url)
         self._log(f"[CLAUDE] Copied Claude.ai Connector URL to clipboard: {url}")
-        
-        warn = ""
-        if not url.startswith("https://") or "127.0.0.1" in url or "localhost" in url:
-            warn = (
-                "\n\n⚠️ Notice: The copied URL points to a local address. Claude.ai web connectors "
-                "require a public HTTPS endpoint to connect from the cloud. To connect Claude.ai, start a Cloudflare Tunnel "
-                "or Tailscale Funnel in Cockpit first."
-            )
+        warn = self._connector_tunnel_warning("Claude.ai", url, tunnel_is_live)
         messagebox.showinfo(
             "Claude.ai Connector URL Copied",
             f"Copied MCP Endpoint URL to clipboard:\n\n{url}{warn}\n\n"
-            "In Claude.ai:\n"
-            "1. Open Settings -> Connectors -> Add MCP Connector\n"
-            "2. Paste this URL and save\n"
-            "3. Claude connects directly and authenticates via Defroster's built-in OAuth 2.1 flow.",
+            "In Claude (claude.ai):\n"
+            "1. Open Settings -> Connectors -> Add custom connector\n"
+            "2. Paste this URL (leave OAuth Client ID & Secret blank — Defroster uses automatic DCR + PKCE S256)\n"
+            "3. Click Connect — when Defroster's OAuth screen opens, paste your Bearer API Key (from the Dashboard) and click Allow Access.",
+            parent=self
+        )
+
+    def _copy_chatgpt_connector_url(self):
+        url, tunnel_is_live = self._resolve_connector_mcp_url()
+        self.clipboard_clear()
+        self.clipboard_append(url)
+        self._log(f"[CHATGPT] Copied ChatGPT Connector URL to clipboard: {url}")
+        warn = self._connector_tunnel_warning("ChatGPT", url, tunnel_is_live)
+        messagebox.showinfo(
+            "ChatGPT Connector URL Copied",
+            f"Copied MCP Endpoint URL to clipboard:\n\n{url}{warn}\n\n"
+            "In ChatGPT (chatgpt.com):\n"
+            "1. Open Settings -> Apps & Connectors -> Advanced settings -> Enable Developer mode\n"
+            "2. Click Create / Add MCP Connector and paste this URL\n"
+            "3. Choose OAuth authentication — when Defroster's OAuth screen opens, paste your Bearer API Key (from the Dashboard) and click Allow Access.",
             parent=self
         )
 
@@ -5568,6 +5963,7 @@ class MammouthControlCenter(ctk.CTk):
             "web_tools": "🌐",
             "screen_capture": "👁️",
             "mammouth_code": "💻",
+            "claude_code": "🤖",
             "desktop_input": "🖱️",
             "google_drive": "☁️",
             "browser_agent": "🌐",
@@ -5575,23 +5971,39 @@ class MammouthControlCenter(ctk.CTk):
             "smart_clipboard": "📑"
         }
 
+        try:
+            from server import get_streamlined_tool_counts
+            _mod_cnts, _ = get_streamlined_tool_counts()
+        except Exception:
+            _mod_cnts = {
+                "memory": 3, "tasks_kanban": 1, "task_scheduler": 2, "file_ops": 5,
+                "shell_processes": 3, "putty_ssh": 3, "system_monitor": 3, "web_tools": 1,
+                "screen_capture": 2, "mammouth_code": 1, "claude_code": 1, "desktop_input": 3,
+                "google_drive": 4, "browser_agent": 5, "workspace_memory": 1, "smart_clipboard": 1,
+            }
+
+        def _fmt_cnt(mod_key: str, suffix: str = "") -> str:
+            n = _mod_cnts.get(mod_key, 1)
+            noun = "Tool" if n == 1 else "Tools"
+            return f"{n} {noun}{f' ({suffix})' if suffix else ''}"
+
         tool_counts = {
-            "memory": "5 Tools",
-            "tasks_kanban": "4 Tools",
-            "task_scheduler": "5 Tools (Automated Triggers)",
-            "file_ops": "6 Tools",
-            "shell_processes": "8 Tools (Privileged)",
-            "putty_ssh": "6 Tools",
-            "system_monitor": "5 Tools",
-            "web_tools": "2 Tools (SSRF Shield)",
-            "screen_capture": "7 Tools (Vision Gate)",
-            "mammouth_code": "5 Tools (Agent Bridge)",
-            "claude_code": "4 Tools (Cloud Sessions & CLI)",
-            "desktop_input": "9 Tools",
-            "google_drive": "11 Tools (Cloud & Docs)",
-            "browser_agent": "14 Tools (Multi-Browser / Playwright)",
-            "workspace_memory": "4 Tools (Local RAG)",
-            "smart_clipboard": "3 Tools (AI Bridge)"
+            "memory": _fmt_cnt("memory"),
+            "tasks_kanban": _fmt_cnt("tasks_kanban"),
+            "task_scheduler": _fmt_cnt("task_scheduler", "Automated Triggers"),
+            "file_ops": _fmt_cnt("file_ops"),
+            "shell_processes": _fmt_cnt("shell_processes", "Privileged"),
+            "putty_ssh": _fmt_cnt("putty_ssh"),
+            "system_monitor": _fmt_cnt("system_monitor"),
+            "web_tools": _fmt_cnt("web_tools", "SSRF Shield"),
+            "screen_capture": _fmt_cnt("screen_capture", "Vision Gate"),
+            "mammouth_code": _fmt_cnt("mammouth_code", "Agent Bridge"),
+            "claude_code": _fmt_cnt("claude_code", "Cloud Sessions & CLI"),
+            "desktop_input": _fmt_cnt("desktop_input"),
+            "google_drive": _fmt_cnt("google_drive", "Cloud & Docs"),
+            "browser_agent": _fmt_cnt("browser_agent", "Playwright"),
+            "workspace_memory": _fmt_cnt("workspace_memory", "Local RAG"),
+            "smart_clipboard": _fmt_cnt("smart_clipboard", "AI Bridge"),
         }
 
         for key, mod in modules.items():
@@ -5659,9 +6071,11 @@ class MammouthControlCenter(ctk.CTk):
             elif key == "shell_processes":
                 sub_opts = ctk.CTkFrame(left, fg_color=THEME_INPUT_BG, corner_radius=6)
                 sub_opts.pack(fill="x", pady=(8, 0))
+                row_admin = ctk.CTkFrame(sub_opts, fg_color="transparent")
+                row_admin.pack(fill="x")
                 self.var_admin_shell = ctk.BooleanVar(value=self.config_data.get("server", {}).get("allow_admin_shell", False))
                 sw_admin_shell = ctk.CTkSwitch(
-                    sub_opts,
+                    row_admin,
                     text="⚡ Admin / Modifying (Full Access)" if self.var_admin_shell.get() else "🔒 Diagnostics & Read-Only",
                     variable=self.var_admin_shell,
                     font=ctk.CTkFont(size=12, weight="bold"),
@@ -5672,12 +6086,34 @@ class MammouthControlCenter(ctk.CTk):
                 sw_admin_shell.pack(side="left", padx=10, pady=6)
                 self.sw_admin_shell = sw_admin_shell
                 self.lbl_admin_shell_hint = ctk.CTkLabel(
-                    sub_opts,
+                    row_admin,
                     text="Get-*/ipconfig only  vs  Set-*/Remove-*/sc/schtasks",
                     font=ctk.CTkFont(size=11),
                     text_color=THEME_TEXT_MUTED
                 )
                 self.lbl_admin_shell_hint.pack(side="left", padx=10, pady=6)
+
+                row_downloads = ctk.CTkFrame(sub_opts, fg_color="transparent")
+                row_downloads.pack(fill="x")
+                self.var_shell_downloads = ctk.BooleanVar(value=self.config_data.get("server", {}).get("allow_shell_downloads", False))
+                sw_shell_downloads = ctk.CTkSwitch(
+                    row_downloads,
+                    text="🌐 HTTP / Downloads Allowed (irm, iwr, curl, wget)" if self.var_shell_downloads.get() else "🛡️ HTTP / Downloads Blocked",
+                    variable=self.var_shell_downloads,
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color=("#0F172A", "#E5E7EB"),
+                    progress_color="#F59E0B",
+                    command=self._on_shell_downloads_toggle
+                )
+                sw_shell_downloads.pack(side="left", padx=10, pady=(0, 6))
+                self.sw_shell_downloads = sw_shell_downloads
+                self.lbl_shell_downloads_hint = ctk.CTkLabel(
+                    row_downloads,
+                    text="Opt-in for Invoke-RestMethod / curl / wget (requires Admin mode; iex stays blocked)",
+                    font=ctk.CTkFont(size=11),
+                    text_color=THEME_TEXT_MUTED
+                )
+                self.lbl_shell_downloads_hint.pack(side="left", padx=10, pady=(0, 6))
 
             elif key == "google_drive":
                 sub_opts = ctk.CTkFrame(left, fg_color=THEME_INPUT_BG, corner_radius=6)
@@ -6017,9 +6453,14 @@ class MammouthControlCenter(ctk.CTk):
         est = p_info.get("token_estimate", 0)
         t_cnt = len(p_info.get("tools", []))
         if prof_id == "all":
-            badge_text = "⚠️ ~16,461 tokens (Exceeds Chat limit!)"
-            color = "#EF4444"
-            subtext = "Claude Desktop / Cursor uncapped"
+            if est <= 7719:
+                badge_text = f"✅ ~{est:,} tokens (All active tools)"
+                color = "#10B981"
+                subtext = f"Fits Mammouth AI Chat (~{est:,} / 7,719 limit)"
+            else:
+                badge_text = f"⚠️ ~{est:,} tokens (42 max tools)"
+                color = "#F59E0B"
+                subtext = "~7,380 default / ~8,530 all 16 modules (7,719 Chat limit)"
         elif prof_id == "custom":
             badge_text = "⚙️ Custom Selection"
             color = "#10B981"
@@ -6035,7 +6476,9 @@ class MammouthControlCenter(ctk.CTk):
             self.lbl_schema_subtext.configure(text=subtext)
         if hasattr(self, "dash_profile_badge"):
             if prof_id == "all":
-                self.dash_profile_badge.configure(text="⚠️ 16.5k tok", text_color="#EF4444")
+                dash_col = "#10B981" if est <= 7719 else "#F59E0B"
+                dash_pfx = "✅" if est <= 7719 else "⚠️"
+                self.dash_profile_badge.configure(text=f"{dash_pfx} {est/1000:.1f}k tok", text_color=dash_col)
             elif prof_id == "custom":
                 self.dash_profile_badge.configure(text="⚙️ Custom", text_color="#10B981")
             else:
@@ -6061,6 +6504,9 @@ class MammouthControlCenter(ctk.CTk):
 
         if hasattr(self, "var_admin_shell"):
             self.config_data.setdefault("server", {})["allow_admin_shell"] = self.var_admin_shell.get()
+
+        if hasattr(self, "var_shell_downloads"):
+            self.config_data.setdefault("server", {})["allow_shell_downloads"] = self.var_shell_downloads.get()
 
         save_config(self.config_data)
         self._log("Updated module configuration in config.json.")
@@ -6397,7 +6843,7 @@ class MammouthControlCenter(ctk.CTk):
         f1.pack(fill="x", padx=15, pady=5)
         ctk.CTkLabel(f1, text="Server Port:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
         self.entry_port = ctk.CTkEntry(f1, width=120, fg_color=THEME_INPUT_BG, border_color=THEME_CARD_BORDER, text_color=THEME_TEXT_PRIMARY)
-        self.entry_port.insert(0, str(self.config_data.get("server", {}).get("port", 8000)))
+        self.entry_port.insert(0, str(self.config_data.get("server", {}).get("port", 8742)))
         self.entry_port.pack(side="left")
 
         f2 = ctk.CTkFrame(net_group, fg_color="transparent")
@@ -6788,18 +7234,18 @@ class MammouthControlCenter(ctk.CTk):
             self.entry_gdrive_client_secret.insert(0, saved_csec)
         self.entry_gdrive_client_secret.pack(side="left", padx=(0, 8))
 
-        # 8. In-App Browser & Mammouth.ai
+        # 8. In-App Browsers (ChatGPT, Claude & Mammouth.ai)
         browser_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
         browser_group.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(browser_group, text="💬 In-App Browser & Mammouth.ai", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
+        ctk.CTkLabel(browser_group, text="💬 In-App Browsers (ChatGPT, Claude & Mammouth.ai)", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
 
         f_br1 = ctk.CTkFrame(browser_group, fg_color="transparent")
         f_br1.pack(fill="x", padx=15, pady=5)
         self.var_browser_auto_open = ctk.BooleanVar(value=self.config_data.get("embedded_browser", {}).get("auto_open_on_server_start", True))
         sw_browser_auto = ctk.CTkSwitch(
             f_br1,
-            text="Automatically open Mammouth AI web tab on server start",
+            text="Automatically open default AI chat tab on server start",
             variable=self.var_browser_auto_open,
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=THEME_TEXT_PRIMARY,
@@ -6820,9 +7266,81 @@ class MammouthControlCenter(ctk.CTk):
         )
         sw_start_in_web.pack(side="left")
 
+        f_br_def = ctk.CTkFrame(browser_group, fg_color="transparent")
+        f_br_def.pack(fill="x", padx=15, pady=5)
+        ctk.CTkLabel(f_br_def, text="Default Chat Tab:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        def_chat_val = str(self.config_data.get("embedded_browser", {}).get("default_chat_tab", "chatgpt")).strip().lower()
+        self.opt_default_chat_tab = ctk.CTkOptionMenu(
+            f_br_def,
+            values=["ChatGPT Web", "Claude Web", "Mammouth AI Web"],
+            width=190,
+            fg_color=THEME_BTN_SEC_BG,
+            button_color=THEME_BTN_SEC_HOVER,
+            button_hover_color=("#CBD5E1", "#42434B"),
+            text_color=THEME_TEXT_PRIMARY,
+            dropdown_fg_color=THEME_CARD_BG,
+            dropdown_text_color=THEME_TEXT_PRIMARY,
+            dropdown_hover_color=THEME_BTN_SEC_BG
+        )
+        default_opt_label = {"mammouth": "Mammouth AI Web", "claude": "Claude Web"}.get(def_chat_val, "ChatGPT Web")
+        self.opt_default_chat_tab.set(default_opt_label)
+        self.opt_default_chat_tab.pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(
+            f_br_def,
+            text="🤖 ChatGPT MCP URL",
+            width=165,
+            height=28,
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._copy_chatgpt_connector_url
+        ).pack(side="left", padx=(0, 6))
+
+        ctk.CTkButton(
+            f_br_def,
+            text="🟠 Claude MCP URL",
+            width=155,
+            height=28,
+            fg_color=("#D97757", "#E07A5F"),
+            hover_color=("#C25E3F", "#D97757"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._copy_claude_connector_url
+        ).pack(side="left")
+
+        f_br_cg = ctk.CTkFrame(browser_group, fg_color="transparent")
+        f_br_cg.pack(fill="x", padx=15, pady=5)
+        ctk.CTkLabel(f_br_cg, text="ChatGPT URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        self.entry_chatgpt_start_url = ctk.CTkEntry(
+            f_br_cg,
+            width=320,
+            fg_color=THEME_INPUT_BG,
+            border_color=THEME_CARD_BORDER,
+            text_color=THEME_TEXT_PRIMARY
+        )
+        cg_start_val = self.config_data.get("chatgpt_browser", {}).get("start_page", "https://chatgpt.com")
+        self.entry_chatgpt_start_url.insert(0, cg_start_val)
+        self.entry_chatgpt_start_url.pack(side="left", padx=(0, 8))
+
+        f_br_cl = ctk.CTkFrame(browser_group, fg_color="transparent")
+        f_br_cl.pack(fill="x", padx=15, pady=5)
+        ctk.CTkLabel(f_br_cl, text="Claude URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        self.entry_claude_start_url = ctk.CTkEntry(
+            f_br_cl,
+            width=320,
+            fg_color=THEME_INPUT_BG,
+            border_color=THEME_CARD_BORDER,
+            text_color=THEME_TEXT_PRIMARY
+        )
+        cl_start_val = self.config_data.get("claude_browser", {}).get("start_page", "https://claude.ai")
+        self.entry_claude_start_url.insert(0, cl_start_val)
+        self.entry_claude_start_url.pack(side="left", padx=(0, 8))
+
         f_br2 = ctk.CTkFrame(browser_group, fg_color="transparent")
         f_br2.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f_br2, text="Startup URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        ctk.CTkLabel(f_br2, text="Mammouth.ai URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
         self.entry_browser_start_url = ctk.CTkEntry(
             f_br2,
             width=320,
@@ -7013,6 +7531,20 @@ class MammouthControlCenter(ctk.CTk):
                 text="⚡ Admin / Modifying (Full Access)" if self.var_admin_shell.get() else "🔒 Diagnostics & Read-Only"
             )
 
+    def _on_shell_downloads_toggle(self):
+        if self.var_shell_downloads.get():
+            confirm = messagebox.askyesno(
+                "Enable Shell HTTP & Download Commands?",
+                "WARNING: Enabling shell HTTP & download commands allows MCP tools to run Invoke-RestMethod (irm), Invoke-WebRequest (iwr), curl, wget, and .NET WebClient downloads in PowerShell/CMD (requires Admin Shell mode; 'iex' and stagers stay blocked).\n\nAre you sure you want to enable this?",
+                parent=self
+            )
+            if not confirm:
+                self.var_shell_downloads.set(False)
+        if hasattr(self, "sw_shell_downloads"):
+            self.sw_shell_downloads.configure(
+                text="🌐 HTTP / Downloads Allowed (irm, iwr, curl, wget)" if self.var_shell_downloads.get() else "🛡️ HTTP / Downloads Blocked"
+            )
+
     def _on_settings_mode_changed(self, choice: str):
         self.dash_mode_menu.set(choice)
 
@@ -7033,7 +7565,7 @@ class MammouthControlCenter(ctk.CTk):
         try:
             port = int(self.entry_port.get().strip())
         except ValueError:
-            port = 8000
+            port = 8742
 
         self.config_data["server"]["port"] = port
         self.config_data["server"]["host"] = self.opt_host.get().strip() or "127.0.0.1"
@@ -7053,6 +7585,8 @@ class MammouthControlCenter(ctk.CTk):
         self.config_data["server"]["api_token"] = raw_tok
         if hasattr(self, "var_admin_shell"):
             self.config_data["server"]["allow_admin_shell"] = self.var_admin_shell.get()
+        if hasattr(self, "var_shell_downloads"):
+            self.config_data["server"]["allow_shell_downloads"] = self.var_shell_downloads.get()
         self.config_data["server"]["enable_tls"] = self.var_enable_tls.get()
         self.config_data["server"]["enforce_workspace_sandbox"] = self.var_sandbox.get()
         self.config_data["server"]["workspace_root"] = self.entry_workspace.get().strip() or "./workspace"
@@ -7075,6 +7609,28 @@ class MammouthControlCenter(ctk.CTk):
 
         if hasattr(self, "var_browser_auto_open"):
             self.config_data.setdefault("embedded_browser", {})["auto_open_on_server_start"] = self.var_browser_auto_open.get()
+        if hasattr(self, "opt_default_chat_tab"):
+            sel_chat = self.opt_default_chat_tab.get()
+            if "Mammouth" in sel_chat:
+                def_chat = "mammouth"
+                self.active_chat_tab_key = "💬 Mammouth AI Web"
+            elif "Claude" in sel_chat:
+                def_chat = "claude"
+                self.active_chat_tab_key = "🟠 Claude Web"
+            else:
+                def_chat = "chatgpt"
+                self.active_chat_tab_key = "🤖 ChatGPT Web"
+            self.config_data.setdefault("embedded_browser", {})["default_chat_tab"] = def_chat
+        if hasattr(self, "entry_chatgpt_start_url"):
+            new_cg_url = self.entry_chatgpt_start_url.get().strip() or "https://chatgpt.com"
+            self.config_data.setdefault("chatgpt_browser", {})["start_page"] = new_cg_url
+            if hasattr(self, "chatgpt_browser"):
+                self.chatgpt_browser.start_url = new_cg_url
+        if hasattr(self, "entry_claude_start_url"):
+            new_cl_url = self.entry_claude_start_url.get().strip() or "https://claude.ai"
+            self.config_data.setdefault("claude_browser", {})["start_page"] = new_cl_url
+            if hasattr(self, "claude_browser"):
+                self.claude_browser.start_url = new_cl_url
         if hasattr(self, "entry_browser_start_url"):
             new_url = self.entry_browser_start_url.get().strip() or "https://mammouth.ai"
             self.config_data.setdefault("embedded_browser", {})["start_page"] = new_url
@@ -7152,9 +7708,9 @@ class MammouthControlCenter(ctk.CTk):
 
         host = str(self.config_data.get("server", {}).get("host", "127.0.0.1")).strip() or "127.0.0.1"
         try:
-            port = int(self.config_data.get("server", {}).get("port", 8000))
+            port = int(self.config_data.get("server", {}).get("port", 8742))
         except (ValueError, TypeError):
-            port = 8000
+            port = 8742
 
         # Check if port is already bound by an existing process
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -7268,7 +7824,11 @@ class MammouthControlCenter(ctk.CTk):
             self._refresh_all_endpoint_labels()
             self._log(f"Server is LIVE! Active Endpoint: {self._calculate_active_endpoint_url()}")
             if self.config_data.get("embedded_browser", {}).get("auto_open_on_server_start", True):
-                self.after(500, self._switch_to_mammouth_tab)
+                def_tab = str(self.config_data.get("embedded_browser", {}).get("default_chat_tab", "")).strip().lower()
+                if any(k in self.__dict__ for k in ("chatgpt_browser", "claude_browser")) or def_tab in ("chatgpt", "claude"):
+                    self.after(500, self._switch_to_active_chat_tab)
+                else:
+                    self.after(500, self._switch_to_mammouth_tab)
         except Exception as e:
 
             self._log(f"[ERROR] Failed to start server: {e}")
@@ -7590,9 +8150,41 @@ class MammouthControlCenter(ctk.CTk):
         self.btn_toggle_server.configure(text="▶ START SERVER", fg_color=("#059669", "#10B981"), hover_color=("#047857", "#059669"))
         self._log("Server shutdown complete.")
 
-    def after(self, ms, func=None, *args):
-        """Schedule a callback and track its ID for cleanup on destruction."""
+    def _pump_bg_after_queue(self):
+        """Drain UI callbacks queued from background threads safely on the Tkinter main thread."""
         if self.__dict__.get("_is_destroyed", False):
+            return
+        q = self.__dict__.get("_bg_after_queue")
+        if q is not None:
+            while True:
+                try:
+                    ms, func, args = q.get_nowait()
+                except Exception:
+                    break
+                try:
+                    self.after(ms, func, *args)
+                except Exception:
+                    pass
+        if "tk" in self.__dict__ and self.tk:
+            try:
+                self.after(50, self._pump_bg_after_queue)
+            except Exception:
+                pass
+
+    def after(self, ms, func=None, *args):
+        """Schedule a callback and track its ID for cleanup on destruction.
+
+        Safe to call from non-UI threads: background calls are queued into
+        _bg_after_queue and marshalled onto the Tk main thread via _pump_bg_after_queue.
+        """
+        if self.__dict__.get("_is_destroyed", False):
+            return None
+        if threading.current_thread() is not threading.main_thread() and "tk" in self.__dict__ and self.tk:
+            q = self.__dict__.get("_bg_after_queue")
+            if q is None:
+                import queue as _queue_mod
+                q = self.__dict__.setdefault("_bg_after_queue", _queue_mod.SimpleQueue())
+            q.put((ms, func, args))
             return None
         if "_scheduled_after_ids" not in self.__dict__:
             self._scheduled_after_ids = set()
@@ -7677,12 +8269,30 @@ class MammouthControlCenter(ctk.CTk):
     def destroy(self):
         """Clean up all pending after() timers and child resources before destroying window."""
         self._is_destroyed = True
+        try:
+            from modules.screen_capture import set_consent_prompt_callback
+            set_consent_prompt_callback(None)
+        except Exception:
+            pass
         scheduler = self.__dict__.get("scheduler_engine")
         if scheduler and hasattr(scheduler, "unregister_listener"):
             try:
                 on_sched = self.__dict__.get("_on_scheduler_changed")
                 if on_sched:
                     scheduler.unregister_listener(on_sched)
+            except Exception:
+                pass
+        if scheduler and isinstance(getattr(scheduler, "_handlers", None), dict):
+            try:
+                with scheduler._lock:
+                    for key, handler in list(scheduler._handlers.items()):
+                        if getattr(handler, "__self__", None) is self:
+                            scheduler._handlers.pop(key, None)
+            except Exception:
+                pass
+        if scheduler and self.__dict__.get("_owns_scheduler_loop", False) and hasattr(scheduler, "stop_background_loop"):
+            try:
+                scheduler.stop_background_loop()
             except Exception:
                 pass
         try:

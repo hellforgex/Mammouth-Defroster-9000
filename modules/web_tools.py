@@ -3,7 +3,7 @@ import ipaddress
 import socket
 import urllib.parse
 import httpx
-from typing import Any
+from typing import Any, Literal
 
 
 def _resolve_and_validate_ip(hostname: str) -> str:
@@ -167,3 +167,20 @@ def web_check_status(url: str) -> dict[str, Any]:
         }
     except Exception as e:
         return {"error": str(e), "url": url}
+
+
+def web_fetch(
+    url: str,
+    mode: Literal["content", "status"] = "content",
+    max_length: int = 25000
+) -> str | dict[str, Any]:
+    """Fetch public webpage text/markdown or check HTTP status (SSRF-protected).
+
+    Args:
+        url: Target URL (http:// or https://).
+        mode: 'content' (readable text/markdown) or 'status' (HTTP status & latency).
+        max_length: Maximum characters returned when mode='content'.
+    """
+    if str(mode or "content").strip().lower() == "status":
+        return web_check_status(url=url)
+    return web_fetch_url(url=url, max_length=max_length)

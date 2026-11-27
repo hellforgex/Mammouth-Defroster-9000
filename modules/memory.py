@@ -3,7 +3,7 @@ import sqlite3
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import sys
 
@@ -272,4 +272,35 @@ def memory_get_stats() -> dict[str, Any]:
         "categories": row[1] if row else 0,
         "total_chars": row[2] if row else 0
     }
+
+
+def memory_save_clean(key: str, content: str, category: str = "general") -> str:
+    """Save or update a persistent long-term memory entry across chats."""
+    return memory_save(key=key, content=content, category=category)
+
+
+def memory_recall_clean(
+    query: str = "",
+    key: str = "",
+    category: str = "",
+    limit: int = 50
+) -> list[dict[str, Any]] | dict[str, Any]:
+    """Search memories by keyword, fetch an exact entry by key, or list saved keys.
+
+    Args:
+        query: Keyword to search keys/content. Leave empty (with no key) to list keys/metadata.
+        key: Exact memory key for full retrieval.
+        category: Optional category filter when listing keys.
+        limit: Max items when listing keys (default 50).
+    """
+    if key and str(key).strip():
+        return memory_get(key=key)
+    if not query or not str(query).strip():
+        return memory_list(category=category or None, limit=limit)
+    return memory_recall(query=query)
+
+
+def memory_delete_clean(key: str) -> str:
+    """Delete a persistent long-term memory entry by exact key."""
+    return memory_delete(key=key)
 

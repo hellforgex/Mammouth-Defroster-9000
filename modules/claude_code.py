@@ -8,7 +8,7 @@ import logging
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 logger = logging.getLogger("claude_code")
 
@@ -290,7 +290,7 @@ def get_claude_executable() -> str | None:
         if which_path and os.path.isfile(which_path):
             return which_path
 
-    # Dynamic check for npm global prefix (handles custom npm installations, e.g. D:\hermes\node)
+    # Dynamic check for npm global prefix (handles custom npm installations, e.g. D:\tools\node)
     npm_exe = shutil.which("npm") or shutil.which("npm.cmd")
     if npm_exe:
         try:
@@ -872,3 +872,40 @@ def run_claude_task(
             "workspace": workspace_path,
             "cloud_mode": cloud
         }
+
+
+def claude_code_dispatch(
+    action: Literal["status", "sync_mcp", "launch_terminal", "run_task"] = "status",
+    prompt: str = "",
+    workspace_path: str | None = None,
+    cloud: bool = True,
+    continue_session: bool = False,
+    use_oauth: bool = False,
+    timeout_seconds: int = 180
+) -> dict[str, Any]:
+    """Manage Claude Code CLI & cloud sessions (status, .mcp.json sync, terminal, headless run).
+
+    Args:
+        action: 'status', 'sync_mcp', 'launch_terminal', or 'run_task'.
+        prompt: Task prompt for 'run_task' or initial prompt for 'launch_terminal'.
+        workspace_path: Target repository/workspace directory.
+        cloud: Use Claude Cloud Sessions (--cloud / public tunnel URL).
+        continue_session: Continue previous session for 'launch_terminal'.
+        use_oauth: Use OAuth 2.1 instead of static Authorization header in .mcp.json for 'sync_mcp'.
+        timeout_seconds: Timeout for 'run_task' (default 180s).
+    """
+    act = str(action or "status").strip().lower()
+    if act == "status":
+        return get_claude_code_status(workspace_path=workspace_path)
+    if act == "sync_mcp":
+        return sync_claude_code_mcp(workspace_path=workspace_path, target_cloud=cloud, use_oauth=use_oauth)
+    if act == "launch_terminal":
+        return launch_claude_terminal(
+            workspace_path=workspace_path,
+            cloud=cloud,
+            continue_session=continue_session,
+            prompt=prompt or None,
+        )
+    if act == "run_task":
+        return run_claude_task(prompt=prompt, workspace_path=workspace_path, cloud=cloud, timeout_seconds=timeout_seconds)
+    return {"success": False, "error": f"Unknown claude_code action '{action}'."}

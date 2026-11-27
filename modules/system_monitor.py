@@ -4,10 +4,68 @@ import platform
 import psutil
 import subprocess
 import re
-from typing import Any
+from typing import Any, Literal
+
+_KNOWN_FOLDER_GUIDS = {
+    "desktop": "B4BFCC3A-DB2C-424C-B029-7FE99A87C641",
+    "documents": "FDD39AD0-238F-46AF-ADB4-6C85480369C7",
+    "downloads": "374DE290-123F-4565-9164-39C4925E467B",
+    "pictures": "33E28130-4E1E-4676-835A-98395C3BC3BB",
+    "music": "4BD8D571-6D19-48D3-BE97-422220080E43",
+    "videos": "18989B1D-99B5-455B-841C-AB7C74E4DDFC",
+}
+
+
+def _known_folders() -> dict[str, str]:
+    """Resolve the user's shell folders (Desktop, Documents, Downloads, ...), honouring OneDrive/redirected folders."""
+    home = os.path.expanduser("~")
+    folders: dict[str, str] = {"home": home}
+    if os.name == "nt":
+        try:
+            import ctypes
+            import uuid
+            from ctypes import wintypes
+
+            class _GUID(ctypes.Structure):
+                _fields_ = [
+                    ("Data1", wintypes.DWORD),
+                    ("Data2", wintypes.WORD),
+                    ("Data3", wintypes.WORD),
+                    ("Data4", ctypes.c_ubyte * 8),
+                ]
+
+            def _to_guid(text: str) -> "_GUID":
+                u = uuid.UUID(text)
+                g = _GUID()
+                g.Data1, g.Data2, g.Data3 = u.time_low, u.time_mid, u.time_hi_version
+                for i, b in enumerate(u.bytes[8:]):
+                    g.Data4[i] = b
+                return g
+
+            shell32 = ctypes.windll.shell32
+            ole32 = ctypes.windll.ole32
+            shell32.SHGetKnownFolderPath.argtypes = [
+                ctypes.POINTER(_GUID), wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(ctypes.c_wchar_p)
+            ]
+            shell32.SHGetKnownFolderPath.restype = ctypes.c_long
+            ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
+            for key, guid in _KNOWN_FOLDER_GUIDS.items():
+                out = ctypes.c_wchar_p()
+                hr = shell32.SHGetKnownFolderPath(ctypes.byref(_to_guid(guid)), 0, None, ctypes.byref(out))
+                try:
+                    if hr == 0 and out.value:
+                        folders[key] = out.value
+                finally:
+                    ole32.CoTaskMemFree(ctypes.cast(out, ctypes.c_void_p))
+        except Exception:
+            pass
+    for key in _KNOWN_FOLDER_GUIDS:
+        folders.setdefault(key, os.path.join(home, key.capitalize()))
+    return folders
+
 
 def system_get_specs() -> dict[str, Any]:
-    """Get comprehensive system specs (OS, CPU, RAM, Disk partitions)."""
+    """Get comprehensive system specs (OS, CPU, RAM, Disk partitions) plus the user's known folders."""
     total_ram_gb = round(psutil.virtual_memory().total / (1024**3), 2)
     avail_ram_gb = round(psutil.virtual_memory().available / (1024**3), 2)
     
@@ -37,6 +95,7 @@ def system_get_specs() -> dict[str, Any]:
         "ram_available_gb": avail_ram_gb,
         "ram_used_percent": psutil.virtual_memory().percent,
         "disks": disks,
+        "known_folders": _known_folders(),
     }
 
 def system_get_processes(
@@ -377,4 +436,43 @@ def system_list_event_channels(pattern: str | None = None, limit: int = 50) -> l
         return [{"error": "Timeout listing Windows event channels."}]
     except Exception as e:
         return [{"error": str(e)}]
+
+
+def system_specs_dispatch(include_gpu: bool = True) -> dict[str, Any]:
+    """Get OS, CPU, RAM, disk specifications and optionally GPU details."""
+    specs = system_get_specs()
+    if include_gpu:
+        specs["gpu"] = system_get_gpu_info()
+    return specs
+
+
+def system_event_logs(
+    action: Literal["query", "list_channels"] = "query",
+    log_name: str = "System",
+    entry_type: str | None = None,
+    count: int = 10,
+    event_id: int | None = None,
+    provider_name: str | None = None,
+    pattern: str | None = None
+) -> list[dict[str, Any]]:
+    """Query Windows Event Logs or discover available event log channels.
+
+    Args:
+        action: 'query' (read events) or 'list_channels' (list log channels).
+        log_name: Event log/channel name (e.g. 'System', 'Application').
+        entry_type: Optional level ('Critical', 'Error', 'Warning', 'Information', 'Verbose').
+        count: Max events to return (default 10, max 200).
+        event_id: Optional Event ID filter.
+        provider_name: Optional provider filter.
+        pattern: Optional channel wildcard filter for action='list_channels'.
+    """
+    if str(action or "query").strip().lower() == "list_channels":
+        return system_list_event_channels(pattern=pattern, limit=count or 50)
+    return system_get_event_logs(
+        log_name=log_name,
+        entry_type=entry_type,
+        count=count,
+        event_id=event_id,
+        provider_name=provider_name,
+    )
 

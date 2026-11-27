@@ -1,7 +1,7 @@
 [project]
 name = "mammouth-defroster-9000"
-version = "0.7.5"
-description = "Mammouth Defroster 9000: FastMCP Desktop Cockpit & Windows 11 DevOps Automation for Mammouth.ai"
+version = "0.8.2"
+description = "Mammouth Defroster 9000: FastMCP Desktop Cockpit & Windows 11 DevOps Automation for ChatGPT, Mammouth.ai & Claude"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -171,7 +171,7 @@ class TestTaskSchedulerGuiRegression(unittest.TestCase):
 
         # Test web trigger handler invocation
         res = app._on_trigger_mammouth_web_task({
-            "name": "Livebericht Test",
+            "name": "Live Report Test",
             "prompt": "Test prompt",
             "runs_done": 0,
             "switch_tab": True,

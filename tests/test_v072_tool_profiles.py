@@ -67,20 +67,23 @@ def test_mammouth_safe_promoted_tools_count():
         assert "file_write" in tool_names
         assert "screen_capture" in tool_names
         assert "browser_navigate" in tool_names
-        assert "browser_snapshot" in tool_names
+        assert "browser_inspect" in tool_names
+        assert "browser_interact" in tool_names
         assert "memory_save" in tool_names
         assert "memory_recall" in tool_names
         assert "system_get_specs" in tool_names
-        assert "clipboard_get_text" in tool_names
+        assert "clipboard_manage" in tool_names
+        assert "task_schedule_create" in tool_names
+        assert "task_schedule_manage" in tool_names
 
-        # Count reflects promoted safe tools (up to 15 when shell, desktop & health check are enabled)
+        # Count reflects promoted streamlined safe tools (22 tools)
         assert 20 <= len(tool_names) <= 28
 
     _run(_test())
 
 
 def test_mammouth_safe_schema_token_budget():
-    """Verify that the total schema size for mammouth_safe is safely under 3,500 tokens."""
+    """Verify that the total schema size for mammouth_safe is safely under 7,719 tokens."""
     async def _test():
         cfg = load_config()
         cfg.setdefault("server", {})["tool_profile"] = "mammouth_safe"
@@ -143,14 +146,14 @@ def test_dynamic_profile_switching():
 
 
 def test_unadvertised_tool_execution():
-    """Verify that unadvertised tools (e.g. gdrive_status in mammouth_safe) can still be invoked."""
+    """Verify that unadvertised tools (e.g. gdrive_manage in mammouth_safe) can still be invoked."""
     async def _test():
         cfg = load_config()
         cfg.setdefault("server", {})["tool_profile"] = "mammouth_safe"
         save_config(cfg)
 
-        # Calling gdrive_status directly via FastMCP call_tool
-        res = await mcp.call_tool("gdrive_status", {})
+        # Calling gdrive_manage directly via FastMCP call_tool
+        res = await mcp.call_tool("gdrive_manage", {"action": "status"})
         assert res is not None
         assert isinstance(res.structured_content, dict)
 

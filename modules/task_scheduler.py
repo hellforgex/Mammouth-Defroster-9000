@@ -11,7 +11,7 @@ import threading
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from collections.abc import Callable
 
 logger = logging.getLogger("task_scheduler")
@@ -26,7 +26,7 @@ DB_PATH = BASE_DIR / "tasks.db"
 MAX_NAME_LENGTH = 256
 MAX_PROMPT_LENGTH = 65536
 VALID_STATUSES = {"active", "paused", "completed", "stopped"}
-VALID_TARGETS = {"mammouth_web", "mammouth_code", "powershell", "notification"}
+VALID_TARGETS = {"mammouth_web", "chatgpt_web", "claude_web", "mammouth_code", "powershell", "notification"}
 
 # Built-in high-value presets
 PRESET_TEMPLATES = [
@@ -82,14 +82,41 @@ _schema_ready_paths = set()  # DB files whose schema was created in this process
 _schema_lock = threading.Lock()
 
 
+def _parse_local_naive_dt(iso_str: str) -> datetime | None:
+    """Parse an ISO-8601 timestamp string into local naive datetime for reliable comparison."""
+    if not iso_str:
+        return None
+    try:
+        s = str(iso_str).strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone().replace(tzinfo=None)
+        return dt
+    except Exception:
+        return None
+
+
 def _get_db():
+    db_file = Path(DB_PATH)
+    db_key = str(db_file)
+    needs_schema = (
+        db_key not in _schema_ready_paths
+        or not db_file.exists()
+        or db_file.stat().st_size == 0
+    )
     conn = sqlite3.connect(DB_PATH, timeout=10.0)
     conn.row_factory = sqlite3.Row
-    db_key = str(DB_PATH)
-    if db_key not in _schema_ready_paths:
+    if needs_schema:
         # Schema DDL + commit only once per DB file and process instead of on every call / scheduler tick
         with _schema_lock:
-            if db_key not in _schema_ready_paths:
+            needs_schema_locked = (
+                db_key not in _schema_ready_paths
+                or not db_file.exists()
+                or db_file.stat().st_size == 0
+            )
+            if needs_schema_locked:
                 with conn:
                     conn.execute("""
                         CREATE TABLE IF NOT EXISTS scheduled_tasks (
@@ -157,13 +184,13 @@ def scheduler_create_task(
     """Create a new scheduled automated task.
     
     Args:
-        name: Human-readable task name (e.g. '⚽ Livebericht: FC Bayern vs. Dortmund')
+        name: Human-readable task name (e.g. '⚽ Live Match Report: Arsenal vs. Chelsea')
         prompt: Action prompt to trigger in Mammouth chat or headless runner
         interval_seconds: Interval in seconds between triggers (minimum 10s)
         repeat_count: 0 for unlimited / continuous, or positive int for max executions
-        target: 'mammouth_web', 'mammouth_code', 'powershell', or 'notification'
+        target: 'mammouth_web', 'chatgpt_web', 'claude_web', 'mammouth_code', 'powershell', or 'notification'
         auto_submit: Whether to automatically send the prompt in chat
-        switch_tab: Whether to focus the Mammouth tab upon trigger
+        switch_tab: Whether to focus the target chat tab upon trigger
         start_immediately: If True, first trigger occurs in 2 seconds; otherwise after interval
     """
     clean_name = str(name).strip()[:MAX_NAME_LENGTH]
@@ -302,6 +329,12 @@ def scheduler_update_task(
         if clean_st in VALID_STATUSES:
             updates.append("status = ?")
             params.append(clean_st)
+            if clean_st == "active":
+                existing = scheduler_get_task(task_id)
+                if "error" not in existing and not existing.get("next_run"):
+                    eff_interval = clean_interval if interval_seconds is not None else existing.get("interval_seconds", 300)
+                    updates.append("next_run = ?")
+                    params.append((datetime.now() + timedelta(seconds=eff_interval)).isoformat())
 
     if not updates:
         return {"error": "No valid fields to update."}
@@ -344,7 +377,7 @@ def scheduler_pause_task(task_id: int) -> dict[str, Any]:
 
 
 def scheduler_resume_task(task_id: int) -> dict[str, Any]:
-    """Resume a paused or stopped task."""
+    """Resume a paused, stopped, or completed task."""
     current = scheduler_get_task(task_id)
     if "error" in current:
         return current
@@ -353,13 +386,27 @@ def scheduler_resume_task(task_id: int) -> dict[str, Any]:
     interval = current.get("interval_seconds", 300)
     next_run = (datetime.now() + timedelta(seconds=interval)).isoformat()
 
+    # If a completed task reached its repeat_count limit, reset runs_done so resuming executes again
+    reset_runs = (
+        current.get("status") == "completed"
+        and current.get("repeat_count", 0) > 0
+        and current.get("runs_done", 0) >= current.get("repeat_count", 0)
+    )
+
     conn = _get_db()
     with conn:
-        conn.execute("""
-            UPDATE scheduled_tasks
-            SET status = 'active', next_run = ?, updated_at = ?
-            WHERE id = ?
-        """, (next_run, datetime.now().isoformat(), int(task_id)))
+        if reset_runs:
+            conn.execute("""
+                UPDATE scheduled_tasks
+                SET status = 'active', runs_done = 0, next_run = ?, updated_at = ?
+                WHERE id = ?
+            """, (next_run, datetime.now().isoformat(), int(task_id)))
+        else:
+            conn.execute("""
+                UPDATE scheduled_tasks
+                SET status = 'active', next_run = ?, updated_at = ?
+                WHERE id = ?
+            """, (next_run, datetime.now().isoformat(), int(task_id)))
     conn.close()
 
     TaskSchedulerEngine.get_instance().notify_changed()
@@ -394,7 +441,17 @@ def scheduler_trigger_task_now(task_id: int) -> dict[str, Any]:
 
 
 class TaskSchedulerEngine:
-    """Background engine coordinating task timing and dispatching execution callbacks."""
+    """Background engine coordinating task timing and dispatching execution callbacks.
+
+    The engine uses a daemon thread to poll the SQLite database for due tasks
+    every *poll_interval* seconds.  Handlers registered via ``register_handler``
+    are called **on this background thread**, so GUI-bound handlers must
+    marshal work onto the UI thread themselves (e.g. ``tkinter.after``).
+
+    Call ``start_background_loop()`` once after all handlers are registered.
+    The GUI helper ``_on_scheduler_tick()`` in ``gui.py`` no longer drives
+    execution directly; it only refreshes countdown labels.
+    """
     _instance: Optional["TaskSchedulerEngine"] = None
     _lock = threading.Lock()
 
@@ -415,6 +472,7 @@ class TaskSchedulerEngine:
     def register_handler(self, target: str, handler: Callable[[dict[str, Any]], Any]):
         """Register a handler function for a specific target ('mammouth_web', 'mammouth_code', etc.)."""
         self._handlers[target] = handler
+        logger.info("Registered handler for target '%s'", target)
 
     def register_listener(self, callback: Callable[[], None]):
         """Register a callback notified on task additions, updates, or triggers."""
@@ -434,19 +492,27 @@ class TaskSchedulerEngine:
                 logger.debug(f"Error in scheduler change listener: {e}")
 
     def start_background_loop(self, poll_interval: float = 1.0):
-        """Start background daemon thread polling for due tasks."""
+        """Start background daemon thread polling for due tasks.
+
+        Safe to call multiple times; subsequent calls are no-ops while the
+        loop is already running.
+        """
         if self._running:
             return
         self._running = True
 
         def _loop():
-            import time
+            logger.info("TaskSchedulerEngine background loop started (poll=%.1fs)", poll_interval)
             while self._running:
                 try:
-                    self.check_and_run_due_tasks()
+                    executed = self.check_and_run_due_tasks()
+                    if executed:
+                        logger.info("Scheduler dispatched %d task(s): %s", len(executed),
+                                    ", ".join(f"#{r['id']}({r.get('name','')})" for r in executed))
                 except Exception as ex:
-                    logger.debug(f"Scheduler tick error: {ex}")
+                    logger.warning("Scheduler tick error: %s", ex, exc_info=True)
                 time.sleep(poll_interval)
+            logger.info("TaskSchedulerEngine background loop stopped")
 
         self._thread = threading.Thread(target=_loop, daemon=True, name="TaskSchedulerThread")
         self._thread.start()
@@ -475,10 +541,20 @@ class TaskSchedulerEngine:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT * FROM scheduled_tasks
-            WHERE status = 'active' AND next_run != '' AND next_run <= ?
-        """, (now_str,))
-        due_rows = cursor.fetchall()
+            WHERE status = 'active' AND next_run != ''
+        """)
+        active_rows = cursor.fetchall()
         conn.close()
+
+        due_rows = []
+        for row in active_rows:
+            nr_str = row["next_run"]
+            nr_dt = _parse_local_naive_dt(nr_str)
+            if nr_dt is not None:
+                if nr_dt <= now_dt:
+                    due_rows.append(row)
+            elif nr_str <= now_str:
+                due_rows.append(row)
 
         if not due_rows:
             return []
@@ -518,13 +594,18 @@ class TaskSchedulerEngine:
             res_str = "Dispatched"
             try:
                 if target in self._handlers:
+                    logger.info("Dispatching task #%d '%s' to handler '%s'", task_id, task.get("name"), target)
                     handler_res = self._handlers[target](task)
                     res_str = str(handler_res) if handler_res is not None else "Success"
+                    logger.info("Handler '%s' returned: %s", target, res_str[:200])
                 else:
-                    res_str = f"Default trigger ({target})"
+                    res_str = f"Error: No handler registered for target '{target}'"
+                    logger.warning("Task #%d '%s': no handler registered for target '%s' "
+                                   "(registered: %s)", task_id, task.get("name"), target,
+                                   list(self._handlers.keys()))
             except Exception as e:
                 res_str = f"Error: {e}"
-                logger.error(f"Failed to execute task {task_id} ({task.get('name')}): {e}")
+                logger.error("Failed to execute task %d (%s): %s", task_id, task.get("name"), e, exc_info=True)
 
             duration_ms = round((time.perf_counter() - t0) * 1000)
             finished_at = datetime.now().isoformat()
@@ -640,3 +721,161 @@ def scheduler_test_run(task_id: int, dry_run: bool = False) -> dict[str, Any]:
         "duration_ms": duration_ms,
         "result": res_str
     }
+
+
+def scheduler_update_run_result(
+    task_id: int,
+    run_number: int,
+    status: str,
+    exit_code: int,
+    output_summary: str,
+    duration_ms: int | None = None
+) -> None:
+    """Update last_result and the corresponding task_runs entry when an async handler finishes."""
+    try:
+        conn = _get_db()
+        with conn:
+            conn.execute(
+                "UPDATE scheduled_tasks SET last_result = ?, updated_at = ? WHERE id = ?",
+                (str(output_summary)[:512], datetime.now().isoformat(), int(task_id))
+            )
+            if duration_ms is not None:
+                conn.execute(
+                    """
+                    UPDATE task_runs
+                    SET status = ?, exit_code = ?, output_summary = ?, finished_at = ?, duration_ms = ?
+                    WHERE id = (
+                        SELECT id FROM task_runs
+                        WHERE task_id = ? AND run_number = ?
+                        ORDER BY id DESC LIMIT 1
+                    )
+                    """,
+                    (
+                        status,
+                        int(exit_code),
+                        str(output_summary)[:2048],
+                        datetime.now().isoformat(),
+                        int(duration_ms),
+                        int(task_id),
+                        int(run_number),
+                    ),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE task_runs
+                    SET status = ?, exit_code = ?, output_summary = ?, finished_at = ?
+                    WHERE id = (
+                        SELECT id FROM task_runs
+                        WHERE task_id = ? AND run_number = ?
+                        ORDER BY id DESC LIMIT 1
+                    )
+                    """,
+                    (
+                        status,
+                        int(exit_code),
+                        str(output_summary)[:2048],
+                        datetime.now().isoformat(),
+                        int(task_id),
+                        int(run_number),
+                    ),
+                )
+        conn.close()
+        TaskSchedulerEngine.get_instance().notify_changed()
+    except Exception as ex:
+        logger.debug("scheduler_update_run_result error: %s", ex)
+
+
+def register_default_handlers(engine: TaskSchedulerEngine | None = None, overwrite: bool = False) -> None:
+    """Register built-in headless execution handlers for non-GUI targets (powershell, mammouth_code, notification).
+
+    Called by server lifespan in headless mode so scheduled CLI/PowerShell/alert tasks execute even
+    without the Desktop Cockpit GUI running.
+    """
+    eng = engine or TaskSchedulerEngine.get_instance()
+
+    def _run_powershell(task: dict[str, Any]) -> str:
+        prompt = task.get("prompt", "")
+        if not _shell_module_enabled():
+            return "Error: Target 'powershell' requires module 'shell_processes' to be enabled."
+        from modules.shell_processes import powershell_exec
+        res = powershell_exec(command=prompt)
+        exit_code = res.get("exit_code", -1)
+        status = res.get("status", "error")
+        out = (res.get("stdout") or "").strip()
+        err = (res.get("stderr") or res.get("error") or "").strip()
+        if status == "permission_denied":
+            return f"Error: {err or 'Permission denied'}"
+        if exit_code != 0:
+            return f"Error (exit {exit_code}): {err or out}"
+        return f"Exit 0: {out[:200]}" if out else "Exit 0 (OK)"
+
+    def _run_mammouth_code(task: dict[str, Any]) -> str:
+        prompt = task.get("prompt", "")
+        from modules.mammouth_code import run_mammouth_task
+        res = run_mammouth_task(task_prompt=prompt, stream_output=False, timeout_seconds=180)
+        if res.get("success"):
+            return f"Success: {str(res.get('output', '')).strip()[:200]}"
+        return f"Error: {res.get('error', 'unknown')}"
+
+    def _run_notification(task: dict[str, Any]) -> str:
+        name = task.get("name", "Task")
+        prompt = task.get("prompt", "")
+        logger.info("[TASK ALERT] %s: %s", name, prompt[:120])
+        if sys.platform == "win32":
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONASTERISK)
+            except Exception:
+                pass
+        return "Notification displayed"
+
+    for tgt, fn in (
+        ("powershell", _run_powershell),
+        ("mammouth_code", _run_mammouth_code),
+        ("notification", _run_notification),
+    ):
+        if overwrite or tgt not in eng._handlers:
+            eng.register_handler(tgt, fn)
+
+
+def task_schedule_manage(
+    action: Literal["list", "presets", "pause", "resume", "trigger", "stop", "test_run", "dry_run", "history", "delete"] = "list",
+    task_id: int | None = None,
+    status: str | None = None,
+    limit: int = 20
+) -> dict[str, Any] | list[dict[str, Any]] | str:
+    """List, inspect presets/history, control, test, or delete scheduled tasks.
+
+    Args:
+        action: 'list', 'presets', 'pause', 'resume', 'trigger', 'stop', 'test_run', 'dry_run', 'history', or 'delete'.
+        task_id: Scheduled task ID (required for all actions except 'list' and 'presets').
+        status: Optional status filter for 'list' ('active', 'paused', 'completed', 'stopped').
+        limit: Max history entries when action='history' (default 20).
+    """
+    act = str(action or "list").strip().lower()
+    if act == "list":
+        return scheduler_list_tasks(status=status)
+    if act == "presets":
+        return scheduler_get_presets()
+    if task_id is None:
+        return {"error": f"Parameter 'task_id' is required for action='{action}'."}
+    tid = int(task_id)
+    if act == "pause":
+        return scheduler_pause_task(tid)
+    if act == "resume":
+        return scheduler_resume_task(tid)
+    if act in ("trigger", "trigger_now"):
+        return scheduler_trigger_task_now(tid)
+    if act in ("stop", "abort"):
+        return scheduler_update_task(tid, status="stopped")
+    if act == "test_run":
+        return scheduler_test_run(tid, dry_run=False)
+    if act in ("dry_run", "preview"):
+        return scheduler_test_run(tid, dry_run=True)
+    if act == "history":
+        return {"status": "success", "task_id": tid, "history": scheduler_get_history(tid, limit=limit)}
+    if act == "delete":
+        return scheduler_delete_task(tid)
+    return {"error": f"Unknown task_schedule_manage action '{action}'."}
+

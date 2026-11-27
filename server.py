@@ -66,109 +66,53 @@ except ImportError:
 from config import load_config, save_config, _encrypt_dpapi, _decrypt_dpapi, TOOL_PROFILES
 
 # Import modular capabilities
-from modules.memory import memory_save, memory_recall, memory_get, memory_delete, memory_list
-from modules.tasks_kanban import task_create, task_update, task_list, task_delete
+from modules.memory import memory_save_clean, memory_recall_clean, memory_delete_clean
+from modules.tasks_kanban import task_board
 from modules.file_ops import (
-    file_read,
-    file_write,
-    file_replace_chunk,
-    file_search_text,
-    directory_list,
-    directory_tree
+    file_read_clean,
+    file_write_clean,
+    file_replace_chunk_clean,
+    file_search_text_clean,
+    directory_list_clean,
 )
 from modules.shell_processes import (
-    command_run,
+    powershell_exec_clean,
     powershell_exec,
-    cmd_exec,
     desktop_open,
-    process_start_background,
-    process_list_background,
-    process_get_output,
-    process_kill_background,
-    process_cancel,
-    process_tail_output
+    process_manage,
 )
 from modules.putty_ssh import (
+    ssh_hosts,
     ssh_exec_command,
-    ssh_open_putty_window,
     ssh_transfer_file,
-    ssh_list_saved_hosts,
-    ssh_save_host,
-    ssh_list_putty_registry_sessions
 )
 from modules.system_monitor import (
-    system_get_specs,
+    system_specs_dispatch,
     system_get_processes,
-    system_get_gpu_info,
-    system_get_event_logs,
-    system_list_event_channels
+    system_event_logs,
 )
 from modules.screen_capture import (
-    screen_capture,
-    screen_list_monitors,
-    screen_list_windows,
-    screen_capture_active_window,
-    screen_capture_window,
-    screen_set_tracked_window,
-    screen_get_tracked_window,
+    screen_capture_dispatch,
+    screen_windows,
 )
-from modules.workspace_indexer import (
-    workspace_index_directory,
-    workspace_search,
-    workspace_find_symbols,
-    workspace_get_stats,
-)
-from modules.smart_clipboard import (
-    clipboard_get_text,
-    clipboard_set_text,
-    clipboard_transform,
-)
-from modules.web_tools import (
-    web_fetch_url,
-    web_check_status
-)
+from modules.workspace_indexer import workspace_code_search
+from modules.smart_clipboard import clipboard_manage
+from modules.web_tools import web_fetch
 from modules.browser_agent import (
     browser_navigate,
-    browser_snapshot,
-    browser_screenshot,
-    browser_click,
-    browser_fill,
-    browser_press_key,
-    browser_hover,
-    browser_scroll,
-    browser_get_content,
+    browser_inspect,
+    browser_interact,
     browser_evaluate,
-    browser_tabs,
-    browser_status,
-    browser_close,
-    browser_restart,
-    browser_list_browsers,
+    browser_session,
     init_browser_agent
 )
 from modules.desktop_input import (
     desktop_get_screen_info,
-    mouse_move,
-    mouse_click,
-    mouse_drag,
-    mouse_scroll,
-    mouse_get_position,
-    keyboard_type,
-    keyboard_press,
-    keyboard_hotkey
+    desktop_mouse,
+    desktop_keyboard,
 )
-from modules.mammouth_code import (
-    get_mammouth_code_status as mammouth_code_status,
-    launch_mammouth_terminal as mammouth_code_launch_terminal,
-    run_mammouth_task as mammouth_code_run_task,
-    install_or_update_mammouth_code as mammouth_code_install_or_update,
-    sync_opencode_mcp_config as mammouth_code_sync_mcp,
-)
-from modules.claude_code import (
-    get_claude_code_status as claude_code_status,
-    launch_claude_terminal as claude_code_launch_terminal,
-    run_claude_task as claude_code_run_task,
-    sync_claude_code_mcp as claude_code_sync_mcp,
-)
+from modules.mammouth_code import mammouth_code_dispatch
+from modules.claude_code import claude_code_dispatch, get_claude_code_status as claude_code_status
 from modules.task_scheduler import (
     scheduler_create_task,
     scheduler_list_tasks,
@@ -178,43 +122,34 @@ from modules.task_scheduler import (
     scheduler_resume_task,
     scheduler_trigger_task_now,
     scheduler_get_presets,
-    scheduler_get_history
+    scheduler_get_history,
+    task_schedule_manage,
 )
 from modules.google_drive import (
-    gdrive_status,
-    gdrive_list_files,
-    gdrive_search_files,
-    gdrive_get_metadata,
-    gdrive_read_file,
-    gdrive_download_to_workspace,
-    gdrive_upload_from_workspace,
-    gdrive_write_file,
-    gdrive_update_file,
-    gdrive_create_folder,
-    gdrive_delete_file
+    gdrive_list,
+    gdrive_read,
+    gdrive_write,
+    gdrive_manage,
 )
 
 
-# Initialize FastMCP Server with Mammouth Defroster 9000, Mammouth Code & Google Drive capabilities
+# Initialize FastMCP Server with streamlined 42-tool capability surface
 mcp = FastMCP(
     name="Mammouth-Defroster-9000",
-    instructions="""Mammouth Defroster 9000 (v0.7.5): Sovereign Windows Cockpit & Tool Hub for Mammouth.ai.
-All 86+ Windows tools are immediately discoverable and executable without manual profile switching:
-- Shell & Scripting: 'powershell_exec', 'command_run', 'desktop_open'
-- Files & Sandboxing: 'file_read', 'file_write', 'directory_list', 'file_search_text', 'file_replace_chunk'
-- Desktop Vision: 'screen_capture', 'screen_capture_active_window', 'screen_list_windows'
-- Desktop Automation: 'mouse_click', 'mouse_move', 'keyboard_type', 'keyboard_hotkey', 'desktop_get_screen_info'
-- Browser (Playwright): 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_screenshot'
-- Diagnostics & System: 'system_get_specs', 'system_get_processes'
-- Memory & Clipboard: 'memory_save', 'memory_recall', 'clipboard_get_text', 'clipboard_set_text'
-- Cloud & Scheduling: Google Drive ('gdrive_*'), Task Scheduler ('task_schedule_*'), Claude Code ('claude_code_*')
+    instructions="""Mammouth Defroster 9000 (v0.8.2): Streamlined Windows Cockpit & Tool Hub for ChatGPT, Claude, and Mammouth.ai.
+Core capabilities (42 consolidated tools total across all 16 modules):
+- Files & Code Search: 'file_read', 'file_write', 'file_replace_chunk', 'file_search_text', 'directory_list', 'workspace_code_search'
+- Shell & Apps: 'powershell_exec' (PowerShell/CMD), 'desktop_open', 'process_manage'
+- Desktop Vision & Input: 'screen_capture', 'screen_windows', 'desktop_get_screen_info', 'desktop_mouse', 'desktop_keyboard'
+- Browser (Playwright): 'browser_navigate', 'browser_inspect', 'browser_interact', 'browser_evaluate', 'browser_session'
+- System & Memory: 'system_get_specs', 'system_get_processes', 'system_event_logs', 'memory_save', 'memory_recall', 'memory_delete', 'clipboard_manage'
+- Tasks & Cloud: 'task_board', 'task_schedule_create', 'task_schedule_manage', 'gdrive_*', 'ssh_*', 'mammouth_code', 'claude_code', 'web_fetch'
 
-UNIVERSAL TOOL EXECUTION:
-1. Promoted tools can be invoked directly by name.
-2. Tools within your active profile can also be executed on demand via:
-   defroster_execute_tool(tool_name="<name>", arguments={...})
-3. Call 'defroster_catalog' to inspect categories, search tools, or switch profiles via defroster_catalog(switch_profile="<name>").
-Write scripts via 'file_write' and execute them locally via 'powershell_exec' ($0 cost). Safety, sandboxing, and precision are always prioritized."""
+Use 'defroster_catalog' to inspect categories or switch profiles, and 'defroster_execute_tool' for on-demand profile execution.
+Use 'system_get_specs' (field 'known_folders') to resolve the user's real Desktop/Documents/Downloads paths instead of guessing.
+If AGENTS.md or SYSTEM.md exists in the workspace root, read it first when working on a project there.
+'file_read' and 'file_search_text' skip credential files (.env, tokens, oauth.db) unless server.protect_secret_files is disabled.
+Write scripts via 'file_write' and run them locally via 'powershell_exec' ($0 cost)."""
 )
 
 
@@ -387,26 +322,38 @@ def task_schedule_create(
     prompt: str,
     interval_minutes: float = 5.0,
     repeat_count: int = 0,
-    target: str = "mammouth_web",
+    target: str = "auto",
     start_immediately: bool = False
 ) -> dict[str, Any]:
-    """Schedule an automated recurring task to be triggered in the Defroster GUI.
-    
+    """Schedule a recurring task in Defroster GUI or CLI.
+
     Args:
-        name: Short title (e.g. '⚽ Live Match Report: Football')
-        prompt: Action prompt to trigger (e.g. 'Search web for live match score, goals, and produce a live report')
-        interval_minutes: Interval in minutes between triggers (default 5.0 min, min 0.2)
-        repeat_count: Number of executions (0 = continuous/unlimited, e.g. 18 for a 90min game)
-        target: 'mammouth_web' (sends prompt to Mammouth chat), 'mammouth_code' (runs CLI agent), or 'powershell'
-        start_immediately: Whether to trigger the first run immediately (in 2s) or wait for first interval
+        name: Short task title.
+        prompt: Prompt or command to run on each trigger.
+        interval_minutes: Minutes between runs (default 5.0, min 0.2).
+        repeat_count: Max runs (0 = continuous).
+        target: 'auto' (active web tab), 'chatgpt_web', 'claude_web', 'mammouth_web', 'mammouth_code', 'powershell', or 'notification'.
+        start_immediately: Run first execution immediately (in ~1s) instead of waiting one interval.
     """
+    resolved_target = str(target or "auto").strip().lower()
+    if resolved_target in ("", "auto", "default", "web"):
+        try:
+            default_tab = str(load_config().get("embedded_browser", {}).get("default_chat_tab", "chatgpt")).strip().lower()
+            if default_tab == "mammouth":
+                resolved_target = "mammouth_web"
+            elif default_tab == "claude":
+                resolved_target = "claude_web"
+            else:
+                resolved_target = "chatgpt_web"
+        except Exception:
+            resolved_target = "chatgpt_web"
     interval_seconds = max(10, int(float(interval_minutes) * 60))
     return scheduler_create_task(
         name=name,
         prompt=prompt,
         interval_seconds=interval_seconds,
         repeat_count=repeat_count,
-        target=target,
+        target=resolved_target,
         auto_submit=True,
         switch_tab=True,
         start_immediately=start_immediately
@@ -419,11 +366,11 @@ def task_schedule_list(status: str | None = None) -> list[dict[str, Any]]:
 
 
 def task_schedule_control(task_id: int, action: str) -> dict[str, Any]:
-    """Control a scheduled task (pause, resume, trigger, test_run, preview, history, stop).
-    
+    """Control a scheduled task.
+
     Args:
-        task_id: ID of the scheduled task
-        action: 'pause', 'resume', 'trigger' / 'trigger_now', 'stop' / 'abort', 'test_run', 'preview' / 'dry_run', 'history'
+        task_id: Scheduled task ID.
+        action: 'pause', 'resume', 'trigger', 'stop', 'test_run', 'dry_run', or 'history'.
     """
     act = str(action).lower().strip()
     if act == "pause":
@@ -471,140 +418,152 @@ _DEFROSTER_MODULE_CATALOG: dict[str, dict[str, Any]] = {
     "files": {
         "module": "file_ops",
         "title": "File Operations & Workspace Sandbox",
-        "description": "Read, write, edit, and search files inside the workspace sandbox.",
+        "description": "Read, write, edit, search, and list files inside the workspace sandbox.",
         "tools": [
             {"name": "file_read", "desc": "Read text file with optional line slicing."},
             {"name": "file_write", "desc": "Write or overwrite file content."},
             {"name": "file_replace_chunk", "desc": "Replace targeted text snippet in a file."},
-            {"name": "file_search_text", "desc": "Search for text or regex patterns across workspace files."},
-            {"name": "directory_list", "desc": "List directory contents."},
-            {"name": "directory_tree", "desc": "Render ASCII directory tree."}
+            {"name": "file_search_text", "desc": "Search text or regex patterns across workspace files."},
+            {"name": "directory_list", "desc": "List directory contents (flat or recursive tree)."}
         ]
     },
     "shell": {
         "module": "shell_processes",
-        "title": "PowerShell & Shell Command Execution",
-        "description": "Execute local shell and PowerShell commands, launch applications, manage background tasks.",
+        "title": "PowerShell & Shell Execution",
+        "description": "Execute local PowerShell/CMD commands, launch desktop targets, manage background processes.",
         "tools": [
-            {"name": "powershell_exec", "desc": "Execute PowerShell commands or scripts with stdout/stderr capture."},
-            {"name": "command_run", "desc": "Run CLI command inside the workspace."},
-            {"name": "cmd_exec", "desc": "Execute cmd.exe command."},
-            {"name": "desktop_open", "desc": "Open a file or URL with default Windows application."},
-            {"name": "process_start_background", "desc": "Start long-running background process."},
-            {"name": "process_list_background", "desc": "List background processes."},
-            {"name": "process_get_output", "desc": "Get output from a background process."},
-            {"name": "process_kill_background", "desc": "Terminate a background process."}
+            {"name": "powershell_exec", "desc": "Execute PowerShell or cmd.exe command inside workspace."},
+            {"name": "desktop_open", "desc": "Open a file, folder, or URL with default Windows app."},
+            {"name": "process_manage", "desc": "Start, list, inspect output, or kill background processes."}
         ]
     },
     "browser": {
         "module": "browser_agent",
         "title": "Autonomous Browser Agent",
-        "description": "Full web automation via Playwright: navigate, click, fill forms, take screenshots, evaluate JS.",
+        "description": "Playwright web automation: navigate, inspect DOM/screenshots, interact, evaluate JS, manage tabs.",
         "tools": [
             {"name": "browser_navigate", "desc": "Navigate browser to a URL."},
-            {"name": "browser_snapshot", "desc": "Extract text/accessibility snapshot of the current page."},
-            {"name": "browser_screenshot", "desc": "Capture screenshot of current browser viewport."},
-            {"name": "browser_click", "desc": "Click element by selector or coordinate."},
-            {"name": "browser_fill", "desc": "Type text into form input."},
-            {"name": "browser_press_key", "desc": "Send keyboard key to page (Enter, Escape, etc.)."},
-            {"name": "browser_hover", "desc": "Hover mouse over element."},
-            {"name": "browser_scroll", "desc": "Scroll page vertically or horizontally."},
-            {"name": "browser_get_content", "desc": "Get HTML content or element text."},
-            {"name": "browser_evaluate", "desc": "Run JavaScript in browser context."},
-            {"name": "browser_tabs", "desc": "List or switch browser tabs."},
-            {"name": "browser_status", "desc": "Get current browser engine and page status."},
-            {"name": "browser_restart", "desc": "Restart browser with clean session."},
-            {"name": "browser_close", "desc": "Close browser instance."}
+            {"name": "browser_inspect", "desc": "Inspect page (snapshot, screenshot, markdown, text, html)."},
+            {"name": "browser_interact", "desc": "Interact with page (click, double_click, right_click, fill, press_key, hover, scroll)."},
+            {"name": "browser_evaluate", "desc": "Execute JavaScript in browser context."},
+            {"name": "browser_session", "desc": "Check status, manage tabs, restart, or close browser."}
         ]
     },
     "screen": {
         "module": "screen_capture",
         "title": "Screen Capture & Desktop Vision",
-        "description": "Capture full screen, specific monitors, or target windows for multimodal vision inspection.",
+        "description": "Capture desktop monitors or application windows and inspect window/display metadata.",
         "tools": [
-            {"name": "screen_capture", "desc": "Capture full desktop screenshot."},
-            {"name": "screen_capture_active_window", "desc": "Capture screenshot of the currently active/focused window."},
-            {"name": "screen_capture_window", "desc": "Capture screenshot of window by title/handle."},
-            {"name": "screen_list_monitors", "desc": "List connected displays and resolutions."},
-            {"name": "screen_list_windows", "desc": "List visible application windows."}
+            {"name": "screen_capture", "desc": "Capture screenshot of active_window, fullscreen monitor, tracked window, or title/handle."},
+            {"name": "screen_windows", "desc": "List open windows, list monitors, or get/set tracked window."}
         ]
     },
     "desktop": {
         "module": "desktop_input",
         "title": "Desktop Mouse & Keyboard Input",
-        "description": "Simulate hardware mouse and keyboard events on Windows.",
+        "description": "Query display geometry/cursor coordinates and simulate hardware mouse and keyboard input.",
         "tools": [
-            {"name": "mouse_click", "desc": "Click at desktop coordinates."},
-            {"name": "mouse_move", "desc": "Move mouse cursor to coordinates."},
-            {"name": "mouse_drag", "desc": "Drag mouse between coordinates."},
-            {"name": "mouse_scroll", "desc": "Scroll mouse wheel."},
-            {"name": "keyboard_type", "desc": "Type text directly via simulated keystrokes."},
-            {"name": "keyboard_press", "desc": "Press a key (e.g. Enter, Tab, Win, Ctrl+S)."},
-            {"name": "keyboard_hotkey", "desc": "Trigger keyboard shortcut (e.g. ['ctrl', 'c'])."}
+            {"name": "desktop_get_screen_info", "desc": "Get display resolution and current cursor coordinates."},
+            {"name": "desktop_mouse", "desc": "Perform mouse click, move, drag, or scroll."},
+            {"name": "desktop_keyboard", "desc": "Type text, press keys, or trigger keyboard hotkeys."}
         ]
     },
     "system": {
         "module": "system_monitor",
         "title": "System Hardware & Process Monitor",
-        "description": "Query CPU/RAM/GPU diagnostics, running Windows processes, and event viewer logs.",
+        "description": "Query CPU/RAM/GPU specs, top processes, and Windows event logs.",
         "tools": [
-            {"name": "system_get_specs", "desc": "Get CPU, RAM, storage, and OS specifications."},
-            {"name": "system_get_processes", "desc": "List top running processes by CPU/memory."},
-            {"name": "system_get_gpu_info", "desc": "Query NVIDIA/AMD GPU utilization and VRAM."},
-            {"name": "system_get_event_logs", "desc": "Query Windows event log channels for warnings/errors."}
+            {"name": "system_get_specs", "desc": "Get CPU, RAM, storage, OS, and optional GPU specs."},
+            {"name": "system_get_processes", "desc": "List top running processes by CPU or memory."},
+            {"name": "system_event_logs", "desc": "Query Windows event logs or list available event channels."}
         ]
     },
     "scheduler": {
         "module": "task_scheduler",
         "title": "Task Scheduler & Automation Engine",
-        "description": "Create automated recurring prompts or scripts triggered on intervals.",
+        "description": "Schedule recurring prompts (ChatGPT Web / Claude Web / Mammouth Web) or scripts and manage scheduled jobs.",
         "tools": [
-            {"name": "task_schedule_create", "desc": "Create recurring task (interval_minutes, prompt, target)."},
-            {"name": "task_schedule_list", "desc": "List scheduled automation tasks."},
-            {"name": "task_schedule_control", "desc": "Pause, resume, or trigger scheduled task."},
-            {"name": "task_schedule_delete", "desc": "Delete scheduled task."}
+            {"name": "task_schedule_create", "desc": "Create recurring task (interval_minutes, prompt, target='auto'|'chatgpt_web'|'claude_web'|'mammouth_web'|'powershell')."},
+            {"name": "task_schedule_manage", "desc": "List, presets, pause, resume, trigger, stop, test_run, dry_run, history, or delete tasks."}
         ]
     },
     "gdrive": {
         "module": "google_drive",
         "title": "Google Drive Cloud Integration",
-        "description": "Search, download, read, write, and manage Google Drive files.",
+        "description": "List, search, read, download, write, upload, and manage Google Drive files.",
         "tools": [
-            {"name": "gdrive_search_files", "desc": "Search Google Drive files by name/query."},
-            {"name": "gdrive_read_file", "desc": "Read text or Google Docs/Sheets content."},
-            {"name": "gdrive_download_to_workspace", "desc": "Download Drive file to local workspace."},
-            {"name": "gdrive_upload_from_workspace", "desc": "Upload workspace file to Google Drive."},
-            {"name": "gdrive_list_files", "desc": "List files in Google Drive folder."}
+            {"name": "gdrive_list", "desc": "List folder contents or search Google Drive globally."},
+            {"name": "gdrive_read", "desc": "Read text/Docs/Sheets content, fetch metadata, or download to workspace."},
+            {"name": "gdrive_write", "desc": "Create, update, upload from workspace, or create Drive folders."},
+            {"name": "gdrive_manage", "desc": "Check Google Drive auth status or trash/delete files."}
         ]
     },
     "clipboard": {
         "module": "smart_clipboard",
         "title": "Smart Clipboard",
-        "description": "Read, update, and transform system clipboard content.",
+        "description": "Read, update, and clean/format system clipboard text.",
         "tools": [
-            {"name": "clipboard_get_text", "desc": "Read current clipboard text."},
-            {"name": "clipboard_set_text", "desc": "Set clipboard text."}
+            {"name": "clipboard_manage", "desc": "Get, set, or clean/format clipboard text."}
         ]
     },
     "memory": {
         "module": "memory",
         "title": "Sovereign Long-Term Memory & RAG",
-        "description": "Persistent key-value and semantic memory recall across sessions.",
+        "description": "Persistent key-value and semantic memory storage across sessions.",
         "tools": [
-            {"name": "memory_save", "desc": "Save key-value memory entry."},
-            {"name": "memory_recall", "desc": "Recall stored memories matching a query."},
-            {"name": "memory_list", "desc": "List stored memories."}
+            {"name": "memory_save", "desc": "Save or update a persistent memory entry."},
+            {"name": "memory_recall", "desc": "Search memories semantically, fetch by key, or list entries."},
+            {"name": "memory_delete", "desc": "Delete a memory entry by key."}
+        ]
+    },
+    "tasks": {
+        "module": "tasks_kanban",
+        "title": "Local Kanban Task Board",
+        "description": "Track local project tasks and status in SQLite Kanban storage.",
+        "tools": [
+            {"name": "task_board", "desc": "List, create, update, or delete local Kanban tasks."}
+        ]
+    },
+    "workspace": {
+        "module": "workspace_memory",
+        "title": "Workspace Code Index & RAG",
+        "description": "Full-text SQLite FTS5 code search and Python AST symbol extraction.",
+        "tools": [
+            {"name": "workspace_code_search", "desc": "Search code, find symbols, re-index workspace, or check index stats."}
+        ]
+    },
+    "ssh": {
+        "module": "putty_ssh",
+        "title": "PuTTY & SSH Remote Management",
+        "description": "Manage saved SSH profiles and execute remote commands or SFTP/SCP transfers.",
+        "tools": [
+            {"name": "ssh_hosts", "desc": "List saved SSH profiles, list PuTTY registry sessions, save host, or open PuTTY."},
+            {"name": "ssh_exec_command", "desc": "Execute a shell command over SSH on a remote host."},
+            {"name": "ssh_transfer_file", "desc": "Upload or download files over SCP/SFTP."}
+        ]
+    },
+    "mammouth": {
+        "module": "mammouth_code",
+        "title": "Mammouth Code CLI Agent",
+        "description": "Check status, install/update, sync MCP config, launch terminal, or run tasks via Mammouth Code.",
+        "tools": [
+            {"name": "mammouth_code", "desc": "Manage or execute Mammouth Code CLI (status, install, sync_mcp, launch_terminal, run_task)."}
         ]
     },
     "claude": {
         "module": "claude_code",
         "title": "Claude Code CLI & Cloud Sessions",
-        "description": "Claude Code agent & cloud sessions: status check, .mcp.json sync, terminal launcher, and cloud execution.",
+        "description": "Check Claude Code status, sync .mcp.json, launch terminal, or execute CLI/cloud tasks.",
         "tools": [
-            {"name": "claude_code_status", "desc": "Check Claude Code CLI installation, version, and cloud MCP readiness."},
-            {"name": "claude_code_sync_mcp", "desc": "Sync Mammouth Defroster 9000 into repository .mcp.json for cloud sessions."},
-            {"name": "claude_code_launch_terminal", "desc": "Launch Claude Code terminal session (local or cloud)."},
-            {"name": "claude_code_run_task", "desc": "Execute Claude Code task non-interactively via CLI."}
+            {"name": "claude_code", "desc": "Manage or run Claude Code CLI & cloud sessions (status, sync_mcp, launch_terminal, run_task)."}
+        ]
+    },
+    "web": {
+        "module": "web_tools",
+        "title": "SSRF-Shielded Web Fetch",
+        "description": "Fetch public web page text/markdown or inspect HTTP status safely.",
+        "tools": [
+            {"name": "web_fetch", "desc": "Fetch public URL readable content or check HTTP status (SSRF shielded)."}
         ]
     }
 }
@@ -761,10 +720,10 @@ def defroster_catalog(
       3. catalog_available (total Defroster suite tools)
 
     Args:
-        category: Optional category filter ('files', 'shell', 'browser', 'screen', 'desktop', 'system', 'scheduler', 'gdrive', 'clipboard', 'memory', 'claude', 'all').
+        category: Optional category filter ('files', 'shell', 'browser', 'screen', 'desktop', 'system', 'scheduler', 'gdrive', 'clipboard', 'memory', 'tasks', 'workspace', 'ssh', 'mammouth', 'claude', 'web', 'all').
         search: Optional search keyword (e.g. 'pdf', 'click', 'window').
         switch_profile: Optional profile switch ('mammouth_safe', 'developer', 'web_vision', 'automation', 'all', 'custom').
-        tool_schema: Optional tool name to retrieve full machine-readable JSON schema (e.g. 'powershell_exec', 'browser_click').
+        tool_schema: Optional tool name to retrieve full machine-readable JSON schema (e.g. 'powershell_exec', 'browser_interact').
         include_schemas: Whether to include parameter schemas for all returned tools (default False for token safety).
         detailed: Optional flag to return full descriptions in overview mode (default False for token safety).
     """
@@ -816,13 +775,14 @@ def defroster_catalog(
                 rec_prof = pid
                 break
 
-        is_loaded = target_tool in promoted_names or active_profile_key == "all"
-        is_mod_enabled = mods.get(target_mod, {}).get("enabled", True)
+        is_mod_enabled = target_mod == "core" or mods.get(target_mod, {}).get("enabled", False)
+        is_registered = schema_def is not None
+        is_loaded = is_registered and is_mod_enabled and (target_tool in promoted_names or active_profile_key == "all")
 
         return {
             "status": "success" if schema_def else "not_found",
             "tool_name": target_tool,
-            "status_in_active_profile": "loaded" if is_loaded else ("available" if is_mod_enabled else "disabled"),
+            "status_in_active_profile": ("disabled" if not is_mod_enabled else "not_registered" if not is_registered else "loaded" if is_loaded else "available"),
             "category": target_cat,
             "module": target_mod,
             "module_enabled": is_mod_enabled,
@@ -866,8 +826,9 @@ def defroster_catalog(
                 tools_repr = []
                 for t in matched_tools:
                     t_name = t["name"]
-                    is_loaded = t_name in promoted_names or active_profile_key == "all"
-                    t_status = "loaded" if is_loaded else ("available" if mod_enabled else "disabled")
+                    is_registered = _extract_tool_schema_def(t_name) is not None
+                    is_loaded = is_registered and mod_enabled and (t_name in promoted_names or active_profile_key == "all")
+                    t_status = "disabled" if not mod_enabled else "not_registered" if not is_registered else "loaded" if is_loaded else "available"
                     
                     rec_p = None
                     for pid, pdata in TOOL_PROFILES.items():
@@ -911,7 +872,13 @@ def defroster_catalog(
         budget_status = f"Warning (~{token_est:,} / {MAX_SCHEMA_BUDGET:,} tokens - exceeds platform limit, promotion may fail)"
 
     # Three-Tier tool metrics
-    loaded_tools_count = len(promoted_names) if active_profile_key != "all" else activated_in_config_count
+    loaded_tools_count = sum(
+        1 for cat in _DEFROSTER_MODULE_CATALOG.values()
+        if mods.get(cat["module"], {}).get("enabled", True)
+        for tool in cat["tools"]
+        if (active_profile_key == "all" or tool["name"] in promoted_names)
+        and _extract_tool_schema_def(tool["name"]) is not None
+    )
 
     res = {
         "status": "success",
@@ -943,6 +910,123 @@ def defroster_catalog(
         res["tools_auto_refreshed"] = True
     return res
 
+_LEGACY_TOOL_ALIASES: dict[str, tuple[str, Any]] = {
+    # File ops
+    "directory_tree": ("directory_list", lambda a: {**a, "recursive": True}),
+    # Shell & processes
+    "cmd_exec": ("powershell_exec", lambda a: {("cwd" if k == "working_directory" else k): v for k, v in a.items() if k != "shell"} | {"shell": "cmd"}),
+    "command_run": ("powershell_exec", lambda a: {("cwd" if k == "working_directory" else k): v for k, v in a.items()}),
+    "local_exec_command": ("powershell_exec", lambda a: {("timeout_seconds" if k == "timeout" else k): v for k, v in a.items()}),
+    "process_start_background": ("process_manage", lambda a: {**a, "action": "start"}),
+    "process_list_background": ("process_manage", lambda a: {**a, "action": "list"}),
+    "process_get_output": ("process_manage", lambda a: {("max_lines" if k == "tail_lines" else "task_id" if k == "process_id" else k): v for k, v in a.items()} | {"action": "output"}),
+    "process_kill_background": ("process_manage", lambda a: {("task_id" if k == "process_id" else k): v for k, v in a.items()} | {"action": "kill"}),
+    "process_cancel": ("process_manage", lambda a: {("task_id" if k == "process_id" else k): v for k, v in a.items()} | {"action": "kill"}),
+    "process_tail_output": ("process_manage", lambda a: {("task_id" if k == "process_id" else k): v for k, v in a.items()} | {"action": "output"}),
+    # Desktop input (note: mouse_get_position stays unaliased so profile gating stays strict)
+    "mouse_click": ("desktop_mouse", lambda a: {k: v for k, v in a.items() if k != "interval"} | {"action": "click"}),
+    "mouse_move": ("desktop_mouse", lambda a: {k: v for k, v in a.items() if k != "smooth"} | {"action": "move"}),
+    "mouse_drag": ("desktop_mouse", lambda a: {
+        "action": "drag",
+        **{k: v for k, v in a.items() if k in ("end_x", "end_y", "button", "duration")},
+        **({"x": a.get("x", a.get("start_x"))} if ("x" in a or "start_x" in a) else {}),
+        **({"y": a.get("y", a.get("start_y"))} if ("y" in a or "start_y" in a) else {}),
+    }),
+    "mouse_scroll": ("desktop_mouse", lambda a: {k: v for k, v in a.items() if k != "clicks"} | {"action": "scroll", "amount": a.get("amount", a.get("clicks", 0))}),
+    "keyboard_type": ("desktop_keyboard", lambda a: {**a, "action": "type"}),
+    "keyboard_press": ("desktop_keyboard", lambda a: {k: v for k, v in a.items() if k != "interval"} | {"action": "press", **({"delay": a["interval"]} if "interval" in a and "delay" not in a else {})}),
+    "keyboard_hotkey": ("desktop_keyboard", lambda a: {"action": "hotkey", "key": "+".join(a["keys"]) if isinstance(a.get("keys"), list) else str(a.get("keys", a.get("key", "")))}),
+    # Screen capture
+    "screen_capture_active_window": ("screen_capture", lambda a: {"target": "active_window", **{k: v for k, v in a.items() if k in ("monitor", "max_width", "quality", "include_metadata", "save_to_workspace")}}),
+    "screen_capture_window": ("screen_capture", lambda a: {"target": str(a.get("target") or a.get("target_hwnd") or a.get("window_title") or "active_window"), **{k: v for k, v in a.items() if k in ("monitor", "max_width", "quality", "include_metadata", "save_to_workspace")}}),
+    "screen_list_windows": ("screen_windows", lambda a: {"action": "list", **{k: v for k, v in a.items() if k in ("include_minimized", "exclude_self")}}),
+    "screen_list_monitors": ("screen_windows", lambda a: {"action": "monitors"}),
+    "screen_set_tracked_window": ("screen_windows", lambda a: {"action": "set_tracked", "target": str(a.get("target") or a.get("window_title") or "auto")}),
+    "screen_get_tracked_window": ("screen_windows", lambda a: {"action": "get_tracked"}),
+    # Browser agent
+    "browser_snapshot": ("browser_inspect", lambda a: {**a, "mode": "snapshot"}),
+    "browser_screenshot": ("browser_inspect", lambda a: {**a, "mode": "screenshot"}),
+    "browser_get_content": ("browser_inspect", lambda a: {"mode": a.get("format", a.get("mode", "text")), **{k: v for k, v in a.items() if k != "format"}}),
+    "browser_click": ("browser_interact", lambda a: {"action": "double_click" if a.get("double_click") else ("right_click" if a.get("button") == "right" else "click"), "target": str(a.get("target") or a.get("selector") or a.get("ref") or "")}),
+    "browser_fill": ("browser_interact", lambda a: {"action": "fill", "target": str(a.get("target") or a.get("selector") or a.get("ref") or ""), "text": str(a.get("text") if "text" in a else a.get("value", "")), **({"press_enter": a["press_enter"]} if "press_enter" in a else {})}),
+    "browser_press_key": ("browser_interact", lambda a: {**a, "action": "press_key"}),
+    "browser_hover": ("browser_interact", lambda a: {"action": "hover", "target": str(a.get("target") or a.get("selector") or a.get("ref") or "")}),
+    "browser_scroll": ("browser_interact", lambda a: {**a, "action": "scroll"}),
+    "browser_status": ("browser_session", lambda a: {**a, "action": "status"}),
+    "browser_tabs": ("browser_session", lambda a: {"action": "tabs" if a.get("action", "list") in ("list", "") else a["action"], **{k: v for k, v in a.items() if k in ("tab_index", "url")}}),
+    "browser_restart": ("browser_session", lambda a: {**a, "action": "restart"}),
+    "browser_close": ("browser_session", lambda a: {**a, "action": "close"}),
+    "browser_list_browsers": ("browser_session", lambda a: {"action": "status"}),
+    # Google Drive
+    "gdrive_list_files": ("gdrive_list", lambda a: {**a, "search_mode": "folder"}),
+    "gdrive_search_files": ("gdrive_list", lambda a: {**a, "search_mode": "global"}),
+    "gdrive_read_file": ("gdrive_read", lambda a: {**a, "mode": "text"}),
+    "gdrive_get_metadata": ("gdrive_read", lambda a: {**a, "mode": "metadata"}),
+    "gdrive_download_to_workspace": ("gdrive_read", lambda a: {**a, "mode": "download"}),
+    "gdrive_write_file": ("gdrive_write", lambda a: {**a, "action": "create"}),
+    "gdrive_update_file": ("gdrive_write", lambda a: {**a, "action": "update"}),
+    "gdrive_upload_from_workspace": ("gdrive_write", lambda a: {**a, "action": "upload"}),
+    "gdrive_create_folder": ("gdrive_write", lambda a: {"action": "mkdir", "name": a.get("name", a.get("folder_name", "")), "folder_id": a.get("folder_id", a.get("parent_id", "root"))}),
+    "gdrive_status": ("gdrive_manage", lambda a: {**a, "action": "status"}),
+    "gdrive_delete_file": ("gdrive_manage", lambda a: {**a, "action": "delete"}),
+    # Memory
+    "memory_get": ("memory_recall", lambda a: {"key": str(a.get("key") or a.get("name") or a.get("id") or "")}),
+    "memory_list": ("memory_recall", lambda a: {k: v for k, v in a.items() if k in ("category", "limit")}),
+    # Tasks Kanban
+    "task_create": ("task_board", lambda a: {**a, "action": "create"}),
+    "task_update": ("task_board", lambda a: {("task_id" if k == "id" else k): v for k, v in a.items()} | {"action": "update"}),
+    "task_list": ("task_board", lambda a: {**a, "action": "list"}),
+    "task_delete": ("task_board", lambda a: {("task_id" if k == "id" else k): v for k, v in a.items()} | {"action": "delete"}),
+    # Task Scheduler
+    "task_schedule_list": ("task_schedule_manage", lambda a: {**a, "action": "list"}),
+    "task_schedule_control": ("task_schedule_manage", lambda a: {**a}),
+    "task_schedule_delete": ("task_schedule_manage", lambda a: {**a, "action": "delete"}),
+    "task_schedule_get_presets": ("task_schedule_manage", lambda a: {**a, "action": "presets"}),
+    "task_schedule_get_history": ("task_schedule_manage", lambda a: {**a, "action": "history"}),
+    # System Monitor
+    "system_get_gpu_info": ("system_get_specs", lambda a: {"include_gpu": True}),
+    "system_get_event_logs": ("system_event_logs", lambda a: {"action": "query", **{("log_name" if k == "channel" else "entry_type" if k == "level" else "event_id" if k == "id" else "count" if k == "limit" else k): v for k, v in a.items()}}),
+    "system_list_event_channels": ("system_event_logs", lambda a: {"action": "list_channels", **{k: v for k, v in a.items() if k == "pattern"}}),
+    # Workspace Code Search
+    "workspace_search": ("workspace_code_search", lambda a: {**a, "action": "search"}),
+    "workspace_find_symbols": ("workspace_code_search", lambda a: {("query" if k == "symbol_name" else k): v for k, v in a.items()} | {"action": "symbols"}),
+    "workspace_index_directory": ("workspace_code_search", lambda a: {**a, "action": "index"}),
+    "workspace_get_stats": ("workspace_code_search", lambda a: {"action": "stats"}),
+    # Smart Clipboard
+    "clipboard_get_text": ("clipboard_manage", lambda a: {"action": "get"}),
+    "clipboard_set_text": ("clipboard_manage", lambda a: {**a, "action": "set"}),
+    "clipboard_transform": ("clipboard_manage", lambda a: {"action": "format", **{k: v for k, v in a.items() if k in ("text", "update_clipboard")}}),
+    # PuTTY SSH
+    "ssh_list_saved_hosts": ("ssh_hosts", lambda a: {"action": "list"}),
+    "ssh_list_putty_registry_sessions": ("ssh_hosts", lambda a: {"action": "list_putty"}),
+    "ssh_save_host": ("ssh_hosts", lambda a: {k: v for k, v in a.items() if k != "clear_password"} | {"action": "save"}),
+    "ssh_open_putty_window": ("ssh_hosts", lambda a: {("alias" if k == "host_or_alias" else k): v for k, v in a.items()} | {"action": "open_putty"}),
+    # Mammouth Code CLI
+    "mammouth_code_status": ("mammouth_code", lambda a: {"action": "status"}),
+    "get_mammouth_code_status": ("mammouth_code", lambda a: {"action": "status"}),
+    "mammouth_code_install_or_update": ("mammouth_code", lambda a: {"action": "install"}),
+    "install_or_update_mammouth_code": ("mammouth_code", lambda a: {"action": "install"}),
+    "mammouth_code_sync_mcp": ("mammouth_code", lambda a: {**a, "action": "sync_mcp"}),
+    "sync_opencode_mcp_config": ("mammouth_code", lambda a: {**a, "action": "sync_mcp"}),
+    "mammouth_code_launch_terminal": ("mammouth_code", lambda a: {k: v for k, v in a.items() if k != "preferred_terminal"} | {"action": "launch_terminal"}),
+    "launch_mammouth_terminal": ("mammouth_code", lambda a: {k: v for k, v in a.items() if k != "preferred_terminal"} | {"action": "launch_terminal"}),
+    "mammouth_code_run_task": ("mammouth_code", lambda a: {k: v for k, v in a.items() if k != "task_prompt"} | {"action": "run_task", "prompt": str(a.get("prompt") or a.get("task_prompt") or "")}),
+    "run_mammouth_task": ("mammouth_code", lambda a: {k: v for k, v in a.items() if k != "task_prompt"} | {"action": "run_task", "prompt": str(a.get("prompt") or a.get("task_prompt") or "")}),
+    # Claude Code CLI
+    "claude_code_status": ("claude_code", lambda a: {k: v for k, v in a.items() if k == "workspace_path"} | {"action": "status"}),
+    "get_claude_code_status": ("claude_code", lambda a: {k: v for k, v in a.items() if k == "workspace_path"} | {"action": "status"}),
+    "claude_code_sync_mcp": ("claude_code", lambda a: {k: v for k, v in a.items() if k in ("workspace_path", "use_oauth")} | {"action": "sync_mcp"}),
+    "sync_claude_code_mcp": ("claude_code", lambda a: {k: v for k, v in a.items() if k in ("workspace_path", "use_oauth")} | {"action": "sync_mcp"}),
+    "claude_code_launch_terminal": ("claude_code", lambda a: {k: v for k, v in a.items() if k in ("workspace_path", "cloud", "continue_session", "prompt")} | {"action": "launch_terminal"}),
+    "launch_claude_terminal": ("claude_code", lambda a: {k: v for k, v in a.items() if k in ("workspace_path", "cloud", "continue_session", "prompt")} | {"action": "launch_terminal"}),
+    "claude_code_run_task": ("claude_code", lambda a: {k: v for k, v in a.items() if k in ("prompt", "workspace_path", "cloud", "timeout_seconds")} | {"action": "run_task", "prompt": str(a.get("prompt") or a.get("task_prompt") or "")}),
+    "run_claude_task": ("claude_code", lambda a: {k: v for k, v in a.items() if k in ("prompt", "workspace_path", "cloud", "timeout_seconds")} | {"action": "run_task", "prompt": str(a.get("prompt") or a.get("task_prompt") or "")}),
+    # Web Tools
+    "web_fetch_url": ("web_fetch", lambda a: {**a, "mode": "content"}),
+    "web_check_status": ("web_fetch", lambda a: {**a, "mode": "status"}),
+}
+
+
 async def defroster_execute_tool(
     tool_name: str,
     arguments: dict[str, Any] | None = None,
@@ -952,7 +1036,7 @@ async def defroster_execute_tool(
 
     Args:
         tool_name: Name of the Defroster tool to execute (e.g. 'desktop_get_screen_info', 'system_get_specs').
-        arguments: Key-value dictionary of arguments for the tool (e.g. {'x': 100, 'y': 200}).
+        arguments: Key-value dictionary of arguments for the tool.
     """
     if not tool_name or not isinstance(tool_name, str):
         return {"status": "error", "error": "Invalid or missing 'tool_name' parameter."}
@@ -963,21 +1047,29 @@ async def defroster_execute_tool(
 
     args = arguments if isinstance(arguments, dict) else {}
 
+    # Resolve retired legacy tool names transparently to canonical streamlined tools
+    exec_name = t_name
+    exec_args = args
+    if t_name in _LEGACY_TOOL_ALIASES:
+        canonical_name, mapper = _LEGACY_TOOL_ALIASES[t_name]
+        exec_name = canonical_name
+        exec_args = mapper(dict(args))
+
     cfg = load_config()
     server_cfg = cfg.get("server", {})
     profile_key = str(server_cfg.get("tool_profile", "mammouth_safe")).strip().lower()
     mods = cfg.get("modules", {})
 
-    # 1. Enforce active profile allowlist
+    # 1. Enforce active profile allowlist against canonical target tool
     if profile_key == "all":
         is_profile_allowed = True
     elif profile_key == "custom":
-        mod = _DEFROSTER_TOOL_TO_MODULE.get(t_name, "")
-        is_profile_allowed = t_name in ("defroster_catalog", "defroster_health_check") or mods.get(mod, {}).get("enabled", True)
+        mod = _DEFROSTER_TOOL_TO_MODULE.get(exec_name, "")
+        is_profile_allowed = exec_name in ("defroster_catalog", "defroster_health_check") or mods.get(mod, {}).get("enabled", True)
     else:
         profile_info = TOOL_PROFILES.get(profile_key, TOOL_PROFILES.get("mammouth_safe", {}))
         allowed_names = set(profile_info.get("tools", [])) | {"defroster_catalog", "defroster_health_check"}
-        is_profile_allowed = t_name in allowed_names
+        is_profile_allowed = exec_name in allowed_names
 
     if not is_profile_allowed:
         return {
@@ -987,7 +1079,7 @@ async def defroster_execute_tool(
         }
 
     # 2. Enforce module enabled status
-    mod_name = _DEFROSTER_TOOL_TO_MODULE.get(t_name)
+    mod_name = _DEFROSTER_TOOL_TO_MODULE.get(exec_name) or _DEFROSTER_TOOL_TO_MODULE.get(t_name)
     if mod_name and mod_name != "core":
         if not mods.get(mod_name, {}).get("enabled", True):
             return {
@@ -997,7 +1089,7 @@ async def defroster_execute_tool(
             }
 
     try:
-        call_res = await mcp.call_tool(t_name, args)
+        call_res = await mcp.call_tool(exec_name, exec_args)
         if hasattr(call_res, "is_error") and call_res.is_error:
             err_msg = ""
             if hasattr(call_res, "content") and call_res.content:
@@ -1020,150 +1112,129 @@ async def defroster_execute_tool(
         return {"status": "error", "tool": t_name, "error": f"Execution failed: {err}"}
 
 
+STREAMLINED_MODULE_TOOL_COUNTS: dict[str, int] = {
+    "memory": 3,
+    "tasks_kanban": 1,
+    "task_scheduler": 2,
+    "file_ops": 5,
+    "shell_processes": 3,
+    "putty_ssh": 3,
+    "system_monitor": 3,
+    "screen_capture": 2,
+    "web_tools": 1,
+    "mammouth_code": 1,
+    "claude_code": 1,
+    "desktop_input": 3,
+    "google_drive": 4,
+    "browser_agent": 5,
+    "workspace_memory": 1,
+    "smart_clipboard": 1,
+}
+CORE_TOOL_COUNT = 3
+
+
+def get_streamlined_tool_counts() -> tuple[dict[str, int], int]:
+    """Return canonical per-module tool counts and total registered tool count (39 module + 3 core = 42)."""
+    counts = dict(STREAMLINED_MODULE_TOOL_COUNTS)
+    return counts, CORE_TOOL_COUNT + sum(counts.values())
+
+
+_registered_tool_names: set[str] = set()
+
+
 def register_active_tools():
-    """Register tools dynamically based on enabled modules in config.json."""
-    mcp.tool()(defroster_catalog)
-    mcp.tool()(defroster_health_check)
-    mcp.tool()(defroster_execute_tool)
+    """Register newly enabled streamlined canonical tools; safe to call again on an in-process restart."""
+
+    def register(name=None):
+        def decorator(fn):
+            tool_name = name or fn.__name__
+            if tool_name not in _registered_tool_names:
+                if name is None:
+                    mcp.tool()(fn)
+                else:
+                    mcp.tool(name=name)(fn)
+                _registered_tool_names.add(tool_name)
+            return fn
+        return decorator
+
+    register()(defroster_catalog)
+    register()(defroster_health_check)
+    register()(defroster_execute_tool)
     cfg = load_config()
     mods = cfg.get("modules", {})
 
     if mods.get("memory", {}).get("enabled", True):
-        mcp.tool()(require_module("memory")(memory_save))
-        mcp.tool()(require_module("memory")(memory_recall))
-        mcp.tool()(require_module("memory")(memory_get))
-        mcp.tool()(require_module("memory")(memory_delete))
-        mcp.tool()(require_module("memory")(memory_list))
+        register(name="memory_save")(require_module("memory")(memory_save_clean))
+        register(name="memory_recall")(require_module("memory")(memory_recall_clean))
+        register(name="memory_delete")(require_module("memory")(memory_delete_clean))
 
     if mods.get("tasks_kanban", {}).get("enabled", True):
-        mcp.tool()(require_module("tasks_kanban")(task_create))
-        mcp.tool()(require_module("tasks_kanban")(task_update))
-        mcp.tool()(require_module("tasks_kanban")(task_list))
-        mcp.tool()(require_module("tasks_kanban")(task_delete))
+        register()(require_module("tasks_kanban")(task_board))
 
     if mods.get("task_scheduler", {}).get("enabled", True):
-        mcp.tool()(require_module("task_scheduler")(task_schedule_create))
-        mcp.tool()(require_module("task_scheduler")(task_schedule_list))
-        mcp.tool()(require_module("task_scheduler")(task_schedule_control))
-        mcp.tool()(require_module("task_scheduler")(task_schedule_delete))
-        mcp.tool()(require_module("task_scheduler")(task_schedule_get_presets))
-        mcp.tool()(require_module("task_scheduler")(task_schedule_get_history))
+        register()(require_module("task_scheduler")(task_schedule_create))
+        register()(require_module("task_scheduler")(task_schedule_manage))
 
     if mods.get("file_ops", {}).get("enabled", True):
-        mcp.tool()(require_module("file_ops")(file_read))
-        mcp.tool()(require_module("file_ops")(file_write))
-        mcp.tool()(require_module("file_ops")(file_replace_chunk))
-        mcp.tool()(require_module("file_ops")(file_search_text))
-        mcp.tool()(require_module("file_ops")(directory_list))
-        mcp.tool()(require_module("file_ops")(directory_tree))
+        register(name="file_read")(require_module("file_ops")(file_read_clean))
+        register(name="file_write")(require_module("file_ops")(file_write_clean))
+        register(name="file_replace_chunk")(require_module("file_ops")(file_replace_chunk_clean))
+        register(name="file_search_text")(require_module("file_ops")(file_search_text_clean))
+        register(name="directory_list")(require_module("file_ops")(directory_list_clean))
 
     if mods.get("shell_processes", {}).get("enabled", True):
-        mcp.tool()(require_module("shell_processes")(local_exec_command))
-        mcp.tool()(require_module("shell_processes")(command_run))
-        mcp.tool()(require_module("shell_processes")(powershell_exec))
-        mcp.tool()(require_module("shell_processes")(cmd_exec))
-        mcp.tool()(require_module("shell_processes")(desktop_open))
-        mcp.tool()(require_module("shell_processes")(process_start_background))
-        mcp.tool()(require_module("shell_processes")(process_list_background))
-        mcp.tool()(require_module("shell_processes")(process_get_output))
-        mcp.tool()(require_module("shell_processes")(process_kill_background))
-        mcp.tool()(require_module("shell_processes")(process_cancel))
-        mcp.tool()(require_module("shell_processes")(process_tail_output))
+        register(name="powershell_exec")(require_module("shell_processes")(powershell_exec_clean))
+        register()(require_module("shell_processes")(desktop_open))
+        register()(require_module("shell_processes")(process_manage))
 
     if mods.get("putty_ssh", {}).get("enabled", True):
-        mcp.tool()(require_module("putty_ssh")(ssh_exec_command))
-        mcp.tool()(require_module("putty_ssh")(ssh_open_putty_window))
-        mcp.tool()(require_module("putty_ssh")(ssh_transfer_file))
-        mcp.tool()(require_module("putty_ssh")(ssh_list_saved_hosts))
-        mcp.tool()(require_module("putty_ssh")(ssh_save_host))
-        mcp.tool()(require_module("putty_ssh")(ssh_list_putty_registry_sessions))
+        register()(require_module("putty_ssh")(ssh_hosts))
+        register()(require_module("putty_ssh")(ssh_exec_command))
+        register()(require_module("putty_ssh")(ssh_transfer_file))
 
     if mods.get("system_monitor", {}).get("enabled", True):
-        mcp.tool()(require_module("system_monitor")(system_get_specs))
-        mcp.tool()(require_module("system_monitor")(system_get_processes))
-        mcp.tool()(require_module("system_monitor")(system_get_gpu_info))
-        mcp.tool()(require_module("system_monitor")(system_get_event_logs))
-        mcp.tool()(require_module("system_monitor")(system_list_event_channels))
+        register(name="system_get_specs")(require_module("system_monitor")(system_specs_dispatch))
+        register()(require_module("system_monitor")(system_get_processes))
+        register()(require_module("system_monitor")(system_event_logs))
 
     if mods.get("screen_capture", {}).get("enabled", True):
-        mcp.tool()(require_module("screen_capture")(screen_capture))
-        mcp.tool()(require_module("screen_capture")(screen_list_monitors))
-        mcp.tool()(require_module("screen_capture")(screen_list_windows))
-        mcp.tool()(require_module("screen_capture")(screen_capture_active_window))
-        mcp.tool()(require_module("screen_capture")(screen_capture_window))
-        mcp.tool()(require_module("screen_capture")(screen_set_tracked_window))
-        mcp.tool()(require_module("screen_capture")(screen_get_tracked_window))
+        register(name="screen_capture")(require_module("screen_capture")(screen_capture_dispatch))
+        register()(require_module("screen_capture")(screen_windows))
         # screen_grant_consent / screen_revoke_consent are intentionally NOT exposed as MCP tools:
         # consent must come from the human via the GUI, never from the model itself.
 
     if mods.get("web_tools", {}).get("enabled", True):
-        mcp.tool()(require_module("web_tools")(web_fetch_url))
-        mcp.tool()(require_module("web_tools")(web_check_status))
+        register()(require_module("web_tools")(web_fetch))
 
     if mods.get("mammouth_code", {}).get("enabled", True):
-        mcp.tool()(require_module("mammouth_code")(mammouth_code_status))
-        mcp.tool()(require_module("mammouth_code")(mammouth_code_launch_terminal))
-        mcp.tool()(require_module("mammouth_code")(mammouth_code_run_task))
-        mcp.tool()(require_module("mammouth_code")(mammouth_code_install_or_update))
-        mcp.tool()(require_module("mammouth_code")(mammouth_code_sync_mcp))
+        register(name="mammouth_code")(require_module("mammouth_code")(mammouth_code_dispatch))
 
     if mods.get("claude_code", {}).get("enabled", True):
-        mcp.tool(name="claude_code_status")(require_module("claude_code")(claude_code_status))
-        mcp.tool(name="claude_code_launch_terminal")(require_module("claude_code")(claude_code_launch_terminal))
-        mcp.tool(name="claude_code_run_task")(require_module("claude_code")(claude_code_run_task))
-        mcp.tool(name="claude_code_sync_mcp")(require_module("claude_code")(claude_code_sync_mcp))
+        register(name="claude_code")(require_module("claude_code")(claude_code_dispatch))
 
     if mods.get("desktop_input", {}).get("enabled", True):
-        mcp.tool()(require_module("desktop_input")(desktop_get_screen_info))
-        mcp.tool()(require_module("desktop_input")(mouse_move))
-        mcp.tool()(require_module("desktop_input")(mouse_click))
-        mcp.tool()(require_module("desktop_input")(mouse_drag))
-        mcp.tool()(require_module("desktop_input")(mouse_scroll))
-        mcp.tool()(require_module("desktop_input")(mouse_get_position))
-        mcp.tool()(require_module("desktop_input")(keyboard_type))
-        mcp.tool()(require_module("desktop_input")(keyboard_press))
-        mcp.tool()(require_module("desktop_input")(keyboard_hotkey))
+        register()(require_module("desktop_input")(desktop_get_screen_info))
+        register()(require_module("desktop_input")(desktop_mouse))
+        register()(require_module("desktop_input")(desktop_keyboard))
 
     if mods.get("google_drive", {}).get("enabled", True):
-        mcp.tool()(require_module("google_drive")(gdrive_status))
-        mcp.tool()(require_module("google_drive")(gdrive_list_files))
-        mcp.tool()(require_module("google_drive")(gdrive_search_files))
-        mcp.tool()(require_module("google_drive")(gdrive_get_metadata))
-        mcp.tool()(require_module("google_drive")(gdrive_read_file))
-        mcp.tool()(require_module("google_drive")(gdrive_download_to_workspace))
-        mcp.tool()(require_module("google_drive")(gdrive_upload_from_workspace))
-        mcp.tool()(require_module("google_drive")(gdrive_write_file))
-        mcp.tool()(require_module("google_drive")(gdrive_update_file))
-        mcp.tool()(require_module("google_drive")(gdrive_create_folder))
-        mcp.tool()(require_module("google_drive")(gdrive_delete_file))
+        register()(require_module("google_drive")(gdrive_list))
+        register()(require_module("google_drive")(gdrive_read))
+        register()(require_module("google_drive")(gdrive_write))
+        register()(require_module("google_drive")(gdrive_manage))
 
     if mods.get("browser_agent", {}).get("enabled", True):
-        mcp.tool()(require_module("browser_agent")(browser_navigate))
-        mcp.tool()(require_module("browser_agent")(browser_snapshot))
-        mcp.tool()(require_module("browser_agent")(browser_screenshot))
-        mcp.tool()(require_module("browser_agent")(browser_click))
-        mcp.tool()(require_module("browser_agent")(browser_fill))
-        mcp.tool()(require_module("browser_agent")(browser_press_key))
-        mcp.tool()(require_module("browser_agent")(browser_hover))
-        mcp.tool()(require_module("browser_agent")(browser_scroll))
-        mcp.tool()(require_module("browser_agent")(browser_get_content))
-        mcp.tool()(require_module("browser_agent")(browser_evaluate))
-        mcp.tool()(require_module("browser_agent")(browser_tabs))
-        mcp.tool()(require_module("browser_agent")(browser_status))
-        mcp.tool()(require_module("browser_agent")(browser_close))
-        mcp.tool()(require_module("browser_agent")(browser_restart))
-        mcp.tool()(require_module("browser_agent")(browser_list_browsers))
+        register()(require_module("browser_agent")(browser_navigate))
+        register()(require_module("browser_agent")(browser_inspect))
+        register()(require_module("browser_agent")(browser_interact))
+        register()(require_module("browser_agent")(browser_evaluate))
+        register()(require_module("browser_agent")(browser_session))
 
     if mods.get("workspace_memory", {}).get("enabled", True):
-        mcp.tool()(require_module("workspace_memory")(workspace_index_directory))
-        mcp.tool()(require_module("workspace_memory")(workspace_search))
-        mcp.tool()(require_module("workspace_memory")(workspace_find_symbols))
-        mcp.tool()(require_module("workspace_memory")(workspace_get_stats))
+        register()(require_module("workspace_memory")(workspace_code_search))
 
     if mods.get("smart_clipboard", {}).get("enabled", True):
-        mcp.tool()(require_module("smart_clipboard")(clipboard_get_text))
-        mcp.tool()(require_module("smart_clipboard")(clipboard_set_text))
-        mcp.tool()(require_module("smart_clipboard")(clipboard_transform))
+        register()(require_module("smart_clipboard")(clipboard_manage))
 
 
 register_active_tools()
@@ -1176,33 +1247,32 @@ _DEFROSTER_TOOL_TO_MODULE: dict[str, str] = {
     "defroster_catalog": "core",
     "defroster_health_check": "core",
     "defroster_execute_tool": "core",
-    "process_cancel": "shell_processes",
-    "process_tail_output": "shell_processes",
-    "task_schedule_get_history": "task_scheduler",
+    # Canonical streamlined tools + legacy alias routing
     "memory_save": "memory", "memory_recall": "memory", "memory_get": "memory", "memory_delete": "memory", "memory_list": "memory",
-    "task_create": "tasks_kanban", "task_update": "tasks_kanban", "task_list": "tasks_kanban", "task_delete": "tasks_kanban",
-    "task_schedule_create": "task_scheduler", "task_schedule_list": "task_scheduler", "task_schedule_control": "task_scheduler", "task_schedule_delete": "task_scheduler", "task_schedule_get_presets": "task_scheduler",
+    "task_board": "tasks_kanban", "task_create": "tasks_kanban", "task_update": "tasks_kanban", "task_list": "tasks_kanban", "task_delete": "tasks_kanban",
+    "task_schedule_create": "task_scheduler", "task_schedule_manage": "task_scheduler", "task_schedule_list": "task_scheduler", "task_schedule_control": "task_scheduler", "task_schedule_delete": "task_scheduler", "task_schedule_get_presets": "task_scheduler", "task_schedule_get_history": "task_scheduler",
     "file_read": "file_ops", "file_write": "file_ops", "file_replace_chunk": "file_ops", "file_search_text": "file_ops", "directory_list": "file_ops", "directory_tree": "file_ops",
-    "local_exec_command": "shell_processes", "command_run": "shell_processes", "powershell_exec": "shell_processes", "cmd_exec": "shell_processes", "desktop_open": "shell_processes", "process_start_background": "shell_processes", "process_list_background": "shell_processes", "process_get_output": "shell_processes", "process_kill_background": "shell_processes",
-    "ssh_exec_command": "putty_ssh", "ssh_open_putty_window": "putty_ssh", "ssh_transfer_file": "putty_ssh", "ssh_list_saved_hosts": "putty_ssh", "ssh_save_host": "putty_ssh", "ssh_list_putty_registry_sessions": "putty_ssh",
-    "system_get_specs": "system_monitor", "system_get_processes": "system_monitor", "system_get_gpu_info": "system_monitor", "system_get_event_logs": "system_monitor", "system_list_event_channels": "system_monitor",
-    "screen_capture": "screen_capture", "screen_list_monitors": "screen_capture", "screen_list_windows": "screen_capture", "screen_capture_active_window": "screen_capture", "screen_capture_window": "screen_capture", "screen_set_tracked_window": "screen_capture", "screen_get_tracked_window": "screen_capture",
-    "web_fetch_url": "web_tools", "web_check_status": "web_tools",
-    "mammouth_code_status": "mammouth_code", "get_mammouth_code_status": "mammouth_code", "launch_mammouth_terminal": "mammouth_code", "run_mammouth_task": "mammouth_code", "install_or_update_mammouth_code": "mammouth_code", "sync_opencode_mcp_config": "mammouth_code",
-    "claude_code_status": "claude_code", "get_claude_code_status": "claude_code", "launch_claude_terminal": "claude_code", "claude_code_launch_terminal": "claude_code", "run_claude_task": "claude_code", "claude_code_run_task": "claude_code", "sync_claude_code_mcp": "claude_code", "claude_code_sync_mcp": "claude_code",
-    "desktop_get_screen_info": "desktop_input", "mouse_move": "desktop_input", "mouse_click": "desktop_input", "mouse_drag": "desktop_input", "mouse_scroll": "desktop_input", "mouse_get_position": "desktop_input", "keyboard_type": "desktop_input", "keyboard_press": "desktop_input", "keyboard_hotkey": "desktop_input",
-    "gdrive_status": "google_drive", "gdrive_list_files": "google_drive", "gdrive_search_files": "google_drive", "gdrive_get_metadata": "google_drive", "gdrive_read_file": "google_drive", "gdrive_download_to_workspace": "google_drive", "gdrive_upload_from_workspace": "google_drive", "gdrive_write_file": "google_drive", "gdrive_update_file": "google_drive", "gdrive_create_folder": "google_drive", "gdrive_delete_file": "google_drive",
-    "browser_navigate": "browser_agent", "browser_snapshot": "browser_agent", "browser_screenshot": "browser_agent", "browser_click": "browser_agent", "browser_fill": "browser_agent", "browser_press_key": "browser_agent", "browser_hover": "browser_agent", "browser_scroll": "browser_agent", "browser_get_content": "browser_agent", "browser_evaluate": "browser_agent", "browser_tabs": "browser_agent", "browser_status": "browser_agent", "browser_close": "browser_agent", "browser_restart": "browser_agent", "browser_list_browsers": "browser_agent",
-    "workspace_index_directory": "workspace_memory", "workspace_search": "workspace_memory", "workspace_find_symbols": "workspace_memory", "workspace_get_stats": "workspace_memory",
-    "clipboard_get_text": "smart_clipboard", "clipboard_set_text": "smart_clipboard", "clipboard_transform": "smart_clipboard"
+    "powershell_exec": "shell_processes", "desktop_open": "shell_processes", "process_manage": "shell_processes", "local_exec_command": "shell_processes", "command_run": "shell_processes", "cmd_exec": "shell_processes", "process_start_background": "shell_processes", "process_list_background": "shell_processes", "process_get_output": "shell_processes", "process_kill_background": "shell_processes", "process_cancel": "shell_processes", "process_tail_output": "shell_processes",
+    "ssh_hosts": "putty_ssh", "ssh_exec_command": "putty_ssh", "ssh_transfer_file": "putty_ssh", "ssh_open_putty_window": "putty_ssh", "ssh_list_saved_hosts": "putty_ssh", "ssh_save_host": "putty_ssh", "ssh_list_putty_registry_sessions": "putty_ssh",
+    "system_get_specs": "system_monitor", "system_get_processes": "system_monitor", "system_event_logs": "system_monitor", "system_get_gpu_info": "system_monitor", "system_get_event_logs": "system_monitor", "system_list_event_channels": "system_monitor",
+    "screen_capture": "screen_capture", "screen_windows": "screen_capture", "screen_list_monitors": "screen_capture", "screen_list_windows": "screen_capture", "screen_capture_active_window": "screen_capture", "screen_capture_window": "screen_capture", "screen_set_tracked_window": "screen_capture", "screen_get_tracked_window": "screen_capture",
+    "web_fetch": "web_tools", "web_fetch_url": "web_tools", "web_check_status": "web_tools",
+    "mammouth_code": "mammouth_code", "mammouth_code_status": "mammouth_code", "get_mammouth_code_status": "mammouth_code", "launch_mammouth_terminal": "mammouth_code", "mammouth_code_launch_terminal": "mammouth_code", "run_mammouth_task": "mammouth_code", "mammouth_code_run_task": "mammouth_code", "install_or_update_mammouth_code": "mammouth_code", "mammouth_code_install_or_update": "mammouth_code", "sync_opencode_mcp_config": "mammouth_code", "mammouth_code_sync_mcp": "mammouth_code",
+    "claude_code": "claude_code", "claude_code_status": "claude_code", "get_claude_code_status": "claude_code", "launch_claude_terminal": "claude_code", "claude_code_launch_terminal": "claude_code", "run_claude_task": "claude_code", "claude_code_run_task": "claude_code", "sync_claude_code_mcp": "claude_code", "claude_code_sync_mcp": "claude_code",
+    "desktop_get_screen_info": "desktop_input", "desktop_mouse": "desktop_input", "desktop_keyboard": "desktop_input", "mouse_move": "desktop_input", "mouse_click": "desktop_input", "mouse_drag": "desktop_input", "mouse_scroll": "desktop_input", "mouse_get_position": "desktop_input", "keyboard_type": "desktop_input", "keyboard_press": "desktop_input", "keyboard_hotkey": "desktop_input",
+    "gdrive_list": "google_drive", "gdrive_read": "google_drive", "gdrive_write": "google_drive", "gdrive_manage": "google_drive", "gdrive_status": "google_drive", "gdrive_list_files": "google_drive", "gdrive_search_files": "google_drive", "gdrive_get_metadata": "google_drive", "gdrive_read_file": "google_drive", "gdrive_download_to_workspace": "google_drive", "gdrive_upload_from_workspace": "google_drive", "gdrive_write_file": "google_drive", "gdrive_update_file": "google_drive", "gdrive_create_folder": "google_drive", "gdrive_delete_file": "google_drive",
+    "browser_navigate": "browser_agent", "browser_inspect": "browser_agent", "browser_interact": "browser_agent", "browser_evaluate": "browser_agent", "browser_session": "browser_agent", "browser_snapshot": "browser_agent", "browser_screenshot": "browser_agent", "browser_click": "browser_agent", "browser_fill": "browser_agent", "browser_press_key": "browser_agent", "browser_hover": "browser_agent", "browser_scroll": "browser_agent", "browser_get_content": "browser_agent", "browser_tabs": "browser_agent", "browser_status": "browser_agent", "browser_close": "browser_agent", "browser_restart": "browser_agent", "browser_list_browsers": "browser_agent",
+    "workspace_code_search": "workspace_memory", "workspace_index_directory": "workspace_memory", "workspace_search": "workspace_memory", "workspace_find_symbols": "workspace_memory", "workspace_get_stats": "workspace_memory",
+    "clipboard_manage": "smart_clipboard", "clipboard_get_text": "smart_clipboard", "clipboard_set_text": "smart_clipboard", "clipboard_transform": "smart_clipboard",
 }
 
 
 def _sanitize_schema_dict(schema: dict[str, Any]) -> None:
-    """Recursively repair OpenAPI/JSON schema dictionary."""
+    """Recursively repair OpenAPI/JSON schema dictionary and strip redundant Pydantic title bloat."""
     if not isinstance(schema, dict):
         return
 
+    schema.pop("title", None)
     if "type" not in schema:
         schema["type"] = "object"
 
@@ -1215,6 +1285,8 @@ def _sanitize_schema_dict(schema: dict[str, Any]) -> None:
             props[prop_name] = {"type": "string"}
             continue
 
+        prop_val.pop("title", None)
+
         if not prop_val:
             prop_val["type"] = "string"
             continue
@@ -1223,14 +1295,15 @@ def _sanitize_schema_dict(schema: dict[str, Any]) -> None:
             cleaned_anyof = []
             for sub in prop_val["anyOf"]:
                 if isinstance(sub, dict):
-                    if not sub:
+                    sub_copy = dict(sub)
+                    sub_copy.pop("title", None)
+                    if not sub_copy:
                         cleaned_anyof.append({"type": "string"})
-                    elif "type" not in sub and "$ref" not in sub:
-                        sub_copy = dict(sub)
+                    elif "type" not in sub_copy and "$ref" not in sub_copy:
                         sub_copy["type"] = "string"
                         cleaned_anyof.append(sub_copy)
                     else:
-                        cleaned_anyof.append(sub)
+                        cleaned_anyof.append(sub_copy)
             prop_val["anyOf"] = cleaned_anyof
 
         if "type" not in prop_val and "anyOf" not in prop_val and "oneOf" not in prop_val and "$ref" not in prop_val:
@@ -1239,82 +1312,143 @@ def _sanitize_schema_dict(schema: dict[str, Any]) -> None:
 
 _MULTILINGUAL_TOOL_HINTS: dict[str, str] = {
     # Core & Catalog
-    "defroster_catalog": "Tool-Katalog, Werkzeuge auflisten, Profil wechseln, catalogue outils, list tools",
-    "defroster_health_check": "Selbsttest, Systemdiagnose, Gesundheitsprüfung, Abhängigkeiten prüfen, self test, health check, diagnostics",
-    "defroster_execute_tool": "Werkzeug ausführen, Tool aufrufen, Screen-Capture ausführen, Klick ausführen, Tastatur tippen, Desktop steuern, execute tool, call tool, run defroster tool, invoke tool",
-    "desktop_get_screen_info": "Bildschirmauflösung abrufen, Monitorgröße ermitteln, screen info, display resolution",
-    "process_cancel": "Prozess abbrechen, Hintergrundprozess stoppen, cancel process, abort task",
-    "process_tail_output": "Prozess-Logs lesen, Ausgabe paginieren, tail output, read log lines",
-    "task_schedule_get_history": "Ausführungsprotokoll, Aufgabenhistorie, Task-Logs, execution history, run logs",
+    "defroster_catalog": "Katalog, Profil wechseln, list tools",
+    "defroster_health_check": "Selbsttest, Systemdiagnose, health check",
+    "defroster_execute_tool": "Werkzeug ausführen, execute tool",
     # File Operations
-    "directory_list": "Verzeichnis auflisten, Ordnerinhalt, Dateien anzeigen, Ordner durchsuchen, lister répertoire, list directory",
-    "directory_tree": "Verzeichnisbaum, Ordnerstruktur rekursiv auflisten, arborescence dossiers",
-    "file_read": "Datei lesen, Dateiinhalt anzeigen, Textdatei öffnen, Datei laden, lire fichier, read file",
-    "file_write": "Datei schreiben, Datei erstellen, Datei speichern, Inhalt sichern, écrire fichier, write file",
-    "file_replace_chunk": "Code-Block ersetzen, Datei bearbeiten, Text ersetzen, remplacer code",
-    "file_search_text": "Dateien durchsuchen, Textsuche, Grep, Code suchen, chercher texte, search files",
-    # Browser Automation (Edge / Chrome via Playwright)
-    "browser_navigate": "Browser-Automatisierung, Webseite öffnen, URL aufrufen, Browser steuern, naviguer page web, open url, launch browser",
-    "browser_snapshot": "Browser-Automatisierung, Webseite einlesen, interaktive Elemente erkennen, DOM Snapshot, instantané page",
-    "browser_click": "Browser-Automatisierung, Klick, Button anklicken, Link öffnen, Element klicken, cliquer bouton, click element",
-    "browser_fill": "Browser-Automatisierung, Formular ausfüllen, Text eingeben, Tippen, remplir formulaire, type input, form fill",
-    "browser_screenshot": "Browser Screenshot, Bildschirmfoto Webseite, Browser erfassen, capture page web",
-    "browser_press_key": "Taste drücken, Tastatur Eingabe, Enter Escape senden, appuyer touche",
-    "browser_hover": "Mauszeiger bewegen, Hover, Über Element schweben, survoler élément",
-    "browser_scroll": "Seite scrollen, nach unten scrollen, faire défiler page",
-    "browser_get_content": "HTML Quelltext auslesen, Text der Webseite abrufen, contenu page",
-    "browser_evaluate": "JavaScript ausführen, Skript im Browser starten, exécuter javascript",
-    "browser_tabs": "Browser Tabs auflisten, Tab wechseln, onglets navigateur",
-    "browser_status": "Browser Status prüfen, etat navigateur",
-    "browser_close": "Browser schließen, fermer navigateur",
-    "browser_restart": "Browser neu starten, redémarrer navigateur",
-    "browser_list_browsers": "Installierte Browser auflisten, Edge Chrome finden",
-    # Screen & Desktop Vision
-    "screen_capture": "Screenshot aufnehmen, Bildschirmfoto, Monitor erfassen, Desktop Vision, capture écran",
-    "screen_list_monitors": "Monitore auflisten, Bildschirme anzeigen",
-    "screen_list_windows": "Offene Fenster auflisten, Anwendungsfenster anzeigen, lister fenêtres",
-    "screen_capture_active_window": "Aktives Fenster fotografieren, Screenshot vom Fenster",
-    "screen_capture_window": "Fenster Screenshot aufnehmen",
-    "mouse_click": "Mausklick, Desktop Klick, Koordinate anklicken, clic souris",
-    "mouse_move": "Mauszeiger bewegen, Cursor bewegen, déplacer souris",
-    "mouse_drag": "Maus ziehen, Drag and Drop",
-    "mouse_scroll": "Mausrad scrollen",
-    "mouse_get_position": "Mausposition ermitteln",
-    "keyboard_type": "Tastatur tippen, Text schreiben, Tastatur-Eingabe, taper clavier",
-    "keyboard_press": "Taste drücken, Sondertaste senden",
-    "keyboard_hotkey": "Tastenkombination drücken, Hotkey ausführen",
-    # Shell & System
-    "command_run": "Befehl ausführen, Kommando starten, Shell CMD, Terminal, exécuter commande, run command",
-    "powershell_exec": "PowerShell ausführen, Skript starten, PS Befehl, execute powershell",
-    "desktop_open": "Datei öffnen, URL öffnen, App starten, ouvrir fichier, open file, launch app",
-    "local_exec_command": "Lokalen Befehl ausführen, Kommandozeile",
-    "system_get_specs": "System-Informationen, Hardware-Spezifikationen, CPU RAM Festplatte, spécifications système",
-    "system_get_processes": "Prozesse auflisten, Taskmanager, laufende Programme, processus système",
-    "system_get_gpu_info": "Grafikkarte GPU Details abrufen",
-    "system_get_event_logs": "Windows Ereignisanzeige Event Logs auslesen",
-    # Memory & Tasks
-    "memory_save": "Gedächtnis speichern, Notiz merken, Wissen ablegen, Langzeitgedächtnis, mémoriser note",
-    "memory_recall": "Gedächtnis durchsuchen, Notiz abrufen, Erinnerung finden, chercher mémoire",
-    "memory_get": "Notiz nach Schlüssel abrufen",
-    "memory_delete": "Gedächtniseintrag löschen",
-    "memory_list": "Alle gespeicherten Notizen auflisten",
-    "task_create": "Aufgabe erstellen, Task Kanban anlegen, créer tâche",
-    "task_update": "Aufgabe aktualisieren, Status ändern",
-    "task_list": "Aufgaben auflisten, Taskliste anzeigen, lister tâches",
-    "task_delete": "Aufgabe löschen",
-    "clipboard_get_text": "Zwischenablage lesen, Clipboard auslesen, kopierten Text holen, lire presse-papiers",
-    "clipboard_set_text": "In Zwischenablage kopieren, Text in Clipboard schreiben",
-    "clipboard_transform": "Zwischenablage umwandeln mit KI",
-    # Claude Code & Cloud Sessions
+    "file_read": "Datei lesen, lire fichier",
+    "file_write": "Datei schreiben, speichern",
+    "file_replace_chunk": "Code ersetzen, bearbeiten",
+    "file_search_text": "Dateien durchsuchen, Grep",
+    "directory_list": "Verzeichnis, Ordnerbaum",
+    # Shell & Processes
+    "powershell_exec": "PowerShell, CMD, Befehl ausführen",
+    "desktop_open": "Datei/URL/App öffnen, launch app",
+    "process_manage": "Hintergrundprozess, Logs, kill",
+    # Browser Automation
+    "browser_navigate": "Browser-Automatisierung, Webseite öffnen, URL aufrufen, naviguer page web",
+    "browser_inspect": "DOM Snapshot, Screenshot, HTML",
+    "browser_interact": "Klicken, Formular füllen, Scrollen",
+    "browser_evaluate": "JavaScript im Browser ausführen",
+    "browser_session": "Browser Status, Tabs, Restart",
+    # Screen & Desktop Input
+    "screen_capture": "Screenshot, Bildschirmfoto, Vision",
+    "screen_windows": "Fenster/Monitore auflisten",
+    "desktop_get_screen_info": "Auflösung, Mausposition",
+    "desktop_mouse": "Mausklick, bewegen, ziehen, scrollen",
+    "desktop_keyboard": "Tastatur tippen, Taste, Hotkey",
+    # System, Memory & Clipboard
+    "system_get_specs": "Hardware, CPU, RAM, GPU Infos",
+    "system_get_processes": "Prozesse auflisten, Taskmanager",
+    "system_event_logs": "Windows Event Logs, Kanäle",
+    "memory_save": "Notiz speichern, Langzeitgedächtnis",
+    "memory_recall": "Gedächtnis suchen, abrufen",
+    "memory_delete": "Gedächtnis löschen",
+    "clipboard_manage": "Zwischenablage lesen, setzen",
+    # Tasks, Scheduler, Workspace, Drive, SSH, Coding & Web
+    "task_board": "Kanban Aufgabe verwalten",
+    "task_schedule_create": "Zeitplan, Cron erstellen",
+    "task_schedule_manage": "Zeitplan Pause, Resume, Trigger, Verlauf",
+    "gdrive_list": "Google Drive suchen, auflisten",
+    "gdrive_read": "Google Drive lesen, laden",
+    "gdrive_write": "Google Drive schreiben, hochladen",
+    "gdrive_manage": "Google Drive Status, löschen",
+    "workspace_code_search": "Code-Suche, Symbole, Index",
+    "ssh_hosts": "SSH Hosts, PuTTY Sessions",
+    "ssh_exec_command": "SSH Remote-Befehl ausführen",
+    "ssh_transfer_file": "SSH Datei SFTP/SCP übertragen",
+    "mammouth_code": "Mammouth Code CLI Agent",
+    "claude_code": "Claude Code CLI, Cloud Sessions",
+    "web_fetch": "URL lesen, HTTP Status prüfen",
+    # Legacy aliases preserved for internal hint lookups
     "claude_code_status": "Claude Code Status prüfen, Claude CLI Version, Cloud Session MCP Bridge",
-    "get_claude_code_status": "Claude Code Status prüfen, Claude CLI Version, Cloud Session MCP Bridge",
     "claude_code_sync_mcp": "Claude Code .mcp.json synchronisieren, Claude Cloud Session verbinden, MCP Server für Claude",
-    "sync_claude_code_mcp": "Claude Code .mcp.json synchronisieren, Claude Cloud Session verbinden, MCP Server für Claude",
     "claude_code_launch_terminal": "Claude Code Terminal öffnen, Claude Cloud starten, claude --cloud ausführen",
-    "launch_claude_terminal": "Claude Code Terminal öffnen, Claude Cloud starten, claude --cloud ausführen",
     "claude_code_run_task": "Claude Code Aufgabe ausführen, claude task headless",
-    "run_claude_task": "Claude Code Aufgabe ausführen, claude task headless",
 }
+
+
+def _hint(read_only: bool = False, destructive: bool = False, idempotent: bool = False, open_world: bool = False) -> dict:
+    """Build MCP tool annotation hints (destructive/idempotent hints only apply to non-read-only tools)."""
+    hints = {"readOnlyHint": read_only, "openWorldHint": open_world}
+    if not read_only:
+        hints["destructiveHint"] = destructive
+        hints["idempotentHint"] = idempotent
+    return hints
+
+
+# Behaviour hints per tool (MCP ToolAnnotations). Only advertised when server.expose_tool_annotations is true,
+# because strict MCP 2024-11-05 clients may not expect the field. Clients such as Claude use them to tell
+# read-only tools apart from destructive ones.
+_TOOL_ANNOTATION_HINTS: dict[str, dict] = {
+    # Local, read-only
+    "file_read": _hint(read_only=True),
+    "file_search_text": _hint(read_only=True),
+    "directory_list": _hint(read_only=True),
+    "workspace_code_search": _hint(read_only=True),
+    "system_get_specs": _hint(read_only=True),
+    "system_get_processes": _hint(read_only=True),
+    "system_event_logs": _hint(read_only=True),
+    "screen_capture": _hint(read_only=True),
+    "screen_windows": _hint(read_only=True),
+    "desktop_get_screen_info": _hint(read_only=True),
+    "memory_recall": _hint(read_only=True),
+    "ssh_hosts": _hint(read_only=True),
+    "defroster_health_check": _hint(read_only=True),
+    # Read-only, reaches outside the machine
+    "web_fetch": _hint(read_only=True, open_world=True),
+    "gdrive_list": _hint(read_only=True, open_world=True),
+    "gdrive_read": _hint(read_only=True, open_world=True),
+    "browser_inspect": _hint(read_only=True, open_world=True),
+    # Writes, but additive / non-destructive
+    "memory_save": _hint(),
+    "task_board": _hint(),
+    "task_schedule_create": _hint(),
+    "clipboard_manage": _hint(),
+    "defroster_catalog": _hint(idempotent=True),
+    "browser_navigate": _hint(open_world=True),
+    # Can modify or remove data, or act on the system
+    "file_write": _hint(destructive=True, idempotent=True),
+    "file_replace_chunk": _hint(destructive=True),
+    "memory_delete": _hint(destructive=True, idempotent=True),
+    "task_schedule_manage": _hint(destructive=True),
+    "powershell_exec": _hint(destructive=True, open_world=True),
+    "desktop_open": _hint(destructive=True, open_world=True),
+    "process_manage": _hint(destructive=True),
+    "desktop_mouse": _hint(destructive=True),
+    "desktop_keyboard": _hint(destructive=True),
+    "ssh_exec_command": _hint(destructive=True, open_world=True),
+    "ssh_transfer_file": _hint(destructive=True, open_world=True),
+    "gdrive_write": _hint(destructive=True, open_world=True),
+    "gdrive_manage": _hint(destructive=True, open_world=True),
+    "browser_interact": _hint(destructive=True, open_world=True),
+    "browser_evaluate": _hint(destructive=True, open_world=True),
+    "browser_session": _hint(destructive=True, open_world=True),
+    "mammouth_code": _hint(destructive=True, open_world=True),
+    "claude_code": _hint(destructive=True, open_world=True),
+    "defroster_execute_tool": _hint(destructive=True, open_world=True),
+}
+
+
+def _annotation_hints_for(tool_name: Any) -> dict | None:
+    """Return annotation hints for a tool when server.expose_tool_annotations is enabled, else None."""
+    if not tool_name or tool_name not in _TOOL_ANNOTATION_HINTS:
+        return None
+    try:
+        if not load_config().get("server", {}).get("expose_tool_annotations", False):
+            return None
+    except Exception:
+        return None
+    return dict(_TOOL_ANNOTATION_HINTS[tool_name])
+
+
+def _make_tool_annotations(hints: dict) -> Any:
+    """Build an mcp.types.ToolAnnotations instance, falling back to the plain dict."""
+    try:
+        from mcp.types import ToolAnnotations
+        return ToolAnnotations(**hints)
+    except Exception:
+        return dict(hints)
 
 
 def _sanitize_mcp_tool_schema(tool: Any) -> None:
@@ -1326,6 +1460,9 @@ def _sanitize_mcp_tool_schema(tool: Any) -> None:
         for k in ("output_schema", "outputSchema", "meta", "_meta", "title", "icons", "annotations", "execution"):
             tool.pop(k, None)
         t_name = tool.get("name")
+        _hints = _annotation_hints_for(t_name)
+        if _hints:
+            tool["annotations"] = _hints
         if t_name and t_name in _MULTILINGUAL_TOOL_HINTS:
             hint = _MULTILINGUAL_TOOL_HINTS[t_name]
             desc = tool.get("description", "") or ""
@@ -1349,6 +1486,12 @@ def _sanitize_mcp_tool_schema(tool: Any) -> None:
                 setattr(tool, attr, None)
             except Exception:
                 pass
+    _obj_hints = _annotation_hints_for(getattr(tool, "name", None))
+    if _obj_hints and hasattr(tool, "annotations"):
+        try:
+            tool.annotations = _make_tool_annotations(_obj_hints)
+        except Exception:
+            pass
     # Avoid triggering FastMCPDeprecationWarning for outputSchema shim if output_schema is already handled
     if not hasattr(tool, "output_schema"):
         if "outputSchema" in getattr(tool, "__dict__", {}) or "outputSchema" in getattr(type(tool), "model_fields", {}):
@@ -2060,7 +2203,7 @@ def _verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") 
     return False
 
 
-def _resolve_base_url(header_map: dict[str, str], default_scheme: str = "http", default_host: str = "127.0.0.1:8000") -> str:
+def _resolve_base_url(header_map: dict[str, str], default_scheme: str = "http", default_host: str = "127.0.0.1:8742") -> str:
     cfg = load_config()
     server_cfg = cfg.get("server", {})
     custom = (
@@ -2089,7 +2232,7 @@ def _resolve_base_url(header_map: dict[str, str], default_scheme: str = "http", 
 
 def _get_base_url(request: Request) -> str:
     header_map = {k.lower(): v for k, v in request.headers.items()}
-    default_host = f"{request.url.hostname}:{request.url.port}" if request.url.port else (request.url.hostname or "127.0.0.1:8000")
+    default_host = f"{request.url.hostname}:{request.url.port}" if request.url.port else (request.url.hostname or "127.0.0.1:8742")
     return _resolve_base_url(header_map, default_scheme=request.url.scheme, default_host=default_host)
 
 
@@ -2109,7 +2252,7 @@ async def oauth_protected_resource(request: Request):
         "resource": resource_id,
         "authorization_servers": [base_url],
         "bearer_methods_supported": ["header"],
-        "scopes_supported": ["mcp"]
+        "scopes_supported": ["mcp", "openid", "profile", "offline_access"]
     })
 
 
@@ -2120,11 +2263,14 @@ async def oauth_authorization_server(request: Request):
         "authorization_endpoint": f"{base_url}/oauth/authorize",
         "token_endpoint": f"{base_url}/oauth/token",
         "registration_endpoint": f"{base_url}/oauth/register",
-        "scopes_supported": ["mcp"],
+        "scopes_supported": ["mcp", "openid", "profile", "offline_access"],
         "response_types_supported": ["code"],
+        "response_modes_supported": ["query"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
-        "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic", "none"]
+        "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic", "none"],
+        "authorization_response_iss_parameter_supported": True,
+        "client_id_metadata_document_supported": True
     })
 
 
@@ -2135,18 +2281,21 @@ async def openid_configuration(request: Request):
         "authorization_endpoint": f"{base_url}/oauth/authorize",
         "token_endpoint": f"{base_url}/oauth/token",
         "registration_endpoint": f"{base_url}/oauth/register",
-        "scopes_supported": ["mcp", "openid"],
+        "scopes_supported": ["mcp", "openid", "profile", "offline_access"],
         "response_types_supported": ["code"],
+        "response_modes_supported": ["query"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic", "none"],
+        "authorization_response_iss_parameter_supported": True,
+        "client_id_metadata_document_supported": True,
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256"]
     })
 
 
 def _is_trusted_oauth_redirect_uri(uri: str) -> bool:
-    """Validate that redirect URI points strictly to trusted Mammouth AI, Claude/Anthropic, or localhost domains/schemes."""
+    """Validate that redirect URI points strictly to trusted Mammouth AI, ChatGPT/OpenAI, Claude/Anthropic, or localhost domains/schemes."""
     if not uri:
         return False
     try:
@@ -2154,7 +2303,16 @@ def _is_trusted_oauth_redirect_uri(uri: str) -> bool:
         if parsed.scheme in ("claude", "anthropic"):
             return True
         host = (parsed.hostname or "").lower()
-        if host in ("mammouth.ai", "claude.ai", "anthropic.com", "claude.com") or host.endswith((".mammouth.ai", ".claude.ai", ".anthropic.com", ".claude.com")):
+        trusted_hosts = (
+            "mammouth.ai",
+            "chatgpt.com",
+            "openai.com",
+            "oaiusercontent.com",
+            "claude.ai",
+            "anthropic.com",
+            "claude.com",
+        )
+        if host in trusted_hosts or host.endswith(tuple(f".{h}" for h in trusted_hosts)):
             return parsed.scheme == "https"
         if host in ("localhost", "127.0.0.1", "::1"):
             return parsed.scheme in ("http", "https")
@@ -2199,31 +2357,34 @@ async def oauth_register(request: Request):
         redirect_uris = ["https://mammouth.ai/api/mcp/oauth/callback"]
 
     if not client_name:
+        is_chatgpt = any("chatgpt" in u.lower() or "openai" in u.lower() for u in redirect_uris)
         is_claude = any("claude" in u.lower() or "anthropic" in u.lower() for u in redirect_uris)
-        client_name = "Claude" if is_claude else "Mammouth AI"
+        client_name = "ChatGPT" if is_chatgpt else ("Claude" if is_claude else "Mammouth AI")
 
-    # F-02 Hardening: Dynamic registration only allowed for trusted Mammouth AI, Claude/Anthropic, or localhost redirect URIs
+    # F-02 Hardening: Dynamic registration only allowed for trusted Mammouth AI, ChatGPT/OpenAI, Claude/Anthropic, or localhost redirect URIs
     for u in redirect_uris:
         if not _is_trusted_oauth_redirect_uri(u):
             return JSONResponse(
-                {"error": "invalid_redirect_uri", "error_description": f"Redirect URI '{u}' is not allowed. Must belong to mammouth.ai, claude.ai, anthropic.com, or localhost."},
+                {"error": "invalid_redirect_uri", "error_description": f"Redirect URI '{u}' is not allowed. Must belong to mammouth.ai, chatgpt.com, openai.com, claude.ai, anthropic.com, or localhost."},
                 status_code=400
             )
 
-    auth_method = body.get("token_endpoint_auth_method", "client_secret_post")
+    auth_method = body.get("token_endpoint_auth_method") or "client_secret_basic"
     client_id = body.get("client_id") or f"mcp_{secrets.token_hex(16)}"
     client_secret = secrets.token_urlsafe(32) if auth_method != "none" else ""
     _save_oauth_client(client_id, client_secret, client_name, redirect_uris)
 
     now = time.time()
     req_scope = str(body.get("scope", "mcp")).strip() or "mcp"
+    grant_types = body.get("grant_types") if isinstance(body.get("grant_types"), list) and body.get("grant_types") else ["authorization_code", "refresh_token"]
+    response_types = body.get("response_types") if isinstance(body.get("response_types"), list) and body.get("response_types") else ["code"]
     resp_data: dict[str, Any] = {
         "client_id": client_id,
         "client_id_issued_at": int(now),
         "client_name": client_name,
         "redirect_uris": redirect_uris,
-        "grant_types": ["authorization_code", "refresh_token"],
-        "response_types": ["code"],
+        "grant_types": grant_types,
+        "response_types": response_types,
         "scope": req_scope,
         "token_endpoint_auth_method": auth_method
     }
@@ -2242,15 +2403,18 @@ def _render_consent_page(request: Request, client_name: str, params: dict[str, s
     enforce_auth = server_cfg.get("enforce_auth", True)
 
     is_claude = "claude" in client_name.lower() or "anthropic" in client_name.lower()
+    is_chatgpt = "chatgpt" in client_name.lower() or "openai" in client_name.lower()
     logo_icon = "🦣 ⚡"
-    if is_claude:
-        client_desc = "Anthropic Claude wants to connect to your local Defroster 9000."
+    if is_chatgpt:
+        client_desc = "OpenAI ChatGPT wants to connect to your local Defroster 9000."
+    elif is_claude:
+        client_desc = "Anthropic Claude wants to connect to your local Defroster 9000.<br><span style='font-size:12px;color:#94A3B8;'>Tip: Leave OAuth Client ID &amp; Secret blank in Claude.ai — Defroster registers dynamically via OAuth 2.1 (PKCE S256).</span>"
     else:
         client_desc = f"<strong>{html.escape(client_name)}</strong> wants to connect to your local Defroster 9000."
 
     if enforce_auth:
         token_field_html = """
-                <label class="owner-label" for="owner_token">Defroster API Token (copy from the Cockpit)</label>
+                <label class="owner-label" for="owner_token">Defroster Bearer API Token (Cockpit &rarr; Dashboard &rarr; Copy Key)</label>
                 <input class="owner-input" type="password" id="owner_token" name="owner_token" autocomplete="off" placeholder="mc_..." autofocus>
         """
     else:
@@ -2434,8 +2598,9 @@ async def oauth_authorize(request: Request):
             # If client_id is not yet in oauth.db but points to trusted callback, auto-register
             if _is_trusted_oauth_redirect_uri(redirect_uri):
                 effective_cid = client_id or f"mcp_{secrets.token_hex(16)}"
+                is_chatgpt = any(c in redirect_uri.lower() or c in effective_cid.lower() for c in ("chatgpt", "openai"))
                 is_claude = any(c in redirect_uri.lower() or c in effective_cid.lower() for c in ("claude", "anthropic"))
-                client_name = "Claude" if is_claude else "Mammouth AI"
+                client_name = "ChatGPT" if is_chatgpt else ("Claude" if is_claude else "Mammouth AI")
                 _save_oauth_client(effective_cid, "", client_name, [redirect_uri])
                 client_id = effective_cid
                 client_info = {"client_id": client_id, "client_name": client_name, "redirect_uris": [redirect_uri]}
@@ -2451,6 +2616,8 @@ async def oauth_authorize(request: Request):
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": code_challenge_method,
+            "scope": params.get("scope", "mcp"),
+            "resource": params.get("resource", ""),
         })
 
     elif request.method == "POST":
@@ -2491,6 +2658,7 @@ async def oauth_authorize(request: Request):
                     )
 
         delim = "&" if "?" in redirect_uri else "?"
+        issuer_url = _get_base_url(request).rstrip("/")
 
         if action == "allow":
             # Proof of ownership: only someone who knows this Defroster's API token may grant access.
@@ -2517,11 +2685,15 @@ async def oauth_authorize(request: Request):
             target = f"{redirect_uri}{delim}code={urllib.parse.quote(code)}"
             if state:
                 target += f"&state={urllib.parse.quote(state)}"
+            if issuer_url:
+                target += f"&iss={urllib.parse.quote(issuer_url, safe='')}"
             return RedirectResponse(target, status_code=302)
         else:
             target = f"{redirect_uri}{delim}error=access_denied&error_description=User+denied+authorization"
             if state:
                 target += f"&state={urllib.parse.quote(state)}"
+            if issuer_url:
+                target += f"&iss={urllib.parse.quote(issuer_url, safe='')}"
             return RedirectResponse(target, status_code=302)
 
 
@@ -2547,6 +2719,8 @@ async def oauth_token(request: Request):
             creds = base64.b64decode(auth_header[6:].strip()).decode("utf-8")
             if ":" in creds:
                 basic_cid, basic_csec = creds.split(":", 1)
+                basic_cid = urllib.parse.unquote_plus(basic_cid)
+                basic_csec = urllib.parse.unquote_plus(basic_csec)
                 if not body.get("client_id"):
                     body["client_id"] = basic_cid
                 if not body.get("client_secret"):
@@ -2630,6 +2804,11 @@ async def oauth_token(request: Request):
 DEFAULT_ALLOWED_ORIGINS = [
     "https://mammouth.ai",
     "https://app.mammouth.ai",
+    "https://chatgpt.com",
+    "https://www.chatgpt.com",
+    "https://chat.openai.com",
+    "https://platform.openai.com",
+    "https://openai.com",
     "https://claude.ai",
     "https://code.claude.ai",
     "https://app.claude.ai",
@@ -2640,9 +2819,9 @@ DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost",
     "http://127.0.0.1",
     "http://localhost:3000",
-    "http://localhost:8000"
+    "http://localhost:8742"
 ]
-DEFAULT_ALLOW_ORIGIN_REGEX = r"^https://([a-zA-Z0-9.-]+\.)?(mammouth\.ai|claude\.ai|anthropic\.com|claude\.com)$|^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+DEFAULT_ALLOW_ORIGIN_REGEX = r"^https://([a-zA-Z0-9.-]+\.)?(mammouth\.ai|chatgpt\.com|openai\.com|oaiusercontent\.com|claude\.ai|anthropic\.com|claude\.com)$|^http://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 
 def is_allowed_origin(
@@ -2724,7 +2903,7 @@ class SecurityAndAuthMiddleware:
                     )
                     if is_oauth_consent:
                         if b"content-security-policy" not in existing_keys:
-                            headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai https://*.mammouth.ai https://claude.ai https://*.claude.ai https://anthropic.com https://*.anthropic.com https://claude.com https://*.claude.com"))
+                            headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai https://*.mammouth.ai https://chatgpt.com https://*.chatgpt.com https://openai.com https://*.openai.com https://claude.ai https://*.claude.ai https://anthropic.com https://*.anthropic.com https://claude.com https://*.claude.com"))
                     else:
                         if b"x-frame-options" not in existing_keys:
                             headers.append((b"x-frame-options", b"DENY"))
@@ -2865,6 +3044,8 @@ class SecurityAndAuthMiddleware:
 
 
 def build_app(token: str | None = None):
+    # GUI restarts rebuild the ASGI app without re-importing this module.
+    register_active_tools()
     cfg = load_config()
     server_cfg = cfg.get("server", {})
     enforce_auth = server_cfg.get("enforce_auth", True)
@@ -2999,10 +3180,27 @@ def build_app(token: str | None = None):
                 print(f"[BROWSER AGENT] Initialization notice: {e}")
         global _SERVER_EVENT_LOOP
         _SERVER_EVENT_LOOP = asyncio.get_running_loop()
+        started_sched_loop = False
+        try:
+            if cfg.get("modules", {}).get("task_scheduler", {}).get("enabled", True):
+                from modules.task_scheduler import TaskSchedulerEngine, register_default_handlers
+                sched_eng = TaskSchedulerEngine.get_instance()
+                register_default_handlers(sched_eng, overwrite=False)
+                if not sched_eng._running:
+                    sched_eng.start_background_loop(poll_interval=1.0)
+                    started_sched_loop = True
+        except Exception as e:
+            logger.debug("Task scheduler lifespan init notice: %s", e)
         try:
             async with mcp._lifespan_manager(), streamable_http_app.session_manager.run():
                 yield
         finally:
+            if started_sched_loop:
+                try:
+                    from modules.task_scheduler import TaskSchedulerEngine
+                    TaskSchedulerEngine.get_instance().stop_background_loop()
+                except Exception:
+                    pass
             _SERVER_EVENT_LOOP = None
             try:
                 browser_close()
@@ -3091,7 +3289,7 @@ app = build_app()
 if __name__ == "__main__":
     cfg = load_config()
     server_cfg = cfg.get("server", {})
-    port = int(os.environ.get("PORT", server_cfg.get("port", 8000)))
+    port = int(os.environ.get("PORT", server_cfg.get("port", 8742)))
     host = os.environ.get("HOST", server_cfg.get("host", "127.0.0.1"))
     enable_tls = server_cfg.get("enable_tls", False)
     cert_file = server_cfg.get("ssl_certfile")

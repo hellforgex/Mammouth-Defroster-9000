@@ -49,7 +49,7 @@ from modules.screen_capture import screen_capture
 
 class DefrosterTrayApp:
     def __init__(self):
-        self.port = int(os.environ.get("PORT", 8000))
+        self.port = int(os.environ.get("PORT", 8742))
         self.host = os.environ.get("HOST", "127.0.0.1")
         self.public_url = self._detect_public_url()
         self.server_thread = None

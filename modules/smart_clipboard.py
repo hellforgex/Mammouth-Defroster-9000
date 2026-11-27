@@ -13,7 +13,7 @@ import time
 import ctypes
 import ctypes.wintypes
 import logging
-from typing import Any
+from typing import Any, Literal
 
 logger = logging.getLogger("smart_clipboard")
 
@@ -399,3 +399,41 @@ def clipboard_transform(
         "deterministic_result": deterministic_result,
         "clipboard_updated": clipboard_updated
     }
+
+
+def clipboard_manage(
+    action: Literal["get", "set", "format"] = "get",
+    text: str = "",
+    update_clipboard: bool = False
+) -> dict[str, Any]:
+    """Read, write, or deterministically format (JSON / CSV->Markdown) the Windows clipboard.
+
+    Args:
+        action: 'get' (read clipboard), 'set' (write text), or 'format' (format JSON/CSV/commit).
+        text: Text to write for 'set', or optional input text for 'format' (reads clipboard if empty).
+        update_clipboard: If True and formatting succeeds, copy formatted result to clipboard.
+    """
+    act = str(action or "get").strip().lower()
+    if act == "get":
+        return clipboard_get_text()
+    if act == "set":
+        return clipboard_set_text(text=text)
+    if act == "format":
+        res = clipboard_transform(action="format_data", text=text or None, update_clipboard=update_clipboard)
+        if not res.get("deterministic_result"):
+            return {
+                "status": res.get("status", "success"),
+                "action": "format",
+                "original_char_count": res.get("original_char_count", 0),
+                "deterministic_result": None,
+                "clipboard_updated": False,
+                "message": "Input did not match JSON or CSV/TSV; no deterministic transform applied.",
+            }
+        return {
+            "status": "success",
+            "action": "format",
+            "original_char_count": res.get("original_char_count", 0),
+            "deterministic_result": res["deterministic_result"],
+            "clipboard_updated": res.get("clipboard_updated", False),
+        }
+    return {"status": "error", "error": f"Unknown clipboard action '{action}'. Valid: 'get', 'set', 'format'."}

@@ -18,6 +18,7 @@
 
 ## 📁 2. File Operations & Path Sandboxing (Fail-Closed)
 * **Fail-Closed Workspace Sandbox:** `_get_sandbox_config()` always defaults to `enforce_sandbox = True` if `config.json` is missing or corrupted.
+* **Secret-File Read Protection (`protect_secret_files`):** Enabled by default (`true`, fail-closed). `file_read` blocks credential/token files (`.env`, `.env.*`, `credentials.json`, `gdrive_token.json`, `service_account.json`, `storage_state.json`, `*.token.json`, `oauth.db`, SSH private keys, `*.pfx`/`*.p12`/`*.ppk`, and Defroster's own `config.json` / `hosts.json`) and `file_search_text` skips them, while `*.example` / `*.sample` / `*.template` remain readable.
 * **Path Canonicalization:** Input paths are normalized to strip UNC namespaces (`\\?\`, `\\.\`, `\\?\UNC\`), resolve DOS 8.3 short names via `GetLongPathNameW`, and resolve symlinks/junctions via `os.path.realpath`. All boundary containment checks use casefolded path strings (`.casefold()`).
 * **System & Credential Directory Write Guards:** Direct write operations into Windows operating system directories (`C:\Windows`, `C:\Program Files`, `C:\ProgramData`) and sensitive user credential directories (`.ssh`, `.aws`, `.azure`, `.kube`, `.gnupg`, `Startup`) are unconditionally prohibited.
 * **Binary File Filtering:** Text search utilities (`file_search_text`) perform null-byte detection (`b'\x00' in chunk`) to skip binary files.
@@ -29,6 +30,7 @@
 * **Read-Only Allowlist Default:** By default (`allow_admin_shell: false`), only diagnostic commands and read-only cmdlets are permitted (`Get-*`, `Test-*`, `Measure-*`, `Select-*`, `Where-*`, `Out-*`, `Write-*`, `Format-*`, `whoami`, `ipconfig`, `tasklist`, `netstat`, `hostname`, `systeminfo`, `dir`, `echo`, `type`, `findstr`, `reg query`).
 * **Read-Only Path Guard (R6-N1):** File-reading commands (`Get-Content`, `type`, `Get-Item`, `Get-ChildItem`, `Get-Acl`, `dir`, etc.) are inspected prior to execution. Access to credentials (`.ssh`, `.aws`, `.kube`, `.gnupg`, `id_rsa`, `*.pem`, `*.key`), local databases (`config.json`, `hosts.json`), system registry hives (`SAM`, `NTDS.dit`), and recursive root traversals (`Get-ChildItem C:\ -Recurse`, `dir C:\Windows /s`) raises `PermissionError`.
 * **Admin-Plane Opt-In:** Modifying commands (`Set-*`, `New-*`, `Remove-*`, `Start-*`, `Stop-*`, `sc`, `wevtutil`, `schtasks`, `Set-MpPreference`) require explicit `allow_admin_shell: true` enabled via configuration or GUI confirmation dialog.
+* **Opt-In HTTP Download Control (`allow_shell_downloads`):** HTTP download cmdlets and tools (`Invoke-RestMethod`, `Invoke-WebRequest`, `curl`, `wget`, `Start-BitsTransfer`, `.NET WebClient`) are blocked by default (`ERR_SECURITY_SHIELD`) and permitted only when both `allow_admin_shell: true` and `allow_shell_downloads: true` are explicitly confirmed. Download-and-execute stagers and LOLBins (`iex`, `Invoke-Expression`, `certutil`, `bitsadmin`, `Start-Process`, `powershell -Command/-File`, `python -c`) remain unconditionally blocked.
 * **De-obfuscation & Anti-Bypass Guard:** All commands are normalized (stripping backticks, intra-word quote concatenation, and string addition) and checked against blocked destructive patterns.
 * **Resource Limits:** Background processes are capped (`MAX_BACKGROUND_PROCESSES = 10`) to prevent fork-bomb resource exhaustion.
 * **Parameterized Queries:** PowerShell diagnostics pass variables via script parameters (`param($log, $type, $num)`), never inline string interpolation.
@@ -51,25 +53,7 @@
 
 ---
 
-## 🎮 6. Unreal Engine Remote Bridge (Strict Import Allowlist & HMAC Handshake)
-* **Strict Import Allowlist:** Replaced all module blacklists with a strict AST import allowlist:
-  ```python
-  ALLOWED_MODULES = {
-      'unreal', 'math', 'string', 'enum', 'dataclasses', 'typing',
-      'collections', 'functools', 'itertools', 'json',
-      're', 'datetime', 'hashlib', 'random', 'uuid', 'decimal',
-      'copy', 'statistics', 'time'
-  }
-  ```
-  Any module import outside this allowlist (including `from` imports and relative imports) is unconditionally rejected by AST validation.
-* **Dynamic Call & Dunder Blocks:** Direct calls to `open`, `exec`, `eval`, `compile`, `__import__`, `getattr` and access to `__class__`, `__bases__`, `__subclasses__`, `__globals__`, `__mro__`, `__members__` are blocked.
-* **HMAC-SHA256 Challenge-Response Handshake:** UDP discovery and socket connections use cryptographic HMAC challenge-response verification with single-use nonces (30s TTL).
-* **Loopback Socket Gate:** Socket listener enforces that connections originate strictly from loopback (`127.0.0.1`).
-* **Console Command Filtering:** Semicolon-separated Unreal console commands are tokenized and validated against blocked administrative/crash commands (`quit`, `exit`, `crash`, `exec`, `open`, `travel`, `restart`, `debug`, `obj`, `python`, `py`).
-
----
-
-## 👁️ 7. Desktop Vision & Consent Gate
+## 👁️ 6. Desktop Vision & Consent Gate
 * **Interactive Consent Gate (M-07):** Desktop screen capture requires explicit user consent (`require_consent: true` by default). Unapproved calls return `consent_required`.
 * **Automated Retention Policy:** Saved screenshots auto-prune files older than 24 hours or exceeding 25 files (`max_keep=25`).
 * **Rate-Limit Throttling:** `screen_capture` enforces a 0.5s minimum interval between captures to prevent abusive screen scraping.

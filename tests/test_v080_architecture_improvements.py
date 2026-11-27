@@ -85,6 +85,7 @@ def test_task_scheduler_dry_run_and_history(monkeypatch, tmp_path):
     import modules.task_scheduler as ts
     monkeypatch.setattr(ts, "DB_PATH", tmp_path / "tasks.db")
     monkeypatch.setattr(ts, "_shell_module_enabled", lambda: True)
+    monkeypatch.setattr(ts.TaskSchedulerEngine.get_instance(), "_handlers", {})
     task = scheduler_create_task(
         name="Auto Test Health Probe",
         prompt="system_get_specs",
@@ -124,6 +125,7 @@ def test_task_schedule_control_actions(monkeypatch, tmp_path):
     """Verify task_schedule_control accepts new actions."""
     import modules.task_scheduler as ts
     monkeypatch.setattr(ts, "DB_PATH", tmp_path / "tasks.db")
+    monkeypatch.setattr(ts.TaskSchedulerEngine.get_instance(), "_handlers", {})
     task = server.task_schedule_create(name="Control Action Test", prompt="Echo 1", interval_minutes=5)
     tid = task["id"]
     try:

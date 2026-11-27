@@ -357,10 +357,7 @@ class TestClaudeCodeModule(unittest.TestCase):
         self.assertIn("claude", res["categories"])
         tools = res["categories"]["claude"]["tools"]
         tool_names = [t["name"] for t in tools]
-        self.assertIn("claude_code_status", tool_names)
-        self.assertIn("claude_code_sync_mcp", tool_names)
-        self.assertIn("claude_code_launch_terminal", tool_names)
-        self.assertIn("claude_code_run_task", tool_names)
+        self.assertIn("claude_code", tool_names)
 
     def test_launch_claude_terminal_cmd_empty_title_syntax(self):
         with patch("config.load_config", return_value={"server": {"allow_admin_shell": True}}):

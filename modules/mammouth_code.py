@@ -8,7 +8,7 @@ import logging
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 logger = logging.getLogger("mammouth_code")
 
@@ -621,3 +621,40 @@ def sync_opencode_mcp_config(
     if errors:
         result["errors"] = errors
     return result
+
+
+def mammouth_code_dispatch(
+    action: Literal["status", "install", "sync_mcp", "launch_terminal", "run_task"] = "status",
+    prompt: str = "",
+    workspace_path: str | None = None,
+    continue_session: bool = False,
+    auto_approve: bool = False,
+    timeout_seconds: int = 180
+) -> dict[str, Any]:
+    """Manage Mammouth Code CLI (status, install/upgrade, opencode MCP sync, terminal, headless run).
+
+    Args:
+        action: 'status', 'install', 'sync_mcp', 'launch_terminal', or 'run_task'.
+        prompt: Autonomous task prompt for 'run_task'.
+        workspace_path: Target project directory.
+        continue_session: Continue previous session for 'launch_terminal'.
+        auto_approve: Auto-approve modifications for 'run_task' (requires allow_admin_shell=true).
+        timeout_seconds: Timeout for 'run_task' (default 180s).
+    """
+    act = str(action or "status").strip().lower()
+    if act == "status":
+        return get_mammouth_code_status()
+    if act == "install":
+        return install_or_update_mammouth_code()
+    if act == "sync_mcp":
+        return sync_opencode_mcp_config(workspace_path=workspace_path)
+    if act == "launch_terminal":
+        return launch_mammouth_terminal(workspace_path=workspace_path, continue_session=continue_session)
+    if act == "run_task":
+        return run_mammouth_task(
+            prompt=prompt,
+            workspace_path=workspace_path,
+            timeout_seconds=timeout_seconds,
+            auto_approve=auto_approve,
+        )
+    return {"success": False, "error": f"Unknown mammouth_code action '{action}'."}

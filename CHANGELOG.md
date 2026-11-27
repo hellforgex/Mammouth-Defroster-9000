@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.8.2] - 2026-11-27
+
+### Claude Connector Ergonomics & Secret Hygiene
+- **Secret-file read protection (`modules/file_ops.py`, `config.py`, `config.example.json`):**
+  - `file_read` now refuses credential and token files (`.env`, `.env.*`, `credentials.json`, `gdrive_token.json`, `service_account.json`, `storage_state.json`, `*.token.json`, `oauth.db`, SSH private keys, `*.pfx`/`*.p12`/`*.ppk`) and Defroster's own `config.json` / `hosts.json`; `file_search_text` skips them. Template files (`*.example`, `*.sample`, `*.template`) remain readable.
+  - New switch `server.protect_secret_files` (default `true`, fails closed if the config cannot be read).
+- **Optional MCP tool annotations (`server.py`, `config.py`):**
+  - Every tool carries `readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint` metadata so clients can tell read-only tools from destructive ones.
+  - Advertised only when `server.expose_tool_annotations` is `true` (default `false`, so strict MCP 2024-11-05 clients keep receiving the exact 0.8.1 tool shape).
+- **Known folders in `system_get_specs` (`modules/system_monitor.py`):** the result now includes `known_folders` (home, desktop, documents, downloads, pictures, music, videos), resolved through the Windows shell API so OneDrive-redirected folders are reported correctly.
+- **Bounded directory listings (`modules/file_ops.py`):** `directory_list` accepts `max_entries` (default 500) and appends a truncation marker instead of returning unbounded output; a single unreadable entry no longer fails the whole listing.
+- **Server instructions (`server.py`):** point clients at `known_folders`, at `AGENTS.md` / `SYSTEM.md` in the workspace root when present, and document the secret-file protection.
+- **New default port 8742 (`config.py`, `config.example.json`, `gui.py`, `server.py`, `tray_manager.py`, `start_server.ps1`):** the built-in default moved from 8000 to 8742 so a fresh install no longer collides with other local services or a still-running older instance. Existing `config.json` files keep whatever port they already contain; the `PORT` environment variable still overrides everything.
+- **Opt-in shell HTTP & download toggle (`modules/shell_processes.py`, `config.py`, `gui.py`):** added `server.allow_shell_downloads` (default `false`, fail-closed) and a dedicated Cockpit toggle under Skills → PowerShell so users with elevated shell mode can permit `Invoke-RestMethod` (`irm`), `Invoke-WebRequest` (`iwr`), `curl`, `wget`, `Start-BitsTransfer`, and `.NET WebClient` downloads while keeping stager/LOLBin execution (`iex`, `Invoke-Expression`, `certutil`, `bitsadmin`, `Start-Process`, `powershell -Command/-File`) permanently blocked.
+
+### Notes
+- Not part of this release: a background job mode for long-running `powershell_exec` calls, MCP resources for workspace documents, and image content blocks for `screen_capture`.
+
+## [0.8.1] - 2026-11-25
+
+### 🟠 Embedded Claude WebApp & Connector Onboarding Parity
+- **Parallel Claude Web Tab (`gui.py`, `modules/embedded_browser.py`, `config.py`):**
+  - Added dedicated **🟠 Claude Web** tab (`https://claude.ai`) alongside **🤖 ChatGPT Web** and **💬 Mammouth AI Web** with isolated persistent WebView2 profile (`./data/claude_browser_profile`).
+  - Added top bar & Dashboard quick-switch **`🟠 Claude`** buttons, Dashboard Hero **`🟠 Claude URL`** shortcut, and full **`Settings → In-App Browsers`** support (`Default Chat Tab`, custom `Claude URL`, and **`🟠 Copy Claude MCP URL`**).
+  - Full feature parity across **Zen Mode**, **Global Summon Hotkey (`Ctrl+Shift+M`)**, **Screen Copilot (`Ctrl+Shift+Space`)**, **Smart Clipboard (`Ctrl+Shift+K`)**, **Interactive Snipping (`Ctrl+V`)**, **AI Prompt Catalog**, and automated **`claude_web`** scheduled task triggers (`modules/task_scheduler.py`, `server.py`).
+  - Upgraded `modules/embedded_browser.py` (`_is_trusted_browser_origin`, `on_new_window_request`, and Claude TipTap/ProseMirror `[data-testid="chat-input"]` + `Send message` selectors) for `claude.ai`, `claude.com`, and `anthropic.com` auth/popup/permission flows.
+  - Upgraded `_copy_claude_connector_url()` to detect live dynamic tunnels identically to ChatGPT and surface clear step-by-step OAuth 2.1 DCR setup instructions (`Settings → Connectors → Add custom connector`, leaving Client ID & Secret blank, entering Defroster's Bearer API Key in the OAuth consent prompt).
+
+### ⚡ Streamlined 42-Tool MCP Architecture (-60% Tools, -47% Tokens)
+- **Action-Dispatched Consolidation (`server.py`, `modules/`):**
+  - Streamlined all 16 capability modules and core meta-tools from **106 exposed MCP tools (~16,189 wire tokens)** down to **42 canonical tools (~8,537 wire tokens max / ~7,384 under default module settings; ~4,265 tokens in `mammouth_safe`)** while keeping all internal Python APIs and security gates (workspace sandbox, shell security shield, `allow_admin_shell`, SSRF shield, and screen capture human consent) intact.
+  - Added `_LEGACY_TOOL_ALIASES` inside `defroster_execute_tool` for transparent execution of retired tool names while enforcing active profile allowlists and module toggles, plus compact `_sanitize_schema_dict` schema cleanup.
+  - Synchronized `TOOL_PROFILES` (`config.py`), `get_streamlined_tool_counts()`, `_DEFROSTER_MODULE_CATALOG`, and Cockpit UI badges/gauges (`gui.py`).
+
+## [0.8.0] - 2026-11-25
+
+### 🤖 ChatGPT Integration & Parallel Web Chat Cockpit
+- **Parallel ChatGPT & Mammouth AI Web Tabs (`gui.py`, `modules/embedded_browser.py`):**
+  - Added dedicated **🤖 ChatGPT Web** tab (`https://chatgpt.com`) running in parallel alongside **💬 Mammouth AI Web** (`https://mammouth.ai`) with isolated WebView2 profile storage (`./data/chatgpt_browser_profile`).
+  - Added Top Bar & Dashboard quick-switch buttons (`🤖 ChatGPT` and `💬 Mammouth AI`) and configurable default startup chat tab (`embedded_browser.default_chat_tab`).
+  - Full feature parity across **Zen Mode**, **Global Summon Hotkey (`Ctrl+Shift+M`)**, **Screen Copilot (`Ctrl+Shift+Space`)**, **Smart Clipboard (`Ctrl+Shift+K`)**, **Interactive Snipping / Screenshots (`Ctrl+V`)**, and **AI Prompt Catalog (`🚀 Send to Chat`)** targeting the active chat tab.
+  - Upgraded WebView2 DOM prompt injection & focus engine (`send_chat_prompt`, `focus_and_paste`) to support ChatGPT's ProseMirror `#prompt-textarea` and `button[data-testid="send-button"]` alongside Mammouth.ai, and expanded WebView2 popup/origin handling for OpenAI/Microsoft/Google/Apple login flows.
+- **ChatGPT MCP Connector OAuth 2.1, CORS & CSP (`server.py`, `config.py`):**
+  - Added `chatgpt.com`, `chat.openai.com`, `platform.openai.com`, `openai.com`, and `oaiusercontent.com` to `DEFAULT_ALLOWED_ORIGINS`, `DEFAULT_ALLOW_ORIGIN_REGEX`, `_is_trusted_oauth_redirect_uri` (including `https://chatgpt.com/connector_platform_oauth_redirect`), and OAuth consent `Content-Security-Policy` `frame-ancestors`.
+  - Updated OAuth Dynamic Client Registration (`/oauth/register`) and consent UI (`_render_consent_page`) to recognize and display OpenAI ChatGPT clients.
+  - Added **`🤖 ChatGPT URL`** 1-click copy buttons on the Dashboard Hero Card and in Settings with step-by-step ChatGPT Developer Mode / Connector setup guidance.
+- **Automated Task Scheduler ChatGPT Target & Reliability Fixes (`modules/task_scheduler.py`, `modules/embedded_browser.py`, `gui.py`, `server.py`, `config.py`):**
+  - Added `chatgpt_web` target (`🤖 ChatGPT Web Chat`) to `VALID_TARGETS`, `TaskSchedulerEngine`, `task_schedule_create`, and the Cockpit Task Scheduler dialog/cards, and resolved `target="auto"` in `task_schedule_create` to the configured `default_chat_tab`.
+  - Exposed `task_schedule_create`, `task_schedule_list`, `task_schedule_control`, and `task_schedule_delete` in the default `mammouth_safe` profile within the session token budget.
+  - Started `TaskSchedulerEngine.start_background_loop()` in both Desktop Cockpit and headless server lifespans (with `register_default_handlers` for `powershell`, `mammouth_code`, and `notification`), added thread-safe background `after()` queue marshalling in `gui.py`, normalized timezone-aware `next_run` timestamps, and recorded async run results in `task_runs`.
+  - Hardened WebView2 `send_chat_prompt()` to wait for `CoreWebView2` and page navigation completion before script execution, support ProseMirror `DataTransfer` paste and `<p>` injection fallbacks, expand German/French/English non-send button filters, retry 2x-Enter submission, and guard Win32 `VK_RETURN` fallback to foreground state.
+
 ## [0.7.5] - 2026-11-15
 
 > **Public Release Notice:** Consolidates all features, architectural enhancements, fixes, and security updates since public version `v0.7.2` (including internal development milestones `v0.7.3` and `v0.7.4`).

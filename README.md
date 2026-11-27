@@ -5,20 +5,20 @@
 <p align="center">
   <a href="https://github.com/hellforgex/Mammouth-Defroster-9000/releases"><img src="https://img.shields.io/github/v/release/hellforgex/Mammouth-Defroster-9000?include_prereleases&label=Release&color=blueviolet" alt="Release"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white" alt="Platform">
-  <img src="https://img.shields.io/badge/Tools-97%20in%2015%20modules-0284C7" alt="Tools">
+  <img src="https://img.shields.io/badge/Tools-42%20Streamlined%20in%2016%20Modules-0284C7" alt="Tools">
   <img src="https://img.shields.io/badge/MCP-FastMCP%20%7C%20SSE%20%2B%20HTTP-purple" alt="MCP">
   <img src="https://img.shields.io/badge/License-MIT-F59E0B" alt="License">
 </p>
 
-<h3 align="center">🦣 Thawing 10,000 years of frozen Windows automation power for <a href="https://mammouth.ai">Mammouth.ai</a>. 🔥</h3>
+<h3 align="center">🦣 Thawing 10,000 years of frozen Windows automation power for ChatGPT, Claude, &amp; <a href="https://mammouth.ai">Mammouth.ai</a>. 🔥</h3>
 
-**Mammouth Defroster 9000 (MD-9000)** is a desktop cockpit and MCP server that connects your [Mammouth.ai](https://mammouth.ai) assistant to your Windows PC. Your assistant can look at your screen (with your consent), drive mouse and keyboard, work on files in a sandboxed workspace, automate a browser, manage SSH hosts, check your hardware and run the Mammouth Code CLI — every module can be switched on or off in the GUI.
+**Mammouth Defroster 9000 (MD-9000)** is a desktop cockpit and MCP server that connects **ChatGPT**, **Claude**, and **[Mammouth.ai](https://mammouth.ai)** to your Windows PC. Your assistant can look at your screen (with your consent), drive mouse and keyboard, work on files in a sandboxed workspace, automate a browser, manage SSH hosts, check your hardware and run CLI coding agents — every module can be switched on or off in the GUI.
 
 <p align="center">
   <img src="assets/cockpit_dark.png" alt="Cockpit dashboard (dark mode)" width="95%">
 </p>
 
-**Contents:** [Quickstart](#-quickstart) · [Connect to Mammouth.ai](#-connect-to-mammouthai) · [Exposure modes](#-exposure-modes) · [Safety defaults](#%EF%B8%8F-safety-defaults) · [What's new](#-whats-new-in-v075-cumulative-since-v072) · [Modules](#%EF%B8%8F-modules--tools) · [FAQ](#-faq) · [Developers](#-for-developers) · [Disclaimer](#%EF%B8%8F-disclaimer)
+**Contents:** [Quickstart](#-quickstart) · [Connect to ChatGPT, Claude or Mammouth.ai](#-connect-to-chatgpt-claude-or-mammouthai) · [Exposure modes](#-exposure-modes) · [Safety defaults](#%EF%B8%8F-safety-defaults) · [What's new](#-whats-new-in-v082-cumulative-since-v075) · [Modules](#%EF%B8%8F-modules--tools) · [FAQ](#-faq) · [Developers](#-for-developers) · [Disclaimer](#%EF%B8%8F-disclaimer)
 
 ---
 
@@ -26,16 +26,29 @@
 
 No Python, Git or terminal needed — the release is a self-contained package.
 
-1. **Download** [`MammouthDefroster9000-v0.7.5-windows-x64.zip`](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest) (~133 MB).
+1. **Download** [`MammouthDefroster9000-v0.8.2-windows-x64.zip`](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest) (~133 MB).
 2. **Extract** it anywhere, e.g. `C:\MammouthDefroster9000`.
 3. **Start** `start_gui.bat` (or `MammouthDefroster9000.exe`).
 4. **Pick an exposure mode** ([see below](#-exposure-modes)) and click **`▶ Start Server`**.
 
 ---
 
-## 🔗 Connect to Mammouth.ai
+## 🔗 Connect to ChatGPT, Claude or Mammouth.ai
 
-1. In the cockpit, click **`📋 Copy Endpoint`** (e.g. `https://your-pc.ts.net/sse`) and **`📋 Copy Key`** (your Bearer token).
+### Claude (Web Connectors / OAuth 2.1)
+1. Start a public HTTPS tunnel (e.g., **Tailscale Funnel** or **Cloudflare Tunnel**) and click **`🟠 Claude URL`** on the Dashboard.
+2. In [Claude](https://claude.ai) open **Settings → Connectors → Add custom connector** and paste the copied `/mcp` URL (leave **OAuth Client ID & Secret** blank — Defroster uses Dynamic Client Registration + PKCE `S256`).
+3. Click **Connect**, enter your **Bearer API Key** from the Dashboard on Defroster's OAuth dialog, and click **Allow Access**.
+4. Use the built-in **🟠 Claude Web** tab directly in the Cockpit with screenshots (`Ctrl+V`), global hotkeys, and scheduled tasks!
+
+### ChatGPT (Developer Mode / MCP Connectors)
+1. Start a public HTTPS tunnel (e.g., **Tailscale Funnel** or **Cloudflare Tunnel**) and click **`🤖 ChatGPT URL`** on the Dashboard.
+2. In [ChatGPT](https://chatgpt.com) open **Settings → Apps & Connectors → Advanced settings → Developer mode** and create a new MCP Connector.
+3. Paste the copied `/mcp` URL and choose **OAuth** authentication — Defroster handles Dynamic Client Registration and OAuth 2.1 + PKCE (`S256`) automatically.
+4. Use the built-in **🤖 ChatGPT Web** tab directly in the Cockpit with screenshots (`Ctrl+V`), global hotkeys, and scheduled tasks!
+
+### Mammouth.ai
+1. In the cockpit, click **`📋 Copy URL`** (e.g. `https://your-pc.ts.net/sse`) and **`📋 Copy Key`** (your Bearer token).
 2. In [Mammouth.ai](https://mammouth.ai) open **Settings ⚙️ → Custom MCP Servers → Add MCP Server**:
 
    | Field | Value |
@@ -58,7 +71,7 @@ Mammouth.ai runs in the cloud, so it has to reach your PC. Every mode except LAN
 | **Tailscale Funnel** ⭐ | Public internet | Easy | Stable `https://<node>.ts.net/sse` address, TLS by Tailscale. Recommended for everyday use. |
 | **Cloudflare Quick Tunnel** | Public internet | None | Bundled `cloudflared`, temporary `https://<id>.trycloudflare.com/sse` address. Good for a quick test. |
 | **ngrok** | Public internet | Easy | Needs your ngrok authtoken; supports custom domains. |
-| **Direct LAN IP** | Your local network only | None | `http://192.168.x.x:8000/sse`. Only works if the client is in your network. |
+| **Direct LAN IP** | Your local network only | None | `http://192.168.x.x:8742/sse`. Only works if the client is in your network. |
 
 Tunnels are **never started automatically** unless you enable `auto_tunnel` yourself.
 
@@ -73,35 +86,33 @@ Tunnels are **never started automatically** unless you enable `auto_tunnel` your
 | Default | What it means |
 | :--- | :--- |
 | **Bearer token required** | Every endpoint enforces token authentication (`enforce_auth`). |
-| **Bound to `127.0.0.1`** | The server only listens locally until you choose an exposure mode. |
+| **Bound to `127.0.0.1`** | The server only listens locally until you choose an exposure mode (default port `8742`). |
 | **Workspace sandbox** | File tools are confined to `./workspace`. |
-| **PowerShell & daemons off** | Shell execution is disabled until you switch it on in the GUI. |
+| **Secret-file shield** | `file_read` and `file_search_text` block/skip `.env`, tokens, SSH keys, `oauth.db`, and Defroster `config.json` / `hosts.json` by default (`protect_secret_files`). |
+| **PowerShell & daemons off** | Shell execution is disabled until you switch it on in the GUI (`allow_shell_downloads` stays off unless explicitly enabled). |
 | **Web scraper off** | Disabled by default; when enabled, an SSRF shield blocks private networks and cloud metadata endpoints. |
 | **Screen consent gate** | Every screenshot needs your approval (once / session / revoke). The model cannot grant consent itself — those functions are not exposed as tools. |
 | **Admin shell off** | `allow_admin_shell` is `false` by default. |
-| **Encrypted secrets** | SSH hosts and tokens are stored with Windows DPAPI. |
+| **Encrypted secrets** | SSH hosts, OAuth tokens, and API tokens are stored with Windows DPAPI. |
 
 > ⚠️ Once you enable **PowerShell & daemons**, commands run with your user rights **outside** the workspace sandbox. Only enable it if you trust the prompts you send.
 
 ---
 
-## ✨ What's New in v0.7.5 (Cumulative since v0.7.2)
+## ✨ What's New in v0.8.2 (Cumulative since v0.7.5)
 
-Since the last public release (`v0.7.2`), Defroster has received major upgrades across security, multilingual tool discovery, and background task automation:
+Since `v0.7.5`, Defroster has expanded into a multi-assistant cockpit with a streamlined 42-tool MCP architecture and tighter secret hygiene:
 
-- **Security & Integrity Hardening (v0.7.5):**
-  - Parameterized process execution in terminal tools via child environment variables to prevent command injection.
-  - Profile authorization gating for on-demand tool execution (`defroster_execute_tool`).
-  - Origin-validated CORS preflights; URL query-string tokens (`?token=...`) are disabled by default (opt-in via `server.allow_query_token`).
-  - Upgraded dependencies (`fastmcp>=4.1.4`, `starlette>=1.10.0`, `pillow>=13.0.0`) remediating all known vulnerabilities (`0` pip-audit findings).
-- **Multilingual Tool Discovery & Profile Switching (v0.7.4):**
-  - Integrated `_MULTILINGUAL_TOOL_HINTS` across all Defroster tools (German, French, English) for instant tool search recognition.
-  - Dedicated Tool Profile selectors on Dashboard Hero Card and Navigation Sidebar with live bidirectional synchronization.
-  - Real-time `notifications/tools/list_changed` broadcast to active MCP sessions upon profile change.
-- **Autonomous Web Chat Prompt Automation (v0.7.3):**
-  - Asynchronous input polling (`pollAndInject`) eliminating prompt drops during scheduled tasks.
-  - Multilingual action button detection and full pointer/mouse event sequencing (`pointerdown`, `mousedown`, `pointerup`, `mouseup`, `click`) compatible with modern React 18 interfaces.
-  - Upgraded updater engine using Microsoft Robocopy with automatic SmartScreen unblocking.
+- **Claude Connector Ergonomics & Secret Hygiene (v0.8.2):**
+  - **Secret-file read protection (`protect_secret_files: true`):** `file_read` refuses credential/token files (`.env`, `credentials.json`, `gdrive_token.json`, `oauth.db`, SSH private keys, `config.json`, `hosts.json`) and `file_search_text` skips them while keeping `*.example` / `*.sample` templates readable.
+  - **Optional MCP tool annotations (`expose_tool_annotations`):** Adds `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` metadata when enabled (`false` by default for strict MCP 2024-11-05 clients).
+  - **Windows `known_folders` & bounded listings:** `system_get_specs` reports OneDrive-aware shell folders (`desktop`, `documents`, `downloads`, etc.) and `directory_list` bounds flat listings via `max_entries` (default `500`).
+  - **New default port `8742` & opt-in shell downloads (`allow_shell_downloads`):** Avoids port 8000 collisions on fresh installs and lets elevated shell users explicitly opt into `irm`/`iwr`/`curl`/`wget` downloads while keeping stagers/LOLBins permanently blocked.
+- **Embedded Claude WebApp & Streamlined 42-Tool Architecture (v0.8.1):**
+  - Parallel **🟠 Claude Web** (`claude.ai`) tab alongside **🤖 ChatGPT Web** and **💬 Mammouth AI Web** with isolated WebView2 profiles, OAuth 2.1 DCR onboarding, and `claude_web` task triggers.
+  - Consolidated 106 MCP tools into **42 canonical action-dispatched tools** (-47% wire tokens) with transparent legacy aliases in `defroster_execute_tool`.
+- **ChatGPT Integration & Task Scheduler Reliability (v0.8.0):**
+  - Embedded **🤖 ChatGPT Web** tab (`chatgpt.com`), OpenAI OAuth 2.1 redirect/DCR/PKCE `S256` support, and background `TaskSchedulerEngine` execution loop.
 
 Full history: [`CHANGELOG.md`](CHANGELOG.md) · [`RELEASE_NOTES.md`](RELEASE_NOTES.md)
 
@@ -113,25 +124,26 @@ Full history: [`CHANGELOG.md`](CHANGELOG.md) · [`RELEASE_NOTES.md`](RELEASE_NOT
   <img src="assets/cockpit_tools.png" alt="Module overview in the cockpit" width="95%">
 </p>
 
-15 switchable modules with 97 tools, plus the always-on `defroster_catalog`. Defaults as shipped in `config.example.json`.
+16 switchable modules (39 module tools) plus 3 always-on core hub tools (`defroster_catalog`, `defroster_health_check`, `defroster_execute_tool`) = **42 streamlined tools**. Defaults as shipped in `config.example.json`.
 
-| Module | Default | Tools | What it does | Key tools |
+| Module | Default | Tools | What it does | Canonical tools |
 | :--- | :---: | :---: | :--- | :--- |
-| 🌐 Browser Agent | ✅ on | 15 | Playwright automation: navigate, click, fill, DOM snapshot, screenshots, tabs, persistent logins | `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_fill`, `browser_restart` |
-| 👁️ Desktop Vision | ✅ on | 7 | Multi-monitor and window screenshots, tracked window, hotkey `Ctrl+Shift+Space` — behind the consent gate | `screen_capture`, `screen_capture_active_window`, `screen_list_windows` |
-| 🖱️ Mouse & Keyboard | ✅ on | 9 | Win32 mouse moves, clicks, drag & drop, scrolling, Unicode typing, hotkeys | `mouse_click`, `mouse_drag`, `keyboard_type`, `keyboard_hotkey` |
-| 💻 Mammouth Code CLI | ✅ on | 5 | Install/update, launch and run headless tasks with the Mammouth Code CLI; sync MCP config | `mammouth_code_run_task`, `mammouth_code_sync_mcp` |
-| ☁️ Google Drive | ✅ on | 11 | List, search, read, write, upload and download Drive files (OAuth2 or service account) | `gdrive_search_files`, `gdrive_read_file`, `gdrive_upload_from_workspace` |
-| 🔎 Workspace Search | ✅ on | 4 | Local SQLite FTS5 index of your code, symbol search, incremental updates | `workspace_index_directory`, `workspace_search`, `workspace_find_symbols` |
-| 📑 Smart Clipboard | ✅ on | 3 | Clipboard read/write and AI quick actions, hotkey `Ctrl+Shift+K` | `clipboard_get_text`, `clipboard_transform` |
-| 🧠 Long-Term Memory | ✅ on | 5 | Notes and context that survive across chats; Knowledge Vault tab in the GUI | `memory_save`, `memory_recall`, `memory_list` |
-| 📋 Tasks & Kanban | ✅ on | 4 | Task board with `todo` / `in_progress` / `done` / `blocked` | `task_create`, `task_update`, `task_list` |
-| ⏱️ Task Scheduler | ✅ on | 5 | Recurring prompts for Mammouth chat, Mammouth Code or local scripts | `task_schedule_create`, `task_schedule_control` |
-| 📁 File & Code Ops | ✅ on | 6 | Read, write, patch, search and list files inside `./workspace` | `file_read`, `file_write`, `file_replace_chunk`, `file_search_text` |
-| 🔑 PuTTY & SSH | ✅ on | 6 | Run commands and transfer files on saved SSH hosts (plink / pscp), DPAPI-encrypted host store | `ssh_exec_command`, `ssh_transfer_file`, `ssh_list_saved_hosts` |
-| 📊 System Diagnostics | ✅ on | 5 | CPU, RAM, disks, GPU, processes, Windows event logs | `system_get_specs`, `system_get_processes`, `system_get_event_logs` |
-| 💻 PowerShell & Daemons | ⛔ off | 9 | PowerShell / cmd execution and background processes — **not sandboxed** | `powershell_exec`, `command_run`, `process_start_background` |
-| 🌐 Web Scraper | ⛔ off | 2 | Fetch pages as Markdown, check endpoint status (SSRF shield) | `web_fetch_url`, `web_check_status` |
+| 🌐 Browser Agent | ✅ on | 5 | Playwright automation: navigate, DOM/screenshot inspect, click/fill/scroll, JS eval, tabs & engines | `browser_navigate`, `browser_inspect`, `browser_interact`, `browser_evaluate`, `browser_session` |
+| 📁 File & Code Ops | ✅ on | 5 | Read, write, patch, search and list files inside `./workspace` with secret-file protection | `file_read`, `file_write`, `file_replace_chunk`, `file_search_text`, `directory_list` |
+| ☁️ Google Drive | ✅ on | 4 | List, search, read, download, write, upload and manage Drive files (OAuth2 or service account) | `gdrive_list`, `gdrive_read`, `gdrive_write`, `gdrive_manage` |
+| 🖱️ Mouse & Keyboard | ✅ on | 3 | Screen geometry, Win32 mouse moves/clicks/drag/scroll, Unicode typing and hotkeys | `desktop_get_screen_info`, `desktop_mouse`, `desktop_keyboard` |
+| 📊 System Diagnostics | ✅ on | 3 | CPU, RAM, disks, GPU, `known_folders`, top processes and Windows event logs | `system_get_specs`, `system_get_processes`, `system_event_logs` |
+| 🧠 Long-Term Memory | ✅ on | 3 | Notes and semantic recall that survive across chats; Knowledge Vault tab in the GUI | `memory_save`, `memory_recall`, `memory_delete` |
+| 👁️ Desktop Vision | ✅ on | 2 | Multi-monitor and window screenshots, tracked window, hotkey `Ctrl+Shift+Space` — behind the consent gate | `screen_capture`, `screen_windows` |
+| ⏱️ Task Scheduler | ✅ on | 2 | Recurring prompts for ChatGPT, Claude, Mammouth chat, CLI or local scripts | `task_schedule_create`, `task_schedule_manage` |
+| 🔎 Workspace Search | ✅ on | 1 | Local SQLite FTS5 index of your code, symbol search, incremental updates | `workspace_code_search` |
+| 📑 Smart Clipboard | ✅ on | 1 | Clipboard read/write/clean and AI quick actions, hotkey `Ctrl+Shift+K` | `clipboard_manage` |
+| 📋 Tasks & Kanban | ✅ on | 1 | Task board with `todo` / `in_progress` / `done` / `blocked` | `task_board` |
+| 🤖 Claude Code CLI | ✅ on | 1 | Claude Code CLI & cloud sessions status, `.mcp.json` sync, terminal launcher and task runner | `claude_code` |
+| 💻 PowerShell & Daemons | ⛔ off | 3 | PowerShell / cmd execution, `desktop_open`, and background processes — **not sandboxed** | `powershell_exec`, `desktop_open`, `process_manage` |
+| 🔑 PuTTY & SSH | ⛔ off | 3 | Run commands and transfer files on saved SSH hosts (plink / pscp), DPAPI-encrypted host store | `ssh_hosts`, `ssh_exec_command`, `ssh_transfer_file` |
+| 💻 Mammouth Code CLI | ⛔ off | 1 | Install/update, sync MCP config, launch terminal and run headless tasks with Mammouth Code CLI | `mammouth_code` |
+| 🌐 Web Scraper | ⛔ off | 1 | Fetch pages as Markdown and check endpoint status (SSRF shield) | `web_fetch` |
 
 Global hotkey to summon the cockpit: `Ctrl+Shift+M`.
 
@@ -151,12 +163,12 @@ Global hotkey to summon the cockpit: `Ctrl+Shift+M`.
 
 <details>
 <summary><b>Where does my data go?</b></summary>
-<p>MD-9000 has no telemetry and no server of its own. Tool results — including screenshots you approve — go to your Mammouth.ai chat and from there to the model provider you use in Mammouth. With a tunnel, traffic also passes through that tunnel provider (Tailscale, Cloudflare or ngrok).</p>
+<p>MD-9000 has no telemetry and no server of its own. Tool results — including screenshots you approve — go only to the assistant you connected (ChatGPT, Claude, or Mammouth.ai) and from there to its model provider. With a tunnel, traffic also passes through that tunnel provider (Tailscale, Cloudflare or ngrok).</p>
 </details>
 
 <details>
 <summary><b><code>/sse</code> or <code>/mcp</code>?</b></summary>
-<p><code>/sse</code> is the default and recommended. <code>/mcp</code> (Streamable HTTP) works as well; both require the Bearer token.</p>
+<p><code>/sse</code> is the default for Mammouth.ai; <code>/mcp</code> (Streamable HTTP + OAuth 2.1) is recommended for ChatGPT and Claude connectors. Both enforce authentication.</p>
 </details>
 
 <details>
@@ -192,6 +204,7 @@ uv run gui.py
 │   ├── browser_agent.py   # Playwright multi-browser agent
 │   ├── screen_capture.py  # Desktop vision + consent gate
 │   ├── desktop_input.py   # Win32 mouse & keyboard
+│   ├── claude_code.py     # Claude Code CLI & cloud session sync
 │   ├── mammouth_code.py   # Mammouth Code CLI integration
 │   ├── google_drive.py    # Google Drive
 │   ├── workspace_indexer.py  # Local FTS5 code search
@@ -204,7 +217,7 @@ uv run gui.py
 │   ├── putty_ssh.py       # PuTTY / plink / pscp
 │   ├── system_monitor.py  # Hardware & event logs
 │   ├── web_tools.py       # Web scraper with SSRF shield
-│   ├── embedded_browser.py  # WebView2 Mammouth chat in the cockpit
+│   ├── embedded_browser.py  # WebView2 ChatGPT, Claude & Mammouth tabs in the cockpit
 │   ├── global_hotkey.py   # Win32 global hotkeys
 │   └── updater.py         # Update check
 ├── config.example.json    # Template configuration (copy to config.json)

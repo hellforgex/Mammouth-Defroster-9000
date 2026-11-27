@@ -4,7 +4,7 @@ import io
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 try:
     from PIL import Image as PILImage, ImageGrab
@@ -1219,6 +1219,69 @@ def _screen_capture_active_window_impl(
         "mime_type": mime_type,
         "base64_preview": f"data:{mime_type};base64,{b64_str[:100]}... [total {len(b64_str)} chars]"
     }
+
+
+def screen_capture_dispatch(
+    target: str = "active_window",
+    monitor: int = 1,
+    max_width: int | None = 1920,
+    quality: int = 85,
+    include_metadata: bool = True,
+    save_to_workspace: bool = True
+) -> Any:
+    """Capture a screenshot of the active window, a specific window HWND, or a display monitor.
+
+    Args:
+        target: 'active_window', 'monitor'/'desktop', or numeric window HWND (or 'hwnd:<id>').
+        monitor: Display index when target='monitor' (1=primary, 0=all screens).
+        max_width: Max width in pixels for LLM token efficiency (default 1920).
+        quality: JPEG quality 1-99 or 100 for PNG (default 85).
+        include_metadata: Return window metadata with preview for window targets.
+        save_to_workspace: Save PNG copy under workspace/screenshots/.
+    """
+    tgt = str(target or "active_window").strip().lower()
+    if tgt in ("monitor", "desktop", "screen", "all"):
+        return screen_capture(monitor=monitor, max_width=max_width, quality=quality, save_to_workspace=save_to_workspace)
+    hwnd_val: int | None = None
+    if tgt.startswith("hwnd:"):
+        raw_id = tgt[5:].strip()
+        if raw_id.isdigit():
+            hwnd_val = int(raw_id)
+    elif tgt.isdigit():
+        hwnd_val = int(tgt)
+    return screen_capture_active_window(
+        target_hwnd=hwnd_val,
+        save_to_workspace=save_to_workspace,
+        include_metadata=include_metadata,
+        max_width=max_width,
+        quality=quality,
+    )
+
+
+def screen_windows(
+    action: Literal["list", "monitors", "get_tracked", "set_tracked"] = "list",
+    target: str = "auto",
+    include_minimized: bool = False,
+    exclude_self: bool = True
+) -> Any:
+    """Inspect windows and displays or manage the tracked capture target.
+
+    Args:
+        action: 'list' (open windows), 'monitors' (displays), 'get_tracked', or 'set_tracked'.
+        target: Window title/process, HWND, 'auto', 'monitor', or 'snip' (for set_tracked).
+        include_minimized: Include minimized windows when action='list'.
+        exclude_self: Exclude Defroster windows when action='list'.
+    """
+    act = str(action or "list").strip().lower()
+    if act == "list":
+        return screen_list_windows(include_minimized=include_minimized, exclude_self=exclude_self)
+    if act == "monitors":
+        return screen_list_monitors()
+    if act == "get_tracked":
+        return screen_get_tracked_window()
+    if act == "set_tracked":
+        return screen_set_tracked_window(target=target)
+    return {"status": "error", "error": f"Unknown screen_windows action '{action}'."}
 
 
 

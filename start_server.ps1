@@ -2,7 +2,7 @@
 $cfgPath = Join-Path $PSScriptRoot "config.json"
 $autoTunnel = $false
 $tunnelMode = "Tailscale Funnel"
-$port = 8000
+$port = 8742
 
 if (Test-Path $cfgPath) {
     try {

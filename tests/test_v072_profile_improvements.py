@@ -70,10 +70,10 @@ def test_schema_budget_status_non_contradictory():
     assert "7,719" in safe_info["schema_budget_status"]
     assert "< 3,000" not in safe_info["schema_budget_status"]
 
-    # Test developer (4,100 tokens after adding desktop_open + clipboard_set_text)
+    # Test developer streamlined budget (~3,810 tokens)
     res_dev = defroster_catalog(switch_profile="developer")
     dev_info = res_dev["active_tool_profile"]
     assert "Safe" in dev_info["schema_budget_status"]
-    assert "6,000" in dev_info["schema_budget_status"]
+    assert "3,810" in dev_info["schema_budget_status"]
     assert "7,719" in dev_info["schema_budget_status"]
     assert "< 3,000" not in dev_info["schema_budget_status"]

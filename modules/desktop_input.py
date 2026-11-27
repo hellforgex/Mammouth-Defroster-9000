@@ -1,7 +1,7 @@
 import ctypes
 import os
 import time
-from typing import Any
+from typing import Any, Literal
 
 # Try importing pyautogui if available, with failsafe disabled for server stability
 try:
@@ -565,3 +565,70 @@ def keyboard_hotkey(keys: str) -> dict[str, Any]:
             return {"status": "error", "error": f"Failed to trigger hotkey: {e}"}
 
     return {"status": "error", "error": "Native input subsystem unavailable."}
+
+
+def desktop_mouse(
+    action: Literal["click", "move", "drag", "scroll"] = "click",
+    x: int | None = None,
+    y: int | None = None,
+    end_x: int | None = None,
+    end_y: int | None = None,
+    button: Literal["left", "right", "middle"] = "left",
+    clicks: int = 1,
+    amount: int = 0,
+    duration: float = 0.2
+) -> dict[str, Any]:
+    """Control mouse actions (click, move, drag, scroll).
+
+    Args:
+        action: 'click', 'move', 'drag', or 'scroll'.
+        x: Target/start X coordinate in pixels.
+        y: Target/start Y coordinate in pixels.
+        end_x: Destination X coordinate for 'drag'.
+        end_y: Destination Y coordinate for 'drag'.
+        button: 'left', 'right', or 'middle'.
+        clicks: Click count for 'click' (1=single, 2=double).
+        amount: Scroll wheel clicks for 'scroll' (positive=up, negative=down).
+        duration: Duration in seconds for 'drag' or smooth 'move'.
+    """
+    act = str(action or "click").strip().lower()
+    if act == "click":
+        return mouse_click(x=x, y=y, button=button, clicks=clicks)
+    if act == "move":
+        if x is None or y is None:
+            return {"status": "error", "error": "Parameters 'x' and 'y' are required for action='move'."}
+        return mouse_move(x=x, y=y, smooth=duration > 0.0, duration=duration)
+    if act == "drag":
+        return mouse_drag(start_x=x, start_y=y, end_x=end_x, end_y=end_y, button=button, duration=duration)
+    if act == "scroll":
+        return mouse_scroll(clicks=amount)
+    return {"status": "error", "error": f"Unknown mouse action '{action}'. Valid: 'click', 'move', 'drag', 'scroll'."}
+
+
+def desktop_keyboard(
+    action: Literal["type", "press", "hotkey"] = "type",
+    text: str = "",
+    key: str = "",
+    presses: int = 1,
+    delay: float = 0.01
+) -> dict[str, Any]:
+    """Simulate keyboard typing, single key presses, or hotkeys.
+
+    Args:
+        action: 'type' (Unicode string), 'press' (single key), or 'hotkey' (combo like 'ctrl+c').
+        text: Text to type when action='type'.
+        key: Key or combo when action='press' or 'hotkey' (e.g. 'enter', 'esc', 'ctrl+t').
+        presses: Repeat count for 'press'.
+        delay: Delay between typed characters in seconds.
+    """
+    act = str(action or "type").strip().lower()
+    if act == "type":
+        return keyboard_type(text=text, delay=delay)
+    if act == "press":
+        target_key = key or text
+        if "+" in target_key and target_key.strip() != "+":
+            return keyboard_hotkey(keys=target_key)
+        return keyboard_press(key=target_key, presses=presses)
+    if act == "hotkey":
+        return keyboard_hotkey(keys=key or text)
+    return {"status": "error", "error": f"Unknown keyboard action '{action}'. Valid: 'type', 'press', 'hotkey'."}

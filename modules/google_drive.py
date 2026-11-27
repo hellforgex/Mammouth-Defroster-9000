@@ -10,7 +10,7 @@ import urllib.parse
 import threading
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -1026,3 +1026,100 @@ def gdrive_delete_file(file_id: str, permanent: bool = False) -> dict[str, Any]:
             if resp.status_code != 200:
                 raise RuntimeError(f"Move to trash failed ({resp.status_code}): {resp.text}")
             return {"status": "moved_to_trash", "file_id": file_id}
+
+
+def gdrive_list(
+    query: str = "",
+    folder_id: str = "root",
+    search_mode: Literal["folder", "global"] = "folder",
+    page_size: int = 25
+) -> list[dict[str, Any]]:
+    """List files in a Google Drive folder or search across the whole Drive.
+
+    Args:
+        query: Search term or Drive filter expression.
+        folder_id: Parent folder ID when search_mode='folder' (default 'root').
+        search_mode: 'folder' (list folder contents) or 'global' (full-text/name search).
+        page_size: Maximum results (1-100, default 25).
+    """
+    mode = str(search_mode or "folder").strip().lower()
+    if mode == "global" or (query and folder_id == "root" and "'" not in query and "=" not in query):
+        if mode == "global":
+            return gdrive_search_files(query=query, page_size=page_size)
+    return gdrive_list_files(folder_id=folder_id, query=query, page_size=page_size)
+
+
+def gdrive_read(
+    file_id: str,
+    mode: Literal["text", "metadata", "download"] = "text",
+    destination_filename: str = "",
+    max_chars: int = 50000
+) -> Any:
+    """Read text content, retrieve metadata, or download a Google Drive file to the workspace.
+
+    Args:
+        file_id: Google Drive file or folder ID.
+        mode: 'text' (read/export text), 'metadata' (file properties), or 'download' (save to workspace).
+        destination_filename: Target workspace filename when mode='download'.
+        max_chars: Maximum characters when mode='text' (default 50,000).
+    """
+    m = str(mode or "text").strip().lower()
+    if m == "metadata":
+        return gdrive_get_metadata(file_id=file_id)
+    if m == "download":
+        return gdrive_download_to_workspace(file_id=file_id, destination_filename=destination_filename)
+    return gdrive_read_file(file_id=file_id, max_chars=max_chars)
+
+
+def gdrive_write(
+    action: Literal["create", "update", "upload", "mkdir"] = "create",
+    name: str = "",
+    content: str = "",
+    file_id: str = "",
+    local_filename: str = "",
+    folder_id: str = "root",
+    mime_type: str = "text/plain"
+) -> dict[str, Any]:
+    """Create, update, upload files, or create folders in Google Drive.
+
+    Args:
+        action: 'create', 'update', 'upload' (from local workspace), or 'mkdir' (create folder).
+        name: File or folder name for 'create', 'upload' (optional override), or 'mkdir'.
+        content: Text content for 'create' or 'update'.
+        file_id: Existing Google Drive file ID for 'update'.
+        local_filename: Workspace file path for 'upload'.
+        folder_id: Target parent folder ID (default 'root').
+        mime_type: MIME type for 'create' (default 'text/plain').
+    """
+    act = str(action or "create").strip().lower()
+    if act == "create":
+        return gdrive_write_file(name=name, content=content, folder_id=folder_id, mime_type=mime_type)
+    if act == "update":
+        return gdrive_update_file(file_id=file_id, content=content)
+    if act == "upload":
+        return gdrive_upload_from_workspace(local_filename=local_filename, folder_id=folder_id, drive_filename=name)
+    if act == "mkdir":
+        return gdrive_create_folder(folder_name=name, parent_id=folder_id)
+    return {"status": "error", "error": f"Unknown gdrive_write action '{action}'."}
+
+
+def gdrive_manage(
+    action: Literal["status", "delete"] = "status",
+    file_id: str = "",
+    permanent: bool = False
+) -> dict[str, Any]:
+    """Check Google Drive auth/quota status or trash/delete a file.
+
+    Args:
+        action: 'status' or 'delete'.
+        file_id: Target Drive file/folder ID when action='delete'.
+        permanent: Permanently delete instead of moving to trash.
+    """
+    act = str(action or "status").strip().lower()
+    if act == "status":
+        return gdrive_status()
+    if act == "delete":
+        if not file_id:
+            return {"status": "error", "error": "Parameter 'file_id' is required for action='delete'."}
+        return gdrive_delete_file(file_id=file_id, permanent=permanent)
+    return {"status": "error", "error": f"Unknown gdrive_manage action '{action}'."}

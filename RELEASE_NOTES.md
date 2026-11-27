@@ -1,12 +1,34 @@
 # 🦣 Mammouth Defroster 9000 — Release Notes
 
-> **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **Mammouth.ai**  
+> **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **ChatGPT**, **Claude**, and **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.7.5**
+> **Current Version:** **v0.8.2**
 
 ---
 
-## 🚀 What's New in v0.7.5 — `v0.7.5 - Mammouth Defroster 9000`
+## 🚀 What's New in v0.8.2 — `v0.8.2 - Mammouth Defroster 9000`
+
+> **Note for Public Users:** `v0.8.2` consolidates all multi-assistant cockpit upgrades, the streamlined 42-tool MCP consolidation, secret-file read protection, Windows `known_folders` discovery, and shell hardening since `v0.7.5` (spanning `v0.8.0`, `v0.8.1`, and `v0.8.2`).
+
+### 🛡️ Claude Connector Ergonomics & Secret Hygiene (v0.8.2)
+- **Secret-File Read Protection (`protect_secret_files: true`):** `file_read` refuses credential and token files (`.env`, `.env.*`, `credentials.json`, `gdrive_token.json`, `service_account.json`, `storage_state.json`, `*.token.json`, `oauth.db`, SSH private keys, `*.pfx`/`*.p12`/`*.ppk`, and Defroster's own `config.json` / `hosts.json`), and `file_search_text` skips them. Template files (`*.example`, `*.sample`, `*.template`) remain readable. Fails closed if config cannot be read.
+- **Optional MCP Tool Annotations (`expose_tool_annotations`):** Adds `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` metadata when enabled (`false` by default so strict MCP 2024-11-05 clients receive the exact prior schema shape).
+- **Windows `known_folders` in `system_get_specs`:** Resolves `home`, `desktop`, `documents`, `downloads`, `pictures`, `music`, and `videos` via the Windows Shell API (`SHGetKnownFolderPath`) so OneDrive-redirected directories are reported accurately.
+- **Bounded Directory Listings:** `directory_list` accepts `max_entries` (default `500`) and appends a truncation marker instead of unbounded payloads.
+- **New Default Port `8742`:** Fresh installs default to port `8742` instead of `8000` to avoid collisions with local dev servers or prior instances (existing `config.json` files and `PORT` env overrides keep precedence).
+- **Opt-In Shell HTTP & Download Policy (`allow_shell_downloads`):** Added `server.allow_shell_downloads` (default `false`, fail-closed) and a confirmation toggle under **Skills → PowerShell** to allow `irm`, `iwr`, `curl`, `wget`, `Start-BitsTransfer`, and `.NET WebClient` downloads in elevated shell mode while keeping stagers/LOLBins (`iex`, `Invoke-Expression`, `certutil`, `bitsadmin`, `Start-Process`, `powershell -Command/-File`) permanently blocked.
+
+### 🟠 Embedded Claude WebApp & 42-Tool Consolidation (v0.8.1)
+- **Parallel Claude Web Tab:** Dedicated **🟠 Claude Web** (`https://claude.ai`) tab alongside **🤖 ChatGPT Web** and **💬 Mammouth AI Web**, with isolated WebView2 profile storage, dashboard/top-bar quick switches, OAuth 2.1 DCR onboarding (`🟠 Claude URL`), and `claude_web` task scheduler triggers.
+- **Streamlined 42-Tool MCP Architecture:** Consolidated 106 exposed MCP tools down to **42 canonical action-dispatched tools** (-60% tools, -47% wire tokens) across all 16 modules, with transparent legacy aliases inside `defroster_execute_tool`.
+
+### 🤖 ChatGPT Integration & Task Scheduler Reliability (v0.8.0)
+- **Embedded ChatGPT Web Tab & OAuth 2.1:** Parallel **🤖 ChatGPT Web** tab (`https://chatgpt.com`), OpenAI redirect URI / DCR / PKCE `S256` support, and `chatgpt_web` scheduled task target.
+- **Background Scheduler Loop & Web Chat Injection:** Started `TaskSchedulerEngine.start_background_loop()` in both GUI and headless server lifespans, added thread-safe Tk `after()` queue marshalling, and hardened WebView2 prompt injection for ProseMirror/TipTap editors.
+
+---
+
+## 📜 Previous Release: v0.7.5 — `v0.7.5 - Mammouth Defroster 9000`
 
 > **Note for Public Users:** `v0.7.5` is the first public release following `v0.7.2`. This release consolidates all security hardening, architectural enhancements, Anthropic Claude OAuth 2.1 integration, multilingual tool discovery advancements (from `v0.7.4`), autonomous web chat automation improvements (from `v0.7.3`), and system stability updates.
 

@@ -27,6 +27,43 @@ PROTECTED_SENSITIVE_DIRS = [
     ".ssh", ".aws", ".azure", ".kube", ".gnupg", "startup"
 ]
 
+# Files that routinely hold credentials or tokens. Read access is blocked by default
+# (config: server.protect_secret_files, default true) so a remote MCP client cannot
+# exfiltrate them. Template files (*.example / *.sample / *.template) stay readable.
+SECRET_FILE_PATTERNS = [
+    ".env", ".env.*", "*.env",
+    "credentials.json", "gdrive_token.json", "service_account.json", "storage_state.json",
+    "*.token.json", "oauth.db",
+    "id_rsa", "id_ed25519", "id_ecdsa", "*.ppk", "*.pfx", "*.p12",
+]
+SECRET_TEMPLATE_SUFFIXES = (".example", ".sample", ".template")
+SECRET_PROJECT_FILES = ("config.json", "hosts.json")
+
+
+def _secret_protection_enabled() -> bool:
+    """Return True unless the operator explicitly disabled server.protect_secret_files (fails closed)."""
+    try:
+        from config import load_config
+        return bool(load_config().get("server", {}).get("protect_secret_files", True))
+    except Exception:
+        return True
+
+
+def is_secret_file(path: "str | Path") -> bool:
+    """Heuristically detect credential/token files by name (and Defroster's own config files by location)."""
+    p = Path(path)
+    name = p.name.casefold()
+    if name.endswith(SECRET_TEMPLATE_SUFFIXES):
+        return False
+    if any(fnmatch.fnmatch(name, pat) for pat in SECRET_FILE_PATTERNS):
+        return True
+    if name in SECRET_PROJECT_FILES:
+        try:
+            return p.resolve().parent == BASE_DIR.resolve()
+        except Exception:
+            return False
+    return False
+
 
 def _get_sandbox_config():
     """Load workspace sandbox settings (cached load_config; same root resolution as the shell module)."""
@@ -207,6 +244,11 @@ def file_read(
         return f"Error: File not found: {target}"
     if not validated_path.is_file():
         return f"Error: Path is not a file: {target}"
+    if _secret_protection_enabled() and is_secret_file(validated_path):
+        return (
+            f"Security Shield: Reading '{validated_path.name}' is blocked because it looks like a credential/secret file. "
+            "Set server.protect_secret_files=false in config.json to allow this."
+        )
         
     try:
         max_chars = max(1, int(max_chars))
@@ -337,6 +379,7 @@ def file_search_text(
         
     results = []
     compiled_re = None
+    protect_secrets = _secret_protection_enabled()
     if is_regex:
         try:
             compiled_re = re.compile(raw_query, re.IGNORECASE)
@@ -349,6 +392,8 @@ def file_search_text(
                 if not fnmatch.fnmatch(f, file_pattern):
                     continue
                 fp = Path(root) / f
+                if protect_secrets and is_secret_file(fp):
+                    continue
                 if _is_binary_file(fp):
                     continue
                 try:
@@ -379,14 +424,22 @@ def file_search_text(
 
 def directory_list(
     directory_path: str | None = None,
-    path: str | None = None
-) -> list[dict[str, Any]]:
-    """List all files and folders inside a directory.
-    
+    recursive: bool = False,
+    max_depth: int = 3,
+    path: str | None = None,
+    max_entries: int = 500
+) -> list[dict[str, Any]] | dict[str, Any]:
+    """List files/folders in a directory or render a nested directory tree when recursive=True.
+
     Args:
         directory_path: Path to the directory (defaults to "." for workspace root).
+        recursive: If True, return a nested directory tree up to max_depth.
+        max_depth: Maximum recursion depth when recursive=True (default 3).
         path: Alias for directory_path.
+        max_entries: Maximum entries returned for a flat listing (default 500); a truncation marker is appended when exceeded.
     """
+    if recursive:
+        return directory_tree(directory_path=directory_path, max_depth=max_depth, path=path)
     raw_path = directory_path if directory_path is not None else (path if path is not None else ".")
     try:
         validated_dir = _validate_path(raw_path, for_write=False)
@@ -398,12 +451,21 @@ def directory_list(
         
     entries = []
     try:
-        for item in sorted(validated_dir.iterdir()):
+        limit = max(1, int(max_entries))
+        items = sorted(validated_dir.iterdir())
+        for item in items[:limit]:
+            try:
+                is_dir = item.is_dir()
+                size = item.stat().st_size if item.is_file() else None
+            except OSError:
+                is_dir, size = False, None
+            entries.append({"name": item.name, "is_dir": is_dir, "size_bytes": size, "path": str(item)})
+        if len(items) > limit:
             entries.append({
-                "name": item.name,
-                "is_dir": item.is_dir(),
-                "size_bytes": item.stat().st_size if item.is_file() else None,
-                "path": str(item)
+                "truncated": True,
+                "shown": limit,
+                "total_entries": len(items),
+                "hint": "Increase max_entries or narrow directory_path to see the rest.",
             })
     except Exception as e:
         return [{"error": str(e)}]
@@ -446,3 +508,40 @@ def directory_tree(
         return tree
 
     return build_tree(validated_dir, 1)
+
+
+def file_read_clean(file_path: str, start_line: int | None = None, end_line: int | None = None, max_chars: int = 50000) -> str:
+    """Read a text file inside the workspace sandbox with optional 1-based line slicing."""
+    return file_read(file_path=file_path, start_line=start_line, end_line=end_line, max_chars=max_chars)
+
+
+def file_write_clean(file_path: str, content: str = "", overwrite: bool = True) -> str:
+    """Write or overwrite a file inside the workspace sandbox."""
+    return file_write(file_path=file_path, content=content, overwrite=overwrite)
+
+
+def file_replace_chunk_clean(file_path: str, target_chunk: str, replacement_chunk: str) -> str:
+    """Replace a unique exact text block in a workspace file."""
+    return file_replace_chunk(file_path=file_path, target_chunk=target_chunk, replacement_chunk=replacement_chunk)
+
+
+def file_search_text_clean(
+    directory_path: str = ".",
+    search_query: str = "",
+    file_pattern: str = "*",
+    is_regex: bool = False,
+    max_matches: int = 50
+) -> list[dict[str, Any]]:
+    """Search for text or regex patterns across workspace files (live grep)."""
+    return file_search_text(
+        directory_path=directory_path,
+        search_query=search_query,
+        file_pattern=file_pattern,
+        is_regex=is_regex,
+        max_matches=max_matches,
+    )
+
+
+def directory_list_clean(directory_path: str = ".", recursive: bool = False, max_depth: int = 3, max_entries: int = 500) -> list[dict[str, Any]] | dict[str, Any]:
+    """List files/folders in a workspace directory or render a nested directory tree (recursive=True)."""
+    return directory_list(directory_path=directory_path, recursive=recursive, max_depth=max_depth, max_entries=max_entries)

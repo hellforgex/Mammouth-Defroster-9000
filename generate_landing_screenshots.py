@@ -110,10 +110,10 @@ def customize_dashboard_dark(app):
         app.lbl_public_url.configure(text="https://mammouth-cockpit.ts.net/sse")
 
     if hasattr(app, "lbl_local_url"):
-        app.lbl_local_url.configure(text="http://127.0.0.1:8000/sse")
+        app.lbl_local_url.configure(text="http://127.0.0.1:8742/sse")
 
     if hasattr(app, "status_badge"):
-        app.status_badge.configure(text="● ONLINE (Port 8000)", text_color="#10B981")
+        app.status_badge.configure(text="● ONLINE (Port 8742)", text_color="#10B981")
 
     if hasattr(app, "btn_toggle_server"):
         app.btn_toggle_server.configure(text="⏹ STOP SERVER", fg_color="#EF4444", hover_color="#DC2626")
@@ -153,7 +153,7 @@ def customize_dashboard_dark(app):
             "[12:00:01] [QUICK-LAUNCHER] Global summon hotkey active: Ctrl+Shift+M (ID: 2001)",
             "[12:00:01] [COPILOT] Screen Copilot global hotkey active: Ctrl+Shift+Space (ID: 2002)",
             "[12:00:01] [SMART CLIPBOARD] Global hotkey active: Ctrl+Shift+K (ID: 2003)",
-            "[12:00:02] Starting in-process FastMCP server on 127.0.0.1:8000...",
+            "[12:00:02] Starting in-process FastMCP server on 127.0.0.1:8742...",
             "[12:00:02] [NETWORK] Tailscale Funnel background proxy activated.",
             "[12:00:02] Server is LIVE! Active Endpoint: https://mammouth-cockpit.ts.net/sse",
             "[12:00:02] [CAPABILITIES] 15 Defrosted Modules loaded (89 tools total exposed).",

@@ -44,15 +44,15 @@ class TestTaskScheduler(unittest.TestCase):
     def test_create_task_and_defaults(self):
         """Test task creation with default and customized values."""
         task = scheduler_create_task(
-            name="⚽ Livebericht: FC Bayern vs. Dortmund",
-            prompt="Suche nach Spielstand, Toren und erstelle Livebericht alle 5 Minuten.",
+            name="⚽ Live Match Report: Arsenal vs. Chelsea",
+            prompt="Search for the current score, goals, and write a live report every 5 minutes.",
             interval_seconds=300,
             repeat_count=18,
             target="mammouth_web",
             start_immediately=False
         )
         self.assertIn("id", task)
-        self.assertEqual(task["name"], "⚽ Livebericht: FC Bayern vs. Dortmund")
+        self.assertEqual(task["name"], "⚽ Live Match Report: Arsenal vs. Chelsea")
         self.assertEqual(task["interval_seconds"], 300)
         self.assertEqual(task["repeat_count"], 18)
         self.assertEqual(task["runs_done"], 0)

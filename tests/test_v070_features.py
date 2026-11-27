@@ -35,8 +35,8 @@ class TestV070MultiBrowserFeatures(unittest.TestCase):
     """Test suite for v0.7.0 multi-browser and headless control capabilities."""
 
     def test_version_bump_consistency(self):
-        """Verify APP_VERSION in gui.py and server.py are properly bumped to v0.7.0."""
-        self.assertRegex(gui.APP_VERSION, r"^v0\.7\.\d+$")
+        """Verify APP_VERSION in gui.py and server.py are at least v0.7.0 and aligned."""
+        self.assertRegex(gui.APP_VERSION, r"^v0\.(7|8|9)\.\d+$")
         self.assertIn(gui.APP_VERSION, server.mcp.instructions or "")
 
     def test_playwright_native_channels_contains_firefox_and_webkit(self):

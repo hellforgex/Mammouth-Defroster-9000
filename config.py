@@ -23,7 +23,7 @@ CONFIG_EXAMPLE_FILE = BASE_DIR / "config.example.json"
 DEFAULT_CONFIG: dict[str, Any] = {
     "server": {
         "host": "127.0.0.1",
-        "port": 8000,
+        "port": 8742,
         "tunnel_mode": "Tailscale Funnel",  # Options: "Tailscale Funnel", "Cloudflare Tunnel", "ngrok", "Direct / LAN IP", "Custom Domain"
         "endpoint_path": "/sse",           # Options: "/sse", "/mcp", "/messages", "/"
         "auto_tunnel": False,              # Safe by Default: Opt-in for public exposure
@@ -33,15 +33,23 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "allowed_origins": [
             "https://mammouth.ai",
             "https://app.mammouth.ai",
+            "https://chatgpt.com",
+            "https://chat.openai.com",
+            "https://platform.openai.com",
+            "https://openai.com",
             "https://claude.ai",
             "https://code.claude.ai",
             "https://app.claude.ai",
+            "https://claude.com",
+            "https://www.claude.com",
             "https://console.anthropic.com",
             "http://localhost",
             "http://127.0.0.1"
         ],
         "workspace_root": "./workspace",
         "enforce_workspace_sandbox": True, # Secure by Default: Sandboxed to workspace
+        "protect_secret_files": True,      # Secure by Default: file_read/file_search_text skip .env, tokens, credentials, oauth.db
+        "expose_tool_annotations": False,  # Advertise MCP tool annotations (readOnlyHint/destructiveHint); enable for Claude connectors
         "tailscale_path": "",
         "cloudflared_path": "cloudflared",
         "ngrok_path": "ngrok",
@@ -50,6 +58,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "ngrok_custom_url": "",
         "appearance_mode": "System",       # Options: "System", "Dark", "Light"
         "allow_admin_shell": False,        # Secure by Default: Read-Only shell commands only
+        "allow_shell_downloads": False,    # Secure by Default: Block shell HTTP/download commands (irm, iwr, curl, wget)
         "enable_tls": False,               # Opt-in for LAN HTTPS
         "registration_token": "",          # Optional: If set, only clients with this token in Authorization header can register OAuth clients
         "ssl_certfile": "",
@@ -80,7 +89,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "task_scheduler": {
             "enabled": True,
             "name": "Automated Task Scheduler & Triggers",
-            "description": "Scheduled & recurring prompt automation in Mammouth Web, Code CLI, and system."
+            "description": "Scheduled & recurring prompt automation in ChatGPT Web, Claude Web, Mammouth Web, Code CLI, and system."
         },
         "file_ops": {
             "enabled": True,
@@ -173,11 +182,22 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "embedded_browser": {
         "enabled": True,
         "start_page": "https://mammouth.ai",
+        "default_chat_tab": "chatgpt",
         "auto_open_on_server_start": True,
         "user_data_dir": "./data/browser_profile",
         "quota_sidebar_enabled": True,
         "quota_refresh_interval_seconds": 300,
         "zen_mode": False
+    },
+    "chatgpt_browser": {
+        "enabled": True,
+        "start_page": "https://chatgpt.com",
+        "user_data_dir": "./data/chatgpt_browser_profile"
+    },
+    "claude_browser": {
+        "enabled": True,
+        "start_page": "https://claude.ai",
+        "user_data_dir": "./data/claude_browser_profile"
     }
 }
 
@@ -186,110 +206,102 @@ TOOL_PROFILES: dict[str, dict[str, Any]] = {
     "mammouth_safe": {
         "id": "mammouth_safe",
         "name": "Mammouth Chat Safe",
-        "label": "🛡️ Mammouth Chat Safe (23 Tools - Recommended)",
-        "description": "Recommended default for Mammouth AI Chat. Core file, shell, browser, desktop vision & input automation (~5,800 tokens) guaranteed within platform session limits.",
+        "label": "🛡️ Mammouth Chat Safe (22 Tools - Recommended)",
+        "description": "Recommended lean default for web chats. Core files, shell, browser, desktop vision/input, memory & scheduler (~4,250 tokens).",
         "icon": "🛡️",
-        "token_estimate": 5800,
+        "token_estimate": 4250,
         "tools": [
             "defroster_catalog",
+            "defroster_health_check",
             "defroster_execute_tool",
             "directory_list",
             "file_read",
             "file_write",
-            "command_run",
             "powershell_exec",
             "desktop_open",
             "screen_capture",
-            "screen_capture_active_window",
+            "screen_windows",
             "desktop_get_screen_info",
-            "mouse_click",
-            "mouse_move",
-            "keyboard_type",
-            "keyboard_hotkey",
+            "desktop_mouse",
+            "desktop_keyboard",
             "browser_navigate",
-            "browser_snapshot",
-            "browser_click",
-            "browser_fill",
+            "browser_inspect",
+            "browser_interact",
             "memory_save",
             "memory_recall",
             "system_get_specs",
-            "clipboard_get_text",
+            "clipboard_manage",
+            "task_schedule_create",
+            "task_schedule_manage",
         ]
     },
     "developer": {
         "id": "developer",
         "name": "Developer & Scripting",
-        "label": "💻 Developer & Scripting (22 Tools)",
-        "description": "File search, chunk replacement, directory trees, local PowerShell execution, desktop launcher, vision & input automation, and diagnostics (~6,000 tokens).",
+        "label": "💻 Developer & Scripting (20 Tools)",
+        "description": "File editing & grep, local RAG code search, shell/background processes, vision, diagnostics, and CLI agents (~3,810 tokens).",
         "icon": "💻",
-        "token_estimate": 6000,
+        "token_estimate": 3810,
         "tools": [
             "defroster_catalog",
+            "defroster_health_check",
             "defroster_execute_tool",
             "file_read",
             "file_write",
             "file_replace_chunk",
             "file_search_text",
             "directory_list",
-            "directory_tree",
-            "command_run",
+            "workspace_code_search",
             "powershell_exec",
+            "process_manage",
             "desktop_open",
             "screen_capture",
-            "screen_capture_active_window",
-            "desktop_get_screen_info",
-            "mouse_click",
-            "keyboard_type",
             "system_get_specs",
             "system_get_processes",
             "memory_save",
             "memory_recall",
-            "clipboard_get_text",
-            "clipboard_set_text",
+            "clipboard_manage",
+            "claude_code",
+            "mammouth_code",
         ]
     },
     "web_vision": {
         "id": "web_vision",
         "name": "Web & Vision",
-        "label": "👁️ Web & Vision (14 Tools)",
-        "description": "Browser automation (navigate, snapshot, click, fill), multi-monitor screen capture, and desktop input (~3,500 tokens).",
+        "label": "👁️ Web & Vision (12 Tools)",
+        "description": "Consolidated Playwright browser control, desktop screen capture, mouse/keyboard input, and memory (~2,820 tokens).",
         "icon": "👁️",
-        "token_estimate": 3500,
+        "token_estimate": 2820,
         "tools": [
             "defroster_catalog",
             "defroster_execute_tool",
             "browser_navigate",
-            "browser_snapshot",
-            "browser_screenshot",
-            "browser_click",
-            "browser_fill",
+            "browser_inspect",
+            "browser_interact",
+            "browser_session",
             "screen_capture",
-            "screen_list_windows",
-            "screen_capture_active_window",
-            "mouse_click",
-            "keyboard_type",
+            "screen_windows",
+            "desktop_get_screen_info",
+            "desktop_mouse",
+            "desktop_keyboard",
             "memory_save",
-            "memory_recall",
         ]
     },
     "automation": {
         "id": "automation",
         "name": "Tasks & Automation",
-        "label": "⏱️ Tasks & Automation (12 Tools)",
-        "description": "Scheduled background prompt triggers and Kanban project management (~3,100 tokens).",
+        "label": "⏱️ Tasks & Automation (9 Tools)",
+        "description": "Scheduled recurring triggers, Kanban board, local shell, and persistent memory (~2,120 tokens).",
         "icon": "⏱️",
-        "token_estimate": 3100,
+        "token_estimate": 2120,
         "tools": [
             "defroster_catalog",
             "defroster_execute_tool",
-            "task_create",
-            "task_update",
-            "task_list",
-            "task_delete",
+            "task_board",
             "task_schedule_create",
-            "task_schedule_list",
-            "task_schedule_control",
-            "task_schedule_delete",
+            "task_schedule_manage",
+            "powershell_exec",
+            "desktop_open",
             "memory_save",
             "memory_recall",
         ]
@@ -297,10 +309,10 @@ TOOL_PROFILES: dict[str, dict[str, Any]] = {
     "all": {
         "id": "all",
         "name": "Full Defroster (All Enabled Modules)",
-        "label": "⚡ Full Defroster (All 86+ Tools - Uncapped)",
-        "description": "Exposes all 86+ tools across all enabled modules (~21,500 tokens). Recommended for Claude Desktop or Cursor.",
+        "label": "⚡ Full Defroster (All 42 Tools)",
+        "description": "Exposes all active streamlined tools across all enabled modules (~7,380 default / ~8,530 max tokens, down 47% from 16k+).",
         "icon": "⚡",
-        "token_estimate": 21500,
+        "token_estimate": 8530,
         "tools": []
     },
     "custom": {
@@ -388,7 +400,7 @@ _config_cache: dict[str, Any] | None = None
 _config_cache_stamp: tuple | None = None
 
 # Top-level sections that are merged key-by-key from config.json over DEFAULT_CONFIG.
-_MERGED_SECTIONS = ("server", "browser_agent", "mammouth_code", "embedded_browser")
+_MERGED_SECTIONS = ("server", "browser_agent", "mammouth_code", "embedded_browser", "chatgpt_browser", "claude_browser")
 
 
 def _config_file_stamp() -> tuple | None:

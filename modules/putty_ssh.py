@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 if getattr(sys, "frozen", False):
     BASE_DIR = Path(sys.executable).parent.resolve()
@@ -484,3 +484,51 @@ def ssh_list_putty_registry_sessions() -> dict[str, Any]:
     """List all saved sessions configured directly in PuTTY's Windows Registry."""
     sessions = _get_putty_registry_sessions_list()
     return {"sessions": sessions, "count": len(sessions)}
+
+
+def ssh_hosts(
+    action: Literal["list", "list_putty", "save", "open_putty"] = "list",
+    alias: str = "",
+    host: str = "",
+    username: str = "root",
+    password: str | None = None,
+    private_key_path: str | None = None,
+    port: int = 22,
+    description: str = ""
+) -> dict[str, Any] | str:
+    """Manage DPAPI-encrypted SSH host profiles, PuTTY registry sessions, and interactive PuTTY windows.
+
+    Args:
+        action: 'list' (saved hosts), 'list_putty' (PuTTY registry), 'save', or 'open_putty'.
+        alias: Host alias for 'save' or host/alias for 'open_putty'.
+        host: Hostname/IP for 'save' or 'open_putty'.
+        username: SSH username (default 'root').
+        password: Optional password (encrypted via DPAPI when saved).
+        private_key_path: Optional path to .ppk/.pem private key.
+        port: SSH port (default 22).
+        description: Optional description for 'save'.
+    """
+    act = str(action or "list").strip().lower()
+    if act == "list":
+        return ssh_list_saved_hosts()
+    if act == "list_putty":
+        return ssh_list_putty_registry_sessions()
+    if act == "save":
+        return ssh_save_host(
+            alias=alias,
+            host=host,
+            username=username,
+            password=password,
+            private_key_path=private_key_path,
+            port=port,
+            description=description,
+        )
+    if act == "open_putty":
+        return ssh_open_putty_window(
+            host_or_alias=alias or host,
+            username=username if username != "root" else None,
+            password=password,
+            private_key_path=private_key_path,
+            port=port if port != 22 else None,
+        )
+    return {"error": f"Unknown ssh_hosts action '{action}'. Valid: 'list', 'list_putty', 'save', 'open_putty'."}

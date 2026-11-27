@@ -334,13 +334,13 @@ class TestOAuthHardening(unittest.TestCase):
             "method": "GET",
             "path": "/",
             "headers": [
-                (b"host", b"desktop-sdm42jr.taila2d74a.ts.net"),
+                (b"host", b"example-node.tail00000.ts.net"),
             ],
             "scheme": "http"
         }
         req = Request(scope)
         base = _get_base_url(req)
-        self.assertEqual(base, "https://desktop-sdm42jr.taila2d74a.ts.net")
+        self.assertEqual(base, "https://example-node.tail00000.ts.net")
 
     def test_anti_clickjacking_headers(self):
         from server import SecurityAndAuthMiddleware

@@ -2,7 +2,7 @@ import threading
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import sys
 
@@ -179,3 +179,41 @@ def task_delete(task_id: int | None = None, id: int | None = None) -> str:
         deleted = cursor.rowcount > 0
     conn.close()
     return f"Successfully deleted task {effective_id}." if deleted else f"Task {effective_id} not found."
+
+
+def task_board(
+    action: Literal["list", "create", "update", "delete"] = "list",
+    task_id: int | None = None,
+    title: str = "",
+    description: str = "",
+    status: str = "",
+    priority: str = "",
+    limit: int = 50
+) -> dict[str, Any] | list[dict[str, Any]] | str:
+    """Manage persistent Kanban tasks (list, create, update, delete).
+
+    Args:
+        action: 'list', 'create', 'update', or 'delete'.
+        task_id: Task ID for 'update' or 'delete'.
+        title: Task title for 'create' or 'update'.
+        description: Task description for 'create' or 'update'.
+        status: 'todo', 'in_progress', 'done', or 'blocked'.
+        priority: 'low', 'medium', 'high', or 'urgent'.
+        limit: Max tasks returned for 'list' (default 50).
+    """
+    act = str(action or "list").strip().lower()
+    if act == "list":
+        return task_list(status=status or None, priority=priority or None, limit=limit)
+    if act == "create":
+        return task_create(title=title, description=description, priority=priority or "medium")
+    if act == "update":
+        return task_update(
+            task_id=task_id,
+            status=status or None,
+            title=title or None,
+            description=description if description else None,
+            priority=priority or None,
+        )
+    if act == "delete":
+        return task_delete(task_id=task_id)
+    return {"error": f"Unknown task_board action '{action}'. Valid: 'list', 'create', 'update', 'delete'."}

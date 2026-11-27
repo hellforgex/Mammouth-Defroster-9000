@@ -94,6 +94,7 @@ if sys.platform == "win32":
         edgechromium.EdgeChrome.on_script_notify = _safe_edgechrome_on_script_notify
         edgechromium.EdgeChrome.on_navigation_completed = _safe_edgechrome_on_nav_completed
         edgechromium.EdgeChrome.on_download_starting = _safe_edgechrome_on_download_starting
+        edgechromium.EdgeChrome.on_new_window_request = lambda self, s, a: None
 
         user32 = ctypes.windll.user32
         HAS_WEBVIEW2 = True
@@ -169,7 +170,7 @@ def _native_save_file_dialog(initial_dir: str, default_name: str, title: str = "
 
 
 def _is_trusted_browser_origin(uri: str) -> bool:
-    """Verifies if the requested URI originates from trusted domains (Mammouth.ai, localhost, 127.0.0.1)."""
+    """Verifies if the requested URI originates from trusted domains (Mammouth.ai, ChatGPT/OpenAI, Claude/Anthropic, localhost, 127.0.0.1)."""
     if not uri:
         return False
     try:
@@ -178,7 +179,17 @@ def _is_trusted_browser_origin(uri: str) -> bool:
         if not domain:
             # Allow blob/data schemes if needed
             return uri.lower().startswith("blob:") or uri.lower().startswith("data:")
-        trusted_domains = ("mammouth.ai", "localhost", "127.0.0.1")
+        trusted_domains = (
+            "mammouth.ai",
+            "chatgpt.com",
+            "openai.com",
+            "oaiusercontent.com",
+            "claude.ai",
+            "claude.com",
+            "anthropic.com",
+            "localhost",
+            "127.0.0.1",
+        )
         return any(domain == td or domain.endswith("." + td) for td in trusted_domains)
     except Exception:
         return False
@@ -310,7 +321,7 @@ def parse_mammouth_quota_data(payload: Any | None) -> dict[str, Any]:
 
 
 class MammouthBrowserFrame(ctk.CTkFrame):
-    """Modern embedded browser widget hosting Mammouth.ai inside the Cockpit."""
+    """Modern embedded browser widget hosting AI web chats (ChatGPT, Claude, Mammouth.ai) inside the Cockpit."""
 
     def __init__(
         self,
@@ -321,14 +332,25 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         screenshot_cb: Callable[[], str | None] | None = None,
         quota_cb: Callable[[dict[str, Any]], None] | None = None,
         zen_toggle_cb: Callable[[], None] | None = None,
+        brand_name: str | None = None,
+        log_cb: Callable[[str], None] | None = None,
         **kwargs
     ):
         super().__init__(master, **kwargs)
         self.get_mcp_url_cb = get_mcp_url_cb
         self.start_url = start_url or "https://mammouth.ai"
+        if brand_name:
+            self.brand_name = brand_name
+        elif "chatgpt.com" in self.start_url.lower() or "openai.com" in self.start_url.lower():
+            self.brand_name = "ChatGPT"
+        elif "claude.ai" in self.start_url.lower() or "claude.com" in self.start_url.lower():
+            self.brand_name = "Claude"
+        else:
+            self.brand_name = "Mammouth.ai"
         self.screenshot_cb = screenshot_cb
         self.quota_cb = quota_cb
         self.zen_toggle_cb = zen_toggle_cb
+        self.log_cb = log_cb
         self._last_quota_data: dict[str, Any] | None = None
 
         # Persistent profile directory (ensures login/cookies are stored in app root, never in _internal)
@@ -348,10 +370,19 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         self.hwnd: int | None = None
         self.is_embedded = False
         self._is_visible = True
+        self._nav_completed = True
 
         self._ui_queue = queue.Queue()
         self._build_ui()
         self._schedule_ui_queue_poll()
+
+    def _log_msg(self, msg: str):
+        cb = getattr(self, "log_cb", None)
+        if callable(cb):
+            try:
+                cb(msg)
+            except Exception:
+                pass
 
     def _build_ui(self):
         # 1. Sleek, Modern Navigation Bar (Mammouth Authentic Sandstone / Warm Charcoal)
@@ -559,9 +590,10 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         ).pack(pady=(0, 4))
 
         err_msg = _INIT_ERROR or "Microsoft Edge WebView2 Runtime could not be loaded on this system."
+        brand = getattr(self, "brand_name", "Mammouth.ai")
         ctk.CTkLabel(
             box,
-            text=f"{err_msg}\n\nYou can still easily use Mammouth.ai in your external browser:",
+            text=f"{err_msg}\n\nYou can still easily use {brand} in your external browser:",
             font=ctk.CTkFont(size=12),
             text_color=BROWSER_TEXT_MUTED,
             wraplength=480
@@ -569,7 +601,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
         ctk.CTkButton(
             box,
-            text="🚀 Open Mammouth.ai in Browser",
+            text=f"🚀 Open {brand} in Browser",
             font=ctk.CTkFont(size=13, weight="bold"),
             fg_color=BROWSER_ACCENT,
             hover_color=BROWSER_ACCENT_HOVER,
@@ -583,12 +615,14 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             return
 
         try:
+            self._nav_completed = False
             self.update_idletasks()
             w = max(self.viewport.winfo_width(), 400)
             h = max(self.viewport.winfo_height(), 300)
 
             control = Control()
-            window = Window("Mammouth", "Mammouth.ai", self.start_url)
+            brand = getattr(self, "brand_name", "Mammouth.ai")
+            window = Window(brand, brand, self.start_url)
             window.real_url = self.start_url
             window.localization = {
                 'windows.fileFilter.allFiles': 'All Files'
@@ -635,15 +669,32 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                     target_wv = sender if hasattr(sender, "CoreWebView2") else self.edge.webview
                     if hasattr(target_wv, "CoreWebView2") and target_wv.CoreWebView2:
                         core = target_wv.CoreWebView2
-                        # 1. Standard Edge desktop User-Agent to avoid Google/Cloudflare "disallowed_useragent" or bot challenges
-                        core.Settings.UserAgent = (
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
-                        )
+                        # 1. Preserve native Edge version in User-Agent (avoid Sec-CH-UA mismatch) while stripping any WebView marker
+                        try:
+                            cur_ua = str(core.Settings.UserAgent or "")
+                            if "; wv" in cur_ua:
+                                core.Settings.UserAgent = cur_ua.replace("; wv", "")
+                            elif not cur_ua:
+                                core.Settings.UserAgent = (
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0"
+                                )
+                        except Exception:
+                            pass
                         # 2. Enable keyboard accelerator shortcuts (Ctrl+C, Ctrl+V, Ctrl+A) and right-click context menu
                         core.Settings.AreBrowserAcceleratorKeysEnabled = True
                         core.Settings.AreDefaultContextMenusEnabled = True
                         core.Settings.IsGeneralAutofillEnabled = True
                         core.Settings.IsPasswordAutosaveEnabled = True
+
+                        # 2b. Ensure our popup/OAuth NewWindowRequested handler is always bound directly on CoreWebView2
+                        try:
+                            core.NewWindowRequested -= self._on_new_window_requested
+                        except Exception:
+                            pass
+                        try:
+                            core.NewWindowRequested += self._on_new_window_requested
+                        except Exception:
+                            pass
 
                         # 3. Allow clipboard, downloads, and storage permissions only for trusted origins
                         try:
@@ -678,14 +729,31 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             except Exception:
                 pass
 
+            # Track navigation start/completion so send_chat_prompt never injects into about:blank mid-load
+            def _on_nav_starting(sender, args):
+                try:
+                    uri = str(getattr(args, "Uri", "") or "")
+                    if uri and not uri.lower().startswith("about:blank"):
+                        self._nav_completed = False
+                except Exception:
+                    pass
+
+            try:
+                self.edge.webview.NavigationStarting += _on_nav_starting
+            except Exception:
+                pass
+
             # Update URL pill when navigation completes and handle auto-recovery
             def _on_nav_completed(sender, args):
                 try:
                     current_uri = str(self.edge.webview.Source) if hasattr(self.edge.webview, "Source") else self.start_url
+                    if current_uri and not current_uri.lower().startswith("about:blank"):
+                        self._nav_completed = True
                     if current_uri and hasattr(self, "lbl_url"):
                         self._safe_ui_call(lambda u=current_uri: self.lbl_url.configure(text=f"🔒 {u}") if hasattr(self, "lbl_url") else None, force_async=True)
-                    # Automatically redirect stuck OAuth callbacks or errors back to Mammouth home
-                    if "/api/auth/callback" in current_uri or "/api/mcp/oauth/callback" in current_uri or "mcp_error" in current_uri:
+                    # Automatically redirect stuck Mammouth OAuth callbacks or errors back to home
+                    uri_l = current_uri.lower()
+                    if "/api/mcp/oauth/callback" in uri_l or "mcp_error" in uri_l or ("mammouth.ai" in uri_l and "/api/auth/callback" in uri_l):
                         self._safe_ui_call(lambda: self.after(800, lambda: self.edge.load_url(self.start_url)), force_async=True)
                 except Exception:
                     pass
@@ -732,7 +800,14 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             is_auth_or_app = (
                 is_local_protocol
                 or "mammouth.ai" in uri_lower
+                or "chatgpt.com" in uri_lower
+                or "openai.com" in uri_lower
+                or "claude.ai" in uri_lower
+                or "claude.com" in uri_lower
+                or "anthropic.com" in uri_lower
                 or "accounts.google.com" in uri_lower
+                or "login.microsoftonline.com" in uri_lower
+                or "login.live.com" in uri_lower
                 or "github.com/login" in uri_lower
                 or "appleid.apple.com" in uri_lower
                 or "oauth" in uri_lower
@@ -755,7 +830,8 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             deferral = args.GetDeferral()
 
             popup_form = Form()
-            popup_form.Text = "Mammouth — Login & Autorisierung"
+            brand = getattr(self, "brand_name", "Mammouth")
+            popup_form.Text = f"{brand} — Login & Autorisierung"
             popup_form.Width = 620
             popup_form.Height = 720
             popup_form.StartPosition = FormStartPosition.CenterScreen
@@ -768,9 +844,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 try:
                     if hasattr(popup_wv, "CoreWebView2") and popup_wv.CoreWebView2:
                         popup_core = popup_wv.CoreWebView2
-                        popup_core.Settings.UserAgent = (
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
-                        )
+                        try:
+                            p_ua = str(popup_core.Settings.UserAgent or "")
+                            if "; wv" in p_ua:
+                                popup_core.Settings.UserAgent = p_ua.replace("; wv", "")
+                        except Exception:
+                            pass
                         # Enable copy/paste shortcuts and context menu in popup window
                         popup_core.Settings.AreBrowserAcceleratorKeysEnabled = True
                         popup_core.Settings.AreDefaultContextMenusEnabled = True
@@ -821,6 +900,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                         pass
 
             popup_wv.CoreWebView2InitializationCompleted += _on_popup_ready
+            popup_form.CreateControl()
             popup_wv.EnsureCoreWebView2Async(sender.Environment)
 
             def _on_form_closed(s, a):
@@ -1051,9 +1131,29 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                     if hasattr(target_wv, "CoreWebView2") and target_wv.CoreWebView2:
                         js_focus = """
                         (function() {
-                            var el = document.querySelector('textarea, div[contenteditable="true"], input[type="text"]');
-                            if (el) {
-                                el.focus();
+                            var selectors = [
+                                '#prompt-textarea[contenteditable="true"]',
+                                '#prompt-textarea',
+                                'div.ProseMirror[contenteditable="true"]',
+                                'div[contenteditable="true"][role="textbox"]',
+                                'textarea',
+                                'div[contenteditable="true"]',
+                                '[role="textbox"]',
+                                'input[type="text"]'
+                            ];
+                            for (var i = 0; i < selectors.length; i++) {
+                                var list = document.querySelectorAll(selectors[i]);
+                                for (var j = 0; j < list.length; j++) {
+                                    var el = list[j];
+                                    if (el && (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0)) {
+                                        el.focus();
+                                        return true;
+                                    }
+                                }
+                            }
+                            var fallback = document.querySelector('textarea, div[contenteditable="true"], input[type="text"]');
+                            if (fallback) {
+                                fallback.focus();
                                 return true;
                             }
                             return false;
@@ -1082,17 +1182,21 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         self.after(max(50, delay_ms), _do_paste_ui)
 
     def send_chat_prompt(self, prompt: str, auto_submit: bool = True, delay_ms: int = 200) -> bool:
-        """Injects a text prompt into Mammouth.ai chat input and optionally submits it.
+        """Injects a text prompt into AI Web chat input (ChatGPT / Claude / Mammouth.ai) and optionally submits it.
         Uses native WebView2 script execution + DOM events on the UI thread."""
         if not HAS_WEBVIEW2:
+            self._log_msg("[CHAT] WebView2 not available; cannot dispatch web prompt.")
             return False
 
         if not self.hwnd or not self.is_embedded:
             self.ensure_initialized()
 
-        def _do_send_ui(retries_left=20):
+        brand = getattr(self, "brand_name", "WebChat")
+
+        def _do_send_ui(retries_left=60):
             try:
-                # 1. Bring top-level window to foreground
+                # 1. Bring top-level window to foreground (best effort)
+                top_hwnd = 0
                 try:
                     top_hwnd = self.winfo_toplevel().winfo_id()
                     user32.SetForegroundWindow(top_hwnd)
@@ -1109,194 +1213,355 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 clean_text = json.dumps(prompt)
                 submit_flag = "true" if auto_submit else "false"
 
-                # 3. Inject text and simulate submit in WebView2 CoreWebView2
+                # 3. Wait for WebView2 CoreWebView2 and initial navigation to settle
                 if not self.edge or not hasattr(self.edge, "webview"):
+                    if retries_left > 0:
+                        self.after(250, lambda: _do_send_ui(retries_left - 1))
+                    else:
+                        self._log_msg(f"[TASK WARNING] {brand} WebView not initialized; prompt dropped.")
                     return
                 target_wv = self.edge.webview
                 if not hasattr(target_wv, "CoreWebView2") or not target_wv.CoreWebView2:
                     if retries_left > 0:
-                        self.after(150, lambda: _do_send_ui(retries_left - 1))
+                        self.after(250, lambda: _do_send_ui(retries_left - 1))
+                    else:
+                        self._log_msg(f"[TASK WARNING] {brand} CoreWebView2 timed out; prompt dropped.")
                     return
 
-                if True:
-                        js_send = f"""
-                        (function() {{
-                            try {{
-                                var text = {clean_text};
-                                var autoSubmit = {submit_flag};
+                # Wait while cold page load is still on about:blank / empty before initial page loads
+                cur_src = ""
+                try:
+                    cur_src = str(getattr(target_wv, "Source", "") or "").lower()
+                except Exception:
+                    cur_src = ""
+                if (not cur_src or cur_src.startswith("about:blank")) and not getattr(self, "_nav_completed", True) and retries_left > 8:
+                    self.after(250, lambda: _do_send_ui(retries_left - 1))
+                    return
 
-                                var inputPollAttempts = 0;
-                                function pollAndInject() {{
-                                    inputPollAttempts++;
-                                    var el = document.querySelector('textarea, div[contenteditable="true"], [role="textbox"], input[type="text"]');
-                                    if (!el) {{
-                                        if (inputPollAttempts < 25) {{
-                                            setTimeout(pollAndInject, 120);
-                                        }}
-                                        return false;
-                                    }}
+                js_send = f"""
+                (function() {{
+                    try {{
+                        var text = {clean_text};
+                        var autoSubmit = {submit_flag};
 
-                                    // 1. Focus and inject text into the input element
-                                    try {{ el.focus(); }} catch(e) {{}}
-                                    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{
-                                        var proto = window.HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : Object.getPrototypeOf(el);
-                                        var desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value');
-                                        if (desc && desc.set) {{
-                                            desc.set.call(el, text);
+                        var inputPollAttempts = 0;
+                        function isElementVisible(el) {{
+                            return !!(el && (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0));
+                        }}
+                        function findChatInput() {{
+                            var selectors = [
+                                '#prompt-textarea[contenteditable="true"]',
+                                '#prompt-textarea',
+                                'div.ProseMirror[data-testid="chat-input"]',
+                                '[data-testid="chat-input"][contenteditable="true"]',
+                                'fieldset div.ProseMirror[contenteditable="true"]',
+                                'div.ProseMirror[contenteditable="true"]',
+                                'textarea[data-id]',
+                                'div[contenteditable="true"][role="textbox"]',
+                                'main textarea',
+                                'form textarea',
+                                'textarea',
+                                'main div[contenteditable="true"]',
+                                'div[contenteditable="true"]',
+                                '[role="textbox"]',
+                                'input[type="text"]'
+                            ];
+                            for (var i = 0; i < selectors.length; i++) {{
+                                var list = document.querySelectorAll(selectors[i]);
+                                for (var j = 0; j < list.length; j++) {{
+                                    var cand = list[j];
+                                    if (!isElementVisible(cand)) continue;
+                                    if (cand.disabled || cand.readOnly || cand.getAttribute('aria-hidden') === 'true') continue;
+                                    if (cand.type === 'search') continue;
+                                    if (cand.closest('nav, aside') && !cand.closest('main, form')) continue;
+                                    return cand;
+                                }}
+                            }}
+                            return document.querySelector('textarea, div[contenteditable="true"], [role="textbox"], input[type="text"]');
+                        }}
+
+                        function getInputText(el) {{
+                            if (!el) return '';
+                            if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') return (el.value || '').trim();
+                            return (el.innerText || el.textContent || '').trim();
+                        }}
+
+                        function injectText(el, val) {{
+                            try {{ el.focus(); }} catch(e) {{}}
+                            if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{
+                                var proto = el.tagName === 'INPUT' && window.HTMLInputElement
+                                    ? window.HTMLInputElement.prototype
+                                    : (window.HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : Object.getPrototypeOf(el));
+                                var desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value');
+                                if (desc && desc.set) {{
+                                    desc.set.call(el, val);
+                                }} else {{
+                                    el.value = val;
+                                }}
+                                if (el._valueTracker) {{
+                                    el._valueTracker.setValue('');
+                                }}
+                                try {{
+                                    el.dispatchEvent(new InputEvent('input', {{ inputType: 'insertText', data: val, bubbles: true, cancelable: true, composed: true }}));
+                                }} catch(e) {{
+                                    el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true, composed: true }}));
+                                }}
+                                el.dispatchEvent(new Event('change', {{ bubbles: true, cancelable: true, composed: true }}));
+                                return;
+                            }}
+
+                            if (el.isContentEditable) {{
+                                var snippet = val.trim().slice(0, 20);
+                                var execOk = false;
+                                try {{
+                                    var sel = window.getSelection();
+                                    var rng = document.createRange();
+                                    rng.selectNodeContents(el);
+                                    sel.removeAllRanges();
+                                    sel.addRange(rng);
+                                    execOk = !!document.execCommand('insertText', false, val);
+                                }} catch(e) {{
+                                    execOk = false;
+                                }}
+
+                                var curTxt = getInputText(el);
+                                if (!execOk || !curTxt || (snippet && curTxt.indexOf(snippet) === -1)) {{
+                                    // Try DataTransfer ClipboardEvent('paste') for ProseMirror / TipTap when unfocused
+                                    try {{
+                                        var dt = new DataTransfer();
+                                        dt.setData('text/plain', val);
+                                        var pasteEvt = new ClipboardEvent('paste', {{ clipboardData: dt, bubbles: true, cancelable: true }});
+                                        el.dispatchEvent(pasteEvt);
+                                    }} catch(e) {{}}
+                                }}
+
+                                curTxt = getInputText(el);
+                                if (!curTxt || (snippet && curTxt.indexOf(snippet) === -1)) {{
+                                    // Preserve <p> paragraph wrapper expected by ProseMirror / TipTap
+                                    try {{
+                                        var p = el.querySelector('p');
+                                        if (p) {{
+                                            p.textContent = val;
                                         }} else {{
-                                            el.value = text;
+                                            p = document.createElement('p');
+                                            p.textContent = val;
+                                            while (el.firstChild) {{
+                                                el.removeChild(el.firstChild);
+                                            }}
+                                            el.appendChild(p);
                                         }}
-                                        if (el._valueTracker) {{
-                                            el._valueTracker.setValue('');
-                                        }}
+                                    }} catch(e) {{
+                                        el.textContent = val;
+                                    }}
+                                    try {{
+                                        el.dispatchEvent(new InputEvent('beforeinput', {{ inputType: 'insertText', data: val, bubbles: true, cancelable: true, composed: true }}));
+                                    }} catch(e) {{}}
+                                    try {{
+                                        el.dispatchEvent(new InputEvent('input', {{ inputType: 'insertText', data: val, bubbles: true, cancelable: true, composed: true }}));
+                                    }} catch(e) {{
                                         el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true, composed: true }}));
-                                        el.dispatchEvent(new Event('change', {{ bubbles: true, cancelable: true, composed: true }}));
-                                    }} else if (el.isContentEditable) {{
-                                        try {{
-                                            document.execCommand('selectAll', false, null);
-                                            document.execCommand('insertText', false, text);
-                                        }} catch(e) {{
-                                            el.innerText = text;
-                                        }}
-                                        try {{
-                                            el.dispatchEvent(new InputEvent('input', {{ inputType: 'insertText', data: text, bubbles: true, cancelable: true }}));
-                                        }} catch(e) {{
-                                            el.dispatchEvent(new Event('input', {{ bubbles: true, cancelable: true, composed: true }}));
+                                    }}
+                                    el.dispatchEvent(new Event('change', {{ bubbles: true, cancelable: true, composed: true }}));
+                                }}
+                            }}
+                        }}
+
+                        function pollAndInject() {{
+                            inputPollAttempts++;
+                            var el = findChatInput();
+                            if (!el) {{
+                                if (inputPollAttempts < 40) {{
+                                    setTimeout(pollAndInject, 150);
+                                }}
+                                return false;
+                            }}
+
+                            // 1. Focus and inject text into the input element
+                            injectText(el, text);
+
+                            if (!autoSubmit) return true;
+
+                            // 2. Dispatch Helpers for synthetic clicks and Enter keys
+                            function triggerPointerClick(btn) {{
+                                if (!btn) return;
+                                try {{
+                                    btn.focus();
+                                    var pOpts = {{ bubbles: true, cancelable: true, view: window, buttons: 1 }};
+                                    btn.dispatchEvent(new PointerEvent('pointerdown', pOpts));
+                                    btn.dispatchEvent(new MouseEvent('mousedown', pOpts));
+                                    btn.dispatchEvent(new PointerEvent('pointerup', pOpts));
+                                    btn.dispatchEvent(new MouseEvent('mouseup', pOpts));
+                                    btn.click();
+                                }} catch(e) {{
+                                    try {{ btn.click(); }} catch(e2) {{}}
+                                }}
+                            }}
+
+                            function triggerEnterKey(targetEl) {{
+                                if (!targetEl) return;
+                                try {{
+                                    targetEl.focus();
+                                    var kOpts = {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, charCode: 13, bubbles: true, cancelable: true, composed: true }};
+                                    targetEl.dispatchEvent(new KeyboardEvent('keydown', kOpts));
+                                    targetEl.dispatchEvent(new KeyboardEvent('keypress', kOpts));
+                                    targetEl.dispatchEvent(new KeyboardEvent('keyup', kOpts));
+                                }} catch(e) {{}}
+                            }}
+
+                            // 3. Robust multilingual and SVG send button finder
+                            function findSendBtn(allowGenericFallback) {{
+                                var badWords = [
+                                    'attach', 'file', 'upload', 'joint', 'fichier', 'plus', 'add', 'hinzuf', 'anhäng', 'datei', 'hochladen',
+                                    'audio', 'mic', 'micro', 'mikro', 'search', 'suche', 'websuche', 'recherch', 'model', 'modell',
+                                    'settings', 'einstellung', 'param', 'voice', 'sprach', 'camera', 'kamera', 'stop', 'stopp',
+                                    'abbrech', 'cancel', 'dictate', 'diktier', 'reason', 'nachdenk', 'think', 'canvas',
+                                    'tool', 'werkzeug', 'menu', 'menü', 'sidebar', 'seitenleiste', 'new', 'neu', 'nouveau',
+                                    'copy', 'kopier', 'edit', 'bearbeit', 'regen', 'share', 'teilen', 'thumb', 'like', 'dislike',
+                                    'speak', 'vorles', 'listen', 'read', 'research', 'anmeld', 'login', 'sign', 'registrier'
+                                ];
+                                function isNotBad(b) {{
+                                    if (!b || !isElementVisible(b)) return false;
+                                    var hp = (b.getAttribute('aria-haspopup') || '').toLowerCase();
+                                    if (hp === 'menu' || hp === 'listbox' || hp === 'dialog') return false;
+                                    var a = (b.getAttribute('aria-label') || '').toLowerCase();
+                                    var t = (b.getAttribute('title') || '').toLowerCase();
+                                    var c = (typeof b.className === 'string' ? b.className : '').toLowerCase();
+                                    var tid = (b.getAttribute('data-testid') || '').toLowerCase();
+                                    var txt = (b.textContent || '').trim().toLowerCase();
+                                    for (var k = 0; k < badWords.length; k++) {{
+                                        var bw = badWords[k];
+                                        if (a.includes(bw) || t.includes(bw) || c.includes(bw) || tid.includes(bw) || (txt.length > 0 && txt.length <= 24 && txt.includes(bw))) return false;
+                                    }}
+                                    return true;
+                                }}
+
+                                // Priority 1: High confidence testid, explicit Send aria-label, or submit type (ChatGPT, Claude & Mammouth)
+                                var p1List = document.querySelectorAll('button[data-testid="send-button"], button[data-testid*="send"], button[data-testid*="submit"], button[aria-label="Send message"], button[aria-label="Send Message"], button[type="submit"]');
+                                for (var p = 0; p < p1List.length; p++) {{
+                                    var p1 = p1List[p];
+                                    if (isNotBad(p1)) return p1;
+                                }}
+
+                                // Priority 2: Multilingual label search scoped to composer first, then document (EN, FR, DE)
+                                var sendWords = ['send', 'envoyer', 'submit', 'prompt', 'valider', 'transmettre', 'senden', 'absenden', 'abschicken'];
+                                var scopeRoot = el.closest('form, [class*="composer"], [class*="chat"], [class*="input"], main') || document;
+                                var scopedBtns = Array.from(scopeRoot.querySelectorAll('button'));
+                                var allBtns = scopedBtns.concat(Array.from(document.querySelectorAll('button')));
+                                for (var i = 0; i < allBtns.length; i++) {{
+                                    var b = allBtns[i];
+                                    if (!isNotBad(b)) continue;
+                                    var aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                                    var title = (b.getAttribute('title') || '').toLowerCase();
+                                    var tid = (b.getAttribute('data-testid') || '').toLowerCase();
+                                    var btxt = (b.textContent || '').trim().toLowerCase();
+                                    for (var j = 0; j < sendWords.length; j++) {{
+                                        var w = sendWords[j];
+                                        if (aria.includes(w) || title.includes(w) || tid.includes(w) || (btxt.length > 0 && btxt.length <= 20 && btxt.includes(w))) {{
+                                            return b;
                                         }}
                                     }}
+                                }}
 
-                                    if (!autoSubmit) return true;
-
-                                    // 2. Dispatch Helpers for synthetic clicks and Enter keys
-                                    function triggerPointerClick(btn) {{
-                                        if (!btn) return;
-                                        try {{
-                                            btn.focus();
-                                            var pOpts = {{ bubbles: true, cancelable: true, view: window, buttons: 1 }};
-                                            btn.dispatchEvent(new PointerEvent('pointerdown', pOpts));
-                                            btn.dispatchEvent(new MouseEvent('mousedown', pOpts));
-                                            btn.dispatchEvent(new PointerEvent('pointerup', pOpts));
-                                            btn.dispatchEvent(new MouseEvent('mouseup', pOpts));
-                                            btn.click();
-                                        }} catch(e) {{
-                                            try {{ btn.click(); }} catch(e2) {{}}
+                                // Priority 3: Ancestor walk from el (delayed so React has time to mount explicit send-button first)
+                                if (allowGenericFallback) {{
+                                    var cur = el.parentElement;
+                                    var depth = 0;
+                                    while (cur && cur !== document.body && cur !== document.documentElement && depth < 6) {{
+                                        var cBtns = Array.from(cur.querySelectorAll('button')).filter(function(b) {{
+                                            return isNotBad(b) && (b.querySelector('svg') || (b.textContent || '').trim().length > 0) && !b.closest('nav, header');
+                                        }});
+                                        if (cBtns.length > 0) {{
+                                            return cBtns[cBtns.length - 1];
                                         }}
+                                        cur = cur.parentElement;
+                                        depth++;
+                                    }}
+                                }}
+                                return null;
+                            }}
+
+                            // 4. Polling submission loop
+                            var submitAttempts = 0;
+                            function trySubmit() {{
+                                submitAttempts++;
+                                // If input was already cleared, submission succeeded
+                                if (getInputText(el).length === 0) return;
+
+                                var btn = findSendBtn(submitAttempts >= 6);
+
+                                if (btn) {{
+                                    var isDis = btn.disabled || btn.getAttribute('aria-disabled') === 'true' || (typeof btn.className === 'string' && btn.className.includes('disabled'));
+                                    if (isDis && submitAttempts < 14) {{
+                                        if (submitAttempts === 3 || submitAttempts === 7) {{
+                                            injectText(el, text);
+                                        }}
+                                        setTimeout(trySubmit, 120);
+                                        return;
                                     }}
 
-                                    function triggerEnterKey(targetEl) {{
-                                        if (!targetEl) return;
-                                        try {{
-                                            targetEl.focus();
-                                            var kOpts = {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, charCode: 13, bubbles: true, cancelable: true, composed: true }};
-                                            targetEl.dispatchEvent(new KeyboardEvent('keydown', kOpts));
-                                            targetEl.dispatchEvent(new KeyboardEvent('keypress', kOpts));
-                                            targetEl.dispatchEvent(new KeyboardEvent('keyup', kOpts));
-                                        }} catch(e) {{}}
+                                    // Unset disabled attributes only on final attempt and click with full pointer/mouse sequence
+                                    if (isDis) {{
+                                        try {{ btn.removeAttribute('disabled'); }} catch(e) {{}}
+                                        try {{ btn.setAttribute('aria-disabled', 'false'); }} catch(e) {{}}
                                     }}
+                                    triggerPointerClick(btn);
 
-                                    // 3. Robust multilingual and SVG send button finder
-                                    function findSendBtn() {{
-                                        var badWords = ['attach', 'file', 'upload', 'joint', 'fichier', 'plus', 'audio', 'mic', 'micro', 'search', 'model', 'settings', 'voice', 'camera'];
-                                        function isNotBad(b) {{
-                                            var a = (b.getAttribute('aria-label') || '').toLowerCase();
-                                            var t = (b.getAttribute('title') || '').toLowerCase();
-                                            var c = (b.className || '').toLowerCase();
-                                            var tid = (b.getAttribute('data-testid') || '').toLowerCase();
-                                            for (var k = 0; k < badWords.length; k++) {{
-                                                var bw = badWords[k];
-                                                if (a.includes(bw) || t.includes(bw) || c.includes(bw) || tid.includes(bw)) return false;
-                                            }}
-                                            return true;
-                                        }}
-
-                                        // Priority 1: High confidence testid or submit type
-                                        var p1 = document.querySelector('button[data-testid*="send"], button[data-testid*="submit"], button[type="submit"]');
-                                        if (p1 && isNotBad(p1)) return p1;
-
-                                        // Priority 2: Multilingual label search across entire document (EN, FR, DE)
-                                        var sendWords = ['send', 'envoyer', 'submit', 'prompt', 'valider', 'transmettre', 'senden', 'absenden', 'abschicken'];
-                                        var allBtns = Array.from(document.querySelectorAll('button'));
-                                        for (var i = 0; i < allBtns.length; i++) {{
-                                            var b = allBtns[i];
-                                            if (!isNotBad(b)) continue;
-                                            var aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                                            var title = (b.getAttribute('title') || '').toLowerCase();
-                                            var tid = (b.getAttribute('data-testid') || '').toLowerCase();
-                                            for (var j = 0; j < sendWords.length; j++) {{
-                                                var w = sendWords[j];
-                                                if (aria.includes(w) || title.includes(w) || tid.includes(w)) {{
-                                                    return b;
+                                    // Verify input cleared; if not (e.g. Mammouth 1x/2x Enter mode), send Enter fallback
+                                    setTimeout(function() {{
+                                        if (getInputText(el).length > 0) {{
+                                            triggerEnterKey(el);
+                                            setTimeout(function() {{
+                                                if (getInputText(el).length > 0) {{
+                                                    triggerEnterKey(el);
                                                 }}
-                                            }}
+                                            }}, 120);
                                         }}
+                                    }}, 120);
+                                    return;
+                                }}
 
-                                        // Priority 3: Ancestor walk from el - find closest container holding valid action buttons (SVG/icon buttons)
-                                        var cur = el.parentElement;
-                                        while (cur && cur !== document.body) {{
-                                            var cBtns = Array.from(cur.querySelectorAll('button')).filter(function(b) {{
-                                                return isNotBad(b) && (b.querySelector('svg') || b.textContent.trim().length > 0) && b.offsetWidth > 0;
-                                            }});
-                                            if (cBtns.length > 0) {{
-                                                return cBtns[cBtns.length - 1];
-                                            }}
-                                            cur = cur.parentElement;
-                                        }}
-                                        return null;
+                                if (submitAttempts < 12) {{
+                                    if (submitAttempts === 4) {{
+                                        injectText(el, text);
                                     }}
+                                    setTimeout(trySubmit, 120);
+                                    return;
+                                }}
 
-                                    // 4. Polling submission loop
-                                    var submitAttempts = 0;
-                                    function trySubmit() {{
-                                        submitAttempts++;
-                                        var btn = findSendBtn();
-
-                                        if (btn) {{
-                                            var isDis = btn.disabled || btn.getAttribute('aria-disabled') === 'true' || (btn.className && btn.className.includes('disabled'));
-                                            if (isDis && submitAttempts < 12) {{
-                                                setTimeout(trySubmit, 100);
-                                                return;
-                                            }}
-
-                                            // Unset disabled attributes and click with full pointer/mouse sequence
-                                            try {{ btn.removeAttribute('disabled'); }} catch(e) {{}}
-                                            try {{ btn.setAttribute('aria-disabled', 'false'); }} catch(e) {{}}
-                                            triggerPointerClick(btn);
-
-                                            // Dual redundancy: also send Enter keypress to input field
-                                            setTimeout(function() {{ triggerEnterKey(el); }}, 60);
-                                            return;
-                                        }}
-
-                                        if (submitAttempts < 10) {{
-                                            setTimeout(trySubmit, 100);
-                                            return;
-                                        }}
-
-                                        // Final Fallback: Enter keyboard events + form.requestSubmit()
+                                // Final Fallback: 1x/2x Enter keyboard events + form.requestSubmit()
+                                triggerEnterKey(el);
+                                setTimeout(function() {{
+                                    if (getInputText(el).length > 0) {{
                                         triggerEnterKey(el);
                                         var form = el.closest('form');
                                         if (form && typeof form.requestSubmit === 'function') {{
                                             try {{ form.requestSubmit(); }} catch(err) {{}}
                                         }}
                                     }}
-
-                                    setTimeout(trySubmit, 80);
-                                    return true;
-                                }}
-
-                                return pollAndInject();
-                            }} catch (e) {{
-                                return false;
+                                }}, 120);
                             }}
-                        }})();
-                        """
-                        target_wv.CoreWebView2.ExecuteScriptAsync(js_send)
 
-                # 4. If auto_submit, schedule a native Win32 VK_RETURN keypress fallback after delay
+                            setTimeout(trySubmit, 80);
+                            return true;
+                        }}
+
+                        return pollAndInject();
+                    }} catch (e) {{
+                        return false;
+                    }}
+                }})();
+                """
+                target_wv.CoreWebView2.ExecuteScriptAsync(js_send)
+
+                # 4. If auto_submit, schedule a native Win32 VK_RETURN keypress fallback ONLY when this window is foreground
                 if auto_submit and self.hwnd:
                     def _send_enter_native():
                         try:
                             if self.hwnd and self.is_embedded:
+                                fg = user32.GetForegroundWindow()
+                                root_hwnd = user32.GetAncestor(top_hwnd, 2) if top_hwnd else 0  # GA_ROOT = 2
+                                if top_hwnd and fg not in (top_hwnd, root_hwnd) and not user32.IsChild(top_hwnd, fg) and not (root_hwnd and user32.IsChild(root_hwnd, fg)):
+                                    return
                                 user32.SetFocus(self.hwnd)
                                 VK_RETURN = 0x0D
                                 KEYEVENTF_KEYUP = 0x0002
@@ -1304,9 +1569,9 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                                 user32.keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0)
                         except Exception:
                             pass
-                    self.after(max(600, delay_ms + 400), _send_enter_native)
-            except Exception:
-                pass
+                    self.after(max(900, delay_ms + 700), _send_enter_native)
+            except Exception as ex:
+                self._log_msg(f"[TASK WARNING] {brand} send_chat_prompt error: {ex}")
 
         self.after(max(50, delay_ms), _do_send_ui)
         return True
@@ -1421,10 +1686,11 @@ class MammouthBrowserFrame(ctk.CTkFrame):
 
     def _prompt_save_file(self, initial_dir: str, suggested_name: str) -> str | None:
         """Prompts the user with native SaveFileDialog. Returns chosen file path or None if cancelled."""
+        brand = getattr(self, "brand_name", "Mammouth")
         return _native_save_file_dialog(
             initial_dir=initial_dir,
             default_name=suggested_name,
-            title="Mammouth — Save File",
+            title=f"{brand} — Save File",
             hwnd_owner=0
         )
 

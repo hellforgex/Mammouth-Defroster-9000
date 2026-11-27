@@ -7,7 +7,7 @@ import uuid
 import sys
 from collections import deque
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 if getattr(sys, "frozen", False):
     BASE_DIR = Path(sys.executable).parent.resolve()
@@ -30,11 +30,8 @@ BLOCKED_COMMAND_PATTERNS = [
     r'\[ScriptBlock\]',
     r'\[System\.Management\.Automation',
     r'\[System\.Diagnostics\.Process\]',
-    r'\b(DownloadString|DownloadFile|DownloadData)\b',
-    r'\b(System\.Net\.WebClient|WebClient|HttpClient)\b',
     r'\b(Net\.Sockets|System\.Net\.Sockets|TcpClient|Socket|UdpClient)\b',
-    r'\b(Start-BitsTransfer|bitsadmin|certutil)\b',
-    r'\b(Invoke-WebRequest|iwr|Invoke-RestMethod|irm)\b',
+    r'\b(bitsadmin|certutil)\b',
     r'\brundll32(\.exe)?\b',
     r'\bcmd(\.exe)?\s+/[ck]\b',
     r'-\s*File\b',
@@ -63,11 +60,20 @@ BLOCKED_COMMAND_PATTERNS = [
     r'\bsc(\.exe)?\s+(config|create|delete|start|stop)\b',
     r'\bwevtutil(\.exe)?\s+(cl|clear-log)\b',
     r'\bschtasks(\.exe)?\s+/(create|delete|change|run)\b',
-    r'\b(curl|wget)(\.exe)?\b',
     r'\b(Start-Process|saps)\b',
     r'\b(powershell|pwsh)(\.exe)?\s+.*-(File|Command|c)\b',
     r'\b(python|python3|py)(\.exe)?\s+.*-(c|m)\b',
     r'\bInvoke-Command\b.*-ScriptBlock\b',
+]
+
+# Network/HTTP download patterns: blocked by default (even with allow_admin_shell=true).
+# Permitted only when BOTH server.allow_admin_shell=true AND server.allow_shell_downloads=true.
+SHELL_DOWNLOAD_PATTERNS = [
+    r'\b(DownloadString|DownloadFile|DownloadData)\b',
+    r'\b(System\.Net\.WebClient|WebClient|HttpClient)\b',
+    r'\bStart-BitsTransfer\b',
+    r'\b(Invoke-WebRequest|iwr|Invoke-RestMethod|irm)\b',
+    r'\b(curl|wget)(\.exe)?\b',
 ]
 
 
@@ -338,8 +344,24 @@ def _is_admin_shell_allowed() -> bool:
         return False
 
 
-def _validate_shell_command(command: str, allow_admin: bool | None = None, cwd: str | None = None) -> str:
-    """Validate shell command against dangerous patterns and read-only allowlist."""
+def _is_shell_downloads_allowed() -> bool:
+    """Return True only when BOTH allow_admin_shell and allow_shell_downloads are enabled (fails closed)."""
+    try:
+        from config import load_config
+        cfg = load_config()
+        server_cfg = cfg.get("server", {})
+        return bool(server_cfg.get("allow_admin_shell", False) and server_cfg.get("allow_shell_downloads", False))
+    except Exception:
+        return False
+
+
+def _validate_shell_command(
+    command: str,
+    allow_admin: bool | None = None,
+    cwd: str | None = None,
+    allow_downloads: bool | None = None,
+) -> str:
+    """Validate shell command against dangerous patterns, download policy, and read-only allowlist."""
     clean = str(command).strip()
     clean = _unwrap_powershell_wrapper(clean)
     if not clean:
@@ -347,15 +369,29 @@ def _validate_shell_command(command: str, allow_admin: bool | None = None, cwd: 
 
     s_deobf, s_no_quotes = _deobfuscate_powershell(clean)
 
-    # 1. Always run defense-in-depth blacklist
+    # 1. Always run defense-in-depth blacklist (stagers, obfuscation, destructive commands)
     for pattern in BLOCKED_COMMAND_PATTERNS:
         if (re.search(pattern, clean, re.IGNORECASE) or
             re.search(pattern, s_deobf, re.IGNORECASE) or
             re.search(pattern, s_no_quotes, re.IGNORECASE)):
             raise PermissionError(f"Security Shield: Dangerous command pattern detected and blocked: '{pattern}'")
 
-    # 2. Check Read-Only Allowlist if admin shell is not enabled
+    # 1b. Network / HTTP download patterns (opt-in only when BOTH admin shell and allow_shell_downloads are enabled)
     admin_enabled = allow_admin if allow_admin is not None else _is_admin_shell_allowed()
+    downloads_enabled = admin_enabled and (
+        allow_downloads if allow_downloads is not None else _is_shell_downloads_allowed()
+    )
+    if not downloads_enabled:
+        for pattern in SHELL_DOWNLOAD_PATTERNS:
+            if (re.search(pattern, clean, re.IGNORECASE) or
+                re.search(pattern, s_deobf, re.IGNORECASE) or
+                re.search(pattern, s_no_quotes, re.IGNORECASE)):
+                raise PermissionError(
+                    f"Security Shield: Network/download command pattern detected and blocked: '{pattern}'. "
+                    "Enable 'server.allow_shell_downloads=true' (with elevated shell permissions) to permit Invoke-RestMethod, Invoke-WebRequest, curl, and wget."
+                )
+
+    # 2. Check Read-Only Allowlist if admin shell is not enabled
     if not admin_enabled:
         # Quoted literals cannot execute anything: drop single-quoted strings and double-quoted
         # strings without '$' (PowerShell only expands $ inside double quotes) before scanning.
@@ -452,16 +488,20 @@ def powershell_exec(
     command: str,
     working_directory: str = "C:\\",
     cwd: str | None = None,
-    timeout_seconds: int = 120
+    timeout_seconds: int = 120,
+    shell: Literal["powershell", "cmd"] = "powershell"
 ) -> dict[str, Any]:
-    """Execute a PowerShell command on the Windows host and return stdout, stderr, and exit_code.
-    
+    """Execute a PowerShell or CMD command on the Windows host and return stdout, stderr, and exit_code.
+
     Args:
-        command: PowerShell command to execute.
+        command: Command to execute.
         working_directory: Working directory path (defaults to C:\\ or current directory).
         cwd: Optional alias for working_directory.
         timeout_seconds: Execution timeout in seconds (default 120).
+        shell: 'powershell' (default) or 'cmd'.
     """
+    if str(shell or "powershell").strip().lower() == "cmd":
+        return cmd_exec(command=command, working_directory=working_directory, cwd=cwd, timeout_seconds=timeout_seconds)
     t0 = time.perf_counter()
     work_dir = _resolve_work_dir(cwd, working_directory)
     try:
@@ -861,4 +901,74 @@ def desktop_open(target: str, arguments: str | None = None) -> dict[str, Any]:
             return {"status": "success", "message": f"Launched '{clean_target}' via {opener}."}
     except Exception as e:
         return {"status": "error", "error": f"Failed to open '{clean_target}': {e}"}
+
+
+def process_manage(
+    action: Literal["start", "list", "output", "kill"] = "list",
+    task_id: str = "",
+    command: str = "",
+    cwd: str | None = None,
+    name: str | None = None,
+    line_offset: int = -1,
+    max_lines: int = 100
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Start, list, read logs, or terminate managed background processes.
+
+    Args:
+        action: 'start', 'list', 'output', or 'kill'.
+        task_id: Background task ID (required for 'output' and 'kill').
+        command: Command line to run in background (required for 'start').
+        cwd: Working directory for 'start'.
+        name: Optional label for 'start'.
+        line_offset: 0-based start line for paginated logs, or -1 (default) to read the last max_lines.
+        max_lines: Maximum output lines to return (default 100).
+    """
+    act = str(action or "list").strip().lower()
+    if act == "start":
+        if not command or not str(command).strip():
+            return {"status": "error", "error": "Parameter 'command' is required for action='start'."}
+        return process_start_background(command=command, cwd=cwd, name=name)
+    if act == "list":
+        return process_list_background()
+    if act == "output":
+        if not task_id:
+            return {"status": "error", "error": "Parameter 'task_id' is required for action='output'."}
+        if int(line_offset) >= 0:
+            return process_tail_output(task_id=task_id, line_offset=int(line_offset), max_lines=int(max_lines))
+        return process_get_output(task_id=task_id, tail_lines=int(max_lines))
+    if act == "kill":
+        if not task_id:
+            return {"status": "error", "error": "Parameter 'task_id' is required for action='kill'."}
+        return process_cancel(task_id=task_id)
+    return {"status": "error", "error": f"Unknown process_manage action '{action}'. Valid: 'start', 'list', 'output', 'kill'."}
+
+
+def powershell_exec_clean(
+    command: str,
+    cwd: str = ".",
+    shell: Literal["powershell", "cmd"] = "powershell",
+    timeout_seconds: int = 120
+) -> dict[str, Any]:
+    """Execute a PowerShell or CMD command on Windows and return stdout, stderr, and exit_code.
+
+    Args:
+        command: Command to execute.
+        cwd: Working directory (relative paths resolve against workspace root; default '.').
+        shell: 'powershell' (default) or 'cmd'.
+        timeout_seconds: Execution timeout in seconds (default 120).
+    """
+    clean_cwd = str(cwd or ".").strip().strip("'\"").strip()
+    ws_root = resolve_workspace_root()
+    if not clean_cwd or clean_cwd == ".":
+        resolved_cwd = ws_root
+    else:
+        is_abs = os.path.isabs(clean_cwd) or (len(clean_cwd) >= 2 and clean_cwd[1] == ":")
+        resolved_cwd = clean_cwd if is_abs else os.path.join(ws_root, clean_cwd.lstrip("/\\"))
+    return powershell_exec(
+        command=command,
+        working_directory=resolved_cwd,
+        cwd=resolved_cwd,
+        timeout_seconds=timeout_seconds,
+        shell=shell,
+    )
 
