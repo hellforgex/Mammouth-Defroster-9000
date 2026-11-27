@@ -8,23 +8,39 @@
 
 ## 🚀 What's New in v0.8.2 — `v0.8.2 - Mammouth Defroster 9000`
 
-> **Note for Public Users:** `v0.8.2` consolidates all multi-assistant cockpit upgrades, the streamlined 42-tool MCP consolidation, secret-file read protection, Windows `known_folders` discovery, and shell hardening since `v0.7.5` (spanning `v0.8.0`, `v0.8.1`, and `v0.8.2`).
+> **One Windows Cockpit for ChatGPT, Anthropic Claude & Mammouth.ai.**  
+> `v0.8.2` brings built-in **ChatGPT** and **Claude** WebApp tabs with 1-click OAuth 2.1 onboarding, cuts MCP tool schema overhead by nearly half (**42 streamlined tools**), and tightens default secret hygiene since `v0.7.5`.
 
-### 🛡️ Claude Connector Ergonomics & Secret Hygiene (v0.8.2)
-- **Secret-File Read Protection (`protect_secret_files: true`):** `file_read` refuses credential and token files (`.env`, `.env.*`, `credentials.json`, `gdrive_token.json`, `service_account.json`, `storage_state.json`, `*.token.json`, `oauth.db`, SSH private keys, `*.pfx`/`*.p12`/`*.ppk`, and Defroster's own `config.json` / `hosts.json`), and `file_search_text` skips them. Template files (`*.example`, `*.sample`, `*.template`) remain readable. Fails closed if config cannot be read.
-- **Optional MCP Tool Annotations (`expose_tool_annotations`):** Adds `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` metadata when enabled (`false` by default so strict MCP 2024-11-05 clients receive the exact prior schema shape).
-- **Windows `known_folders` in `system_get_specs`:** Resolves `home`, `desktop`, `documents`, `downloads`, `pictures`, `music`, and `videos` via the Windows Shell API (`SHGetKnownFolderPath`) so OneDrive-redirected directories are reported accurately.
-- **Bounded Directory Listings:** `directory_list` accepts `max_entries` (default `500`) and appends a truncation marker instead of unbounded payloads.
-- **New Default Port `8742`:** Fresh installs default to port `8742` instead of `8000` to avoid collisions with local dev servers or prior instances (existing `config.json` files and `PORT` env overrides keep precedence).
-- **Opt-In Shell HTTP & Download Policy (`allow_shell_downloads`):** Added `server.allow_shell_downloads` (default `false`, fail-closed) and a confirmation toggle under **Skills → PowerShell** to allow `irm`, `iwr`, `curl`, `wget`, `Start-BitsTransfer`, and `.NET WebClient` downloads in elevated shell mode while keeping stagers/LOLBins (`iex`, `Invoke-Expression`, `certutil`, `bitsadmin`, `Start-Process`, `powershell -Command/-File`) permanently blocked.
+### ✨ Release Highlights
 
-### 🟠 Embedded Claude WebApp & 42-Tool Consolidation (v0.8.1)
-- **Parallel Claude Web Tab:** Dedicated **🟠 Claude Web** (`https://claude.ai`) tab alongside **🤖 ChatGPT Web** and **💬 Mammouth AI Web**, with isolated WebView2 profile storage, dashboard/top-bar quick switches, OAuth 2.1 DCR onboarding (`🟠 Claude URL`), and `claude_web` task scheduler triggers.
-- **Streamlined 42-Tool MCP Architecture:** Consolidated 106 exposed MCP tools down to **42 canonical action-dispatched tools** (-60% tools, -47% wire tokens) across all 16 modules, with transparent legacy aliases inside `defroster_execute_tool`.
+| Area | What changed for you |
+| :--- | :--- |
+| 🤖 **ChatGPT Integration** | Built-in **🤖 ChatGPT Web** tab (`chatgpt.com`), OAuth 2.1 Developer Mode connector, **`🤖 ChatGPT URL`** 1-click copy, and `chatgpt_web` scheduled tasks. |
+| 🟠 **Anthropic Claude** | Built-in **🟠 Claude Web** tab (`claude.ai`), OAuth 2.1 DCR onboarding (**`🟠 Claude URL`**), Claude Code `.mcp.json` sync, and `claude_web` scheduled tasks. |
+| ⚡ **42 Streamlined Tools** | Consolidated 106 tools into **42 canonical action-dispatched tools** across 16 modules (-47% wire tokens) with full legacy alias support. |
+| 🛡️ **Secret-File Shield** | Blocks accidental reads/searches on `.env`, tokens, SSH keys, `oauth.db`, and Defroster's own configs by default (`protect_secret_files: true`). |
+| 🔌 **New Default Port `8742`** | Fresh installs avoid `8000` collisions automatically (existing `config.json` ports and `PORT` env overrides stay preserved). |
 
-### 🤖 ChatGPT Integration & Task Scheduler Reliability (v0.8.0)
-- **Embedded ChatGPT Web Tab & OAuth 2.1:** Parallel **🤖 ChatGPT Web** tab (`https://chatgpt.com`), OpenAI redirect URI / DCR / PKCE `S256` support, and `chatgpt_web` scheduled task target.
-- **Background Scheduler Loop & Web Chat Injection:** Started `TaskSchedulerEngine.start_background_loop()` in both GUI and headless server lifespans, added thread-safe Tk `after()` queue marshalling, and hardened WebView2 prompt injection for ProseMirror/TipTap editors.
+---
+
+### 🤖 Feature 1: Parallel ChatGPT & Anthropic Claude Cockpit
+* **Three Built-In AI Web Tabs:** Switch cleanly between **🤖 ChatGPT Web**, **🟠 Claude Web**, and **💬 Mammouth AI Web** with isolated persistent login profiles and configurable startup default (`Settings → In-App Browsers`).
+* **Full Hotkey & Vision Parity:** **Zen Mode**, **Global Summon (`Ctrl+Shift+M`)**, **Screen Copilot (`Ctrl+Shift+Space`)**, **Smart Clipboard (`Ctrl+Shift+K`)**, **Snipping (`Ctrl+V`)**, and the **Prompt Catalog** all target your active chat tab.
+* **Zero-Friction OAuth 2.1 Connectors:** Click **`🤖 ChatGPT URL`** or **`🟠 Claude URL`** on the Dashboard to copy your live `/mcp` tunnel URL with Dynamic Client Registration and PKCE `S256` ready out of the box.
+
+### ⚡ Feature 2: Streamlined 42-Tool MCP Architecture
+* **47% Lower Token Footprint:** Merged 106 fine-grained tools into 42 clear, action-dispatched tools across all 16 modules (`file_*`, `browser_*`, `desktop_*`, `gdrive_*`, `memory_*`, `task_*`, `claude_code`, `mammouth_code`, etc.), fitting comfortably inside chat model context budgets.
+* **Backward Compatibility:** Retired legacy tool names automatically route through `defroster_execute_tool` while still honoring your active profile and module toggles.
+* **Optional MCP Tool Annotations:** Enable `server.expose_tool_annotations: true` to advertise `readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint` metadata (kept off by default for strict MCP 2024-11-05 clients).
+
+### 🛡️ Feature 3: Secret Hygiene & Opt-In Shell Downloads
+* **Credential & Config Protection:** `file_read` refuses and `file_search_text` skips `.env` files, `credentials.json`, `gdrive_token.json`, `oauth.db`, SSH private keys, certificates, and Defroster's `config.json` / `hosts.json`, while keeping `*.example` / `*.sample` templates readable.
+* **Opt-In HTTP Downloads in Elevated Shell:** Added `server.allow_shell_downloads` (off by default) with a confirmation toggle under **Skills → PowerShell** so elevated users can explicitly permit `irm`, `iwr`, `curl`, `wget`, `Start-BitsTransfer`, or `.NET WebClient` downloads while stagers (`iex`, `Invoke-Expression`, `certutil`, `bitsadmin`, `Start-Process`) stay permanently blocked.
+
+### 🖥️ Feature 4: Windows Ergonomics, Scheduler & Port 8742
+* **OneDrive-Aware `known_folders`:** `system_get_specs` reports your actual Windows shell folders (`desktop`, `documents`, `downloads`, etc.) via Windows Shell APIs instead of guessing `%USERPROFILE%`.
+* **Bounded Directory Listings:** `directory_list` limits flat output to `max_entries=500` by default with a truncation marker so huge folders never flood chat context.
+* **Reliable Task Scheduler:** Always-on background execution loop for `chatgpt_web`, `claude_web`, `mammouth_web`, CLI, and PowerShell tasks, with hardened ProseMirror/TipTap chat prompt submission.
 
 ---
 
