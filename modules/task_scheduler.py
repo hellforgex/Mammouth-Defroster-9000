@@ -26,7 +26,7 @@ DB_PATH = BASE_DIR / "tasks.db"
 MAX_NAME_LENGTH = 256
 MAX_PROMPT_LENGTH = 65536
 VALID_STATUSES = {"active", "paused", "completed", "stopped"}
-VALID_TARGETS = {"mammouth_web", "chatgpt_web", "claude_web", "mammouth_code", "powershell", "notification"}
+VALID_TARGETS = {"mammouth_web", "chatgpt_web", "claude_web", "gemini_web", "mammouth_code", "powershell", "notification"}
 
 # Built-in high-value presets
 PRESET_TEMPLATES = [
@@ -188,7 +188,7 @@ def scheduler_create_task(
         prompt: Action prompt to trigger in Mammouth chat or headless runner
         interval_seconds: Interval in seconds between triggers (minimum 10s)
         repeat_count: 0 for unlimited / continuous, or positive int for max executions
-        target: 'mammouth_web', 'chatgpt_web', 'claude_web', 'mammouth_code', 'powershell', or 'notification'
+        target: 'mammouth_web', 'chatgpt_web', 'claude_web', 'gemini_web', 'mammouth_code', 'powershell', or 'notification'
         auto_submit: Whether to automatically send the prompt in chat
         switch_tab: Whether to focus the target chat tab upon trigger
         start_immediately: If True, first trigger occurs in 2 seconds; otherwise after interval

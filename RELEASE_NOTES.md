@@ -1,12 +1,30 @@
-# 🦣 Mammouth Defroster 9000 — Release Notes
+# ❄️ Defrostr — Release Notes
 
-> **Platform:** Dedicated Sovereign Windows Cockpit & DevOps Automation for **ChatGPT**, **Claude**, and **Mammouth.ai**  
+> **Every AI. One Local Bridge. Zero Lock-In.** — Multi-AI Desktop Cockpit & FastMCP Server for **ChatGPT**, **Claude**, **Google Gemini**, and **Mammouth.ai**  
 > **Target OS:** Windows 11 / Windows 10 (x64)  
-> **Current Version:** **v0.8.2**
+> **Current Version:** **v0.9.0**
 
 ---
 
-## 🚀 What's New in v0.8.2 — `v0.8.2 - Mammouth Defroster 9000`
+## 🚀 What's New in v0.9.0 — `v0.9.0 - Mammouth Defroster 9000` (Defrostr)
+
+> **Welcome to Defrostr!**  
+> `v0.9.0` rebrands the cockpit to **Defrostr**, adds a built-in **✨ Gemini Web** tab with an isolated English (`en-US`) WebView2 profile and direct `gemini.google.com/devmode?hl=en` onboarding, introduces **selectable provider tabs** in Settings, and unifies every security toggle into a dedicated **🛡️ Security** tab.
+
+### ✨ Release Highlights
+
+| Area | What changed for you |
+| :--- | :--- |
+| ❄️ **Defrostr Rebrand** | Clean **Defrostr** identity across the Cockpit, Splash Screen, System Tray, and OAuth consent pages while staying 100% compatible with existing configs, tokens, and updates. |
+| ✨ **Gemini Web Tab (`en-US` Profile)** | Isolated `./data/gemini_browser_profile` with WebView2 `Language="en-US"`, post-login auto-return to `/devmode?hl=en`, toolbar **`🧪 DevMode`** + **`🌐 Open in Browser`** tip bar so EU/DE accounts unlock Developer Mode MCP connectors smoothly. |
+| 🎛️ **Selectable Provider Tabs** | Choose in **Settings → In-App Browsers** which provider tabs (`ChatGPT`, `Claude`, `Gemini`, `Mammouth AI`) are visible across the Navigation Rail, Header, and Dashboard. |
+| 🛡️ **Dedicated Security Tab** | Consolidated Auth/Tokens, Workspace Sandbox, Secret-File Shield, Admin Shell & Download controls, Vision Consent Gate, and LAN TLS into one dedicated **🛡️ Security** tab. |
+| 🔐 **Gemini OAuth 2.1 & CORS/CSP** | Exact-host validation for `oauth-redirect*.googleusercontent.com`, `vertexaisearch.cloud.google.com`, and `gemini.google.com` with RFC 7591 DCR + PKCE `S256` and **`✨ Gemini URL`** 1-click setup instructions. |
+| ⏱️ **Scheduler & DOM Automation** | Added `gemini_web` task target, `default_chat_tab="gemini"` resolution, and Quill (`rich-textarea div.ql-editor`) / `button.send-button` prompt submission. |
+
+---
+
+## 📜 Previous Release: v0.8.2 — `v0.8.2 - Mammouth Defroster 9000`
 
 > **One Windows Cockpit for ChatGPT, Anthropic Claude & Mammouth.ai.**  
 > `v0.8.2` brings built-in **ChatGPT** and **Claude** WebApp tabs with 1-click OAuth 2.1 onboarding, cuts MCP tool schema overhead by nearly half (**42 streamlined tools**), and tightens default secret hygiene since `v0.7.5`.

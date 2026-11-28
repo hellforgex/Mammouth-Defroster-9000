@@ -10,15 +10,15 @@
   <img src="https://img.shields.io/badge/License-MIT-F59E0B" alt="License">
 </p>
 
-<h3 align="center">🦣 Thawing 10,000 years of frozen Windows automation power for ChatGPT, Claude, &amp; <a href="https://mammouth.ai">Mammouth.ai</a>. 🔥</h3>
+<h3 align="center">🦣 Thawing 10,000 years of frozen Windows automation power for ChatGPT, Claude, Gemini, &amp; <a href="https://mammouth.ai">Mammouth.ai</a>. 🔥</h3>
 
-**Mammouth Defroster 9000 (MD-9000)** is a desktop cockpit and MCP server that connects **ChatGPT**, **Claude**, and **[Mammouth.ai](https://mammouth.ai)** to your Windows PC. Your assistant can look at your screen (with your consent), drive mouse and keyboard, work on files in a sandboxed workspace, automate a browser, manage SSH hosts, check your hardware and run CLI coding agents — every module can be switched on or off in the GUI.
+**Defrostr (formerly Mammouth Defroster 9000)** is a multi-provider desktop cockpit and MCP server that connects **ChatGPT**, **Claude**, **Google Gemini**, and **[Mammouth.ai](https://mammouth.ai)** to your Windows PC. Your assistant can look at your screen (with your consent), drive mouse and keyboard, work on files in a sandboxed workspace, automate a browser, manage SSH hosts, check your hardware and run CLI coding agents — and you choose in **Settings** which provider tabs appear in the cockpit and manage all security controls in the dedicated **Security** tab.
 
 <p align="center">
   <img src="assets/cockpit_dark.png" alt="Cockpit dashboard (dark mode)" width="95%">
 </p>
 
-**Contents:** [Quickstart](#-quickstart) · [Connect to ChatGPT, Claude or Mammouth.ai](#-connect-to-chatgpt-claude-or-mammouthai) · [Exposure modes](#-exposure-modes) · [Safety defaults](#%EF%B8%8F-safety-defaults) · [What's new](#-whats-new-in-v082-cumulative-since-v075) · [Modules](#%EF%B8%8F-modules--tools) · [FAQ](#-faq) · [Developers](#-for-developers) · [Disclaimer](#%EF%B8%8F-disclaimer)
+**Contents:** [Quickstart](#-quickstart) · [Connect to ChatGPT, Claude, Gemini or Mammouth.ai](#-connect-to-chatgpt-claude-gemini-or-mammouthai) · [Exposure modes](#-exposure-modes) · [Safety defaults](#%EF%B8%8F-safety-defaults) · [What's new](#-whats-new-in-v090-cumulative-since-v082) · [Modules](#%EF%B8%8F-modules--tools) · [FAQ](#-faq) · [Developers](#-for-developers) · [Disclaimer](#%EF%B8%8F-disclaimer)
 
 ---
 
@@ -26,14 +26,22 @@
 
 No Python, Git or terminal needed — the release is a self-contained package.
 
-1. **Download** [`MammouthDefroster9000-v0.8.2-windows-x64.zip`](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest) (~133 MB).
+1. **Download** [`MammouthDefroster9000-v0.9.0-windows-x64.zip`](https://github.com/hellforgex/Mammouth-Defroster-9000/releases/latest) (~133 MB).
 2. **Extract** it anywhere, e.g. `C:\MammouthDefroster9000`.
 3. **Start** `start_gui.bat` (or `MammouthDefroster9000.exe`).
 4. **Pick an exposure mode** ([see below](#-exposure-modes)) and click **`▶ Start Server`**.
 
 ---
 
-## 🔗 Connect to ChatGPT, Claude or Mammouth.ai
+## 🔗 Connect to ChatGPT, Claude, Gemini or Mammouth.ai
+
+### Google Gemini (Developer Mode / OAuth 2.1 — Works in EU/DE via English Profile)
+> **Important for EU / Germany / non-US users:** Google hides custom MCP connectors on localized (e.g. German) Gemini pages. Defrostr's built-in **✨ Gemini Web** tab runs in an isolated English (`en-US`) WebView2 profile pointing directly to `https://gemini.google.com/devmode?hl=en` — and automatically returns to `/devmode?hl=en` after Google sign-in — so MCP connectors stay unlocked!
+
+1. Start a public HTTPS tunnel (e.g., **Tailscale Funnel** or **Cloudflare Tunnel**) and click **`✨ Gemini URL`** on the Dashboard.
+2. Open the built-in **✨ Gemini Web** tab (or click **`🌐 Open in Browser`** on its toolbar if you are already signed into Google in your regular desktop browser — that opens [`https://gemini.google.com/devmode?hl=en`](https://gemini.google.com/devmode?hl=en) immediately; inside Defrostr, you can also click **`🧪 DevMode`** anytime after signing in if Google redirects to `/app`). Make sure Gemini Apps Activity is turned on and you use a personal 18+ Google account.
+3. In **Choose an app**, click **`+ Create new`**, paste the copied `/mcp` URL, and leave **OAuth Client ID & Secret** blank (Defrostr uses Dynamic Client Registration + PKCE `S256`).
+4. Click **Connect**, enter your **Bearer API Key** from the Dashboard on Defrostr's OAuth dialog, and click **Allow Access**.
 
 ### Claude (Web Connectors / OAuth 2.1)
 1. Start a public HTTPS tunnel (e.g., **Tailscale Funnel** or **Cloudflare Tunnel**) and click **`🟠 Claude URL`** on the Dashboard.
@@ -99,7 +107,11 @@ Tunnels are **never started automatically** unless you enable `auto_tunnel` your
 
 ---
 
-## ✨ What's New in v0.8.2 (Cumulative since v0.7.5)
+## ✨ What's New in v0.9.0 (Cumulative since v0.8.2)
+
+- **Built-In Google Gemini WebApp (`✨ Gemini Web`) & English Profile (v0.9.0):**
+  - Added a dedicated **✨ Gemini Web** cockpit tab with an isolated `en-US` WebView2 profile (`./data/gemini_browser_profile`), launching directly at `https://gemini.google.com/devmode?hl=en` with a toolbar **`🧪 DevMode`** shortcut so EU/non-US users can unlock Gemini Developer Mode MCP connectors effortlessly.
+  - Added exact Google Gemini OAuth 2.1 callback validation (`oauth-redirect.googleusercontent.com`, `oauth-redirect-sandbox.googleusercontent.com`, `oauth-redirect-test.googleusercontent.com`, `vertexaisearch.cloud.google.com`, `gemini.google.com`), CORS/CSP `frame-ancestors`, a **`✨ Gemini URL`** 1-click onboarding dialog, Quill editor prompt injection, and `gemini_web` scheduled task support.
 
 Since `v0.7.5`, Defroster has expanded into a multi-assistant cockpit with a streamlined 42-tool MCP architecture and tighter secret hygiene:
 

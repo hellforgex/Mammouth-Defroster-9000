@@ -135,8 +135,8 @@ from modules.google_drive import (
 
 # Initialize FastMCP Server with streamlined 42-tool capability surface
 mcp = FastMCP(
-    name="Mammouth-Defroster-9000",
-    instructions="""Mammouth Defroster 9000 (v0.8.2): Streamlined Windows Cockpit & Tool Hub for ChatGPT, Claude, and Mammouth.ai.
+    name="Defrostr",
+    instructions="""Defrostr (v0.9.0): Streamlined Windows Cockpit & Tool Hub for ChatGPT, Claude, Gemini, and Mammouth.ai.
 Core capabilities (42 consolidated tools total across all 16 modules):
 - Files & Code Search: 'file_read', 'file_write', 'file_replace_chunk', 'file_search_text', 'directory_list', 'workspace_code_search'
 - Shell & Apps: 'powershell_exec' (PowerShell/CMD), 'desktop_open', 'process_manage'
@@ -332,7 +332,7 @@ def task_schedule_create(
         prompt: Prompt or command to run on each trigger.
         interval_minutes: Minutes between runs (default 5.0, min 0.2).
         repeat_count: Max runs (0 = continuous).
-        target: 'auto' (active web tab), 'chatgpt_web', 'claude_web', 'mammouth_web', 'mammouth_code', 'powershell', or 'notification'.
+        target: 'auto' (active web tab), 'chatgpt_web', 'claude_web', 'gemini_web', 'mammouth_web', 'mammouth_code', 'powershell', or 'notification'.
         start_immediately: Run first execution immediately (in ~1s) instead of waiting one interval.
     """
     resolved_target = str(target or "auto").strip().lower()
@@ -343,6 +343,8 @@ def task_schedule_create(
                 resolved_target = "mammouth_web"
             elif default_tab == "claude":
                 resolved_target = "claude_web"
+            elif default_tab == "gemini":
+                resolved_target = "gemini_web"
             else:
                 resolved_target = "chatgpt_web"
         except Exception:
@@ -481,9 +483,9 @@ _DEFROSTER_MODULE_CATALOG: dict[str, dict[str, Any]] = {
     "scheduler": {
         "module": "task_scheduler",
         "title": "Task Scheduler & Automation Engine",
-        "description": "Schedule recurring prompts (ChatGPT Web / Claude Web / Mammouth Web) or scripts and manage scheduled jobs.",
+        "description": "Schedule recurring prompts (ChatGPT Web / Claude Web / Gemini Web / Mammouth Web) or scripts and manage scheduled jobs.",
         "tools": [
-            {"name": "task_schedule_create", "desc": "Create recurring task (interval_minutes, prompt, target='auto'|'chatgpt_web'|'claude_web'|'mammouth_web'|'powershell')."},
+            {"name": "task_schedule_create", "desc": "Create recurring task (interval_minutes, prompt, target='auto'|'chatgpt_web'|'claude_web'|'gemini_web'|'mammouth_web'|'powershell')."},
             {"name": "task_schedule_manage", "desc": "List, presets, pause, resume, trigger, stop, test_run, dry_run, history, or delete tasks."}
         ]
     },
@@ -2294,8 +2296,32 @@ async def openid_configuration(request: Request):
     })
 
 
+_GEMINI_EXACT_OAUTH_HOSTS = (
+    "gemini.google.com",
+    "oauth-redirect.googleusercontent.com",
+    "oauth-redirect-sandbox.googleusercontent.com",
+    "oauth-redirect-test.googleusercontent.com",
+    "vertexaisearch.cloud.google.com",
+)
+
+
+def _detect_oauth_client_name(redirect_uris: list[str], client_id: str = "") -> str:
+    """Resolve human-readable OAuth client label from redirect URIs or client_id."""
+    haystack = [str(u or "").lower() for u in redirect_uris] + ([str(client_id).lower()] if client_id else [])
+    if any("chatgpt" in s or "openai" in s for s in haystack):
+        return "ChatGPT"
+    if any("claude" in s or "anthropic" in s for s in haystack):
+        return "Claude"
+    if any(
+        any(gh in s for gh in _GEMINI_EXACT_OAUTH_HOSTS) or "gemini" in s
+        for s in haystack
+    ):
+        return "Gemini"
+    return "Mammouth AI"
+
+
 def _is_trusted_oauth_redirect_uri(uri: str) -> bool:
-    """Validate that redirect URI points strictly to trusted Mammouth AI, ChatGPT/OpenAI, Claude/Anthropic, or localhost domains/schemes."""
+    """Validate that redirect URI points strictly to trusted Mammouth AI, ChatGPT/OpenAI, Claude/Anthropic, Google Gemini, or localhost domains/schemes."""
     if not uri:
         return False
     try:
@@ -2312,6 +2338,8 @@ def _is_trusted_oauth_redirect_uri(uri: str) -> bool:
             "anthropic.com",
             "claude.com",
         )
+        if host in _GEMINI_EXACT_OAUTH_HOSTS:
+            return parsed.scheme == "https"
         if host in trusted_hosts or host.endswith(tuple(f".{h}" for h in trusted_hosts)):
             return parsed.scheme == "https"
         if host in ("localhost", "127.0.0.1", "::1"):
@@ -2357,15 +2385,13 @@ async def oauth_register(request: Request):
         redirect_uris = ["https://mammouth.ai/api/mcp/oauth/callback"]
 
     if not client_name:
-        is_chatgpt = any("chatgpt" in u.lower() or "openai" in u.lower() for u in redirect_uris)
-        is_claude = any("claude" in u.lower() or "anthropic" in u.lower() for u in redirect_uris)
-        client_name = "ChatGPT" if is_chatgpt else ("Claude" if is_claude else "Mammouth AI")
+        client_name = _detect_oauth_client_name(redirect_uris)
 
-    # F-02 Hardening: Dynamic registration only allowed for trusted Mammouth AI, ChatGPT/OpenAI, Claude/Anthropic, or localhost redirect URIs
+    # F-02 Hardening: Dynamic registration only allowed for trusted Mammouth AI, ChatGPT/OpenAI, Claude/Anthropic, Google Gemini, or localhost redirect URIs
     for u in redirect_uris:
         if not _is_trusted_oauth_redirect_uri(u):
             return JSONResponse(
-                {"error": "invalid_redirect_uri", "error_description": f"Redirect URI '{u}' is not allowed. Must belong to mammouth.ai, chatgpt.com, openai.com, claude.ai, anthropic.com, or localhost."},
+                {"error": "invalid_redirect_uri", "error_description": f"Redirect URI '{u}' is not allowed. Must belong to mammouth.ai, chatgpt.com, openai.com, claude.ai, anthropic.com, Google Gemini OAuth callbacks, or localhost."},
                 status_code=400
             )
 
@@ -2404,17 +2430,20 @@ def _render_consent_page(request: Request, client_name: str, params: dict[str, s
 
     is_claude = "claude" in client_name.lower() or "anthropic" in client_name.lower()
     is_chatgpt = "chatgpt" in client_name.lower() or "openai" in client_name.lower()
+    is_gemini = "gemini" in client_name.lower() or "google" in client_name.lower()
     logo_icon = "🦣 ⚡"
     if is_chatgpt:
-        client_desc = "OpenAI ChatGPT wants to connect to your local Defroster 9000."
+        client_desc = "OpenAI ChatGPT wants to connect to your local Defrostr."
     elif is_claude:
-        client_desc = "Anthropic Claude wants to connect to your local Defroster 9000.<br><span style='font-size:12px;color:#94A3B8;'>Tip: Leave OAuth Client ID &amp; Secret blank in Claude.ai — Defroster registers dynamically via OAuth 2.1 (PKCE S256).</span>"
+        client_desc = "Anthropic Claude wants to connect to your local Defrostr.<br><span style='font-size:12px;color:#94A3B8;'>Tip: Leave OAuth Client ID &amp; Secret blank in Claude.ai — Defrostr registers dynamically via OAuth 2.1 (PKCE S256).</span>"
+    elif is_gemini:
+        client_desc = "Google Gemini wants to connect to your local Defrostr.<br><span style='font-size:12px;color:#94A3B8;'>Tip: Defrostr handles Gemini Developer Mode OAuth 2.1 DCR (PKCE S256) automatically — enter your Bearer API Key below to grant access.</span>"
     else:
-        client_desc = f"<strong>{html.escape(client_name)}</strong> wants to connect to your local Defroster 9000."
+        client_desc = f"<strong>{html.escape(client_name)}</strong> wants to connect to your local Defrostr."
 
     if enforce_auth:
         token_field_html = """
-                <label class="owner-label" for="owner_token">Defroster Bearer API Token (Cockpit &rarr; Dashboard &rarr; Copy Key)</label>
+                <label class="owner-label" for="owner_token">Defrostr Bearer API Token (Cockpit &rarr; Dashboard &rarr; Copy Key)</label>
                 <input class="owner-input" type="password" id="owner_token" name="owner_token" autocomplete="off" placeholder="mc_..." autofocus>
         """
     else:
@@ -2429,7 +2458,7 @@ def _render_consent_page(request: Request, client_name: str, params: dict[str, s
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Mammouth Defroster 9000 — Authorization</title>
+        <title>Defrostr — Authorization</title>
         <style>
             body {{
                 background-color: #0B0D13;
@@ -2551,7 +2580,7 @@ def _render_consent_page(request: Request, client_name: str, params: dict[str, s
     <body>
         <div class="card">
             <div class="logo">{logo_icon}</div>
-            <h2>Mammouth Defroster 9000</h2>
+            <h2>Defrostr</h2>
             <div class="subtitle">MCP Connection Request</div>
             <div class="badge">● Secure MCP OAuth 2.0 Flow</div>
             <div class="info-box">
@@ -2598,9 +2627,7 @@ async def oauth_authorize(request: Request):
             # If client_id is not yet in oauth.db but points to trusted callback, auto-register
             if _is_trusted_oauth_redirect_uri(redirect_uri):
                 effective_cid = client_id or f"mcp_{secrets.token_hex(16)}"
-                is_chatgpt = any(c in redirect_uri.lower() or c in effective_cid.lower() for c in ("chatgpt", "openai"))
-                is_claude = any(c in redirect_uri.lower() or c in effective_cid.lower() for c in ("claude", "anthropic"))
-                client_name = "ChatGPT" if is_chatgpt else ("Claude" if is_claude else "Mammouth AI")
+                client_name = _detect_oauth_client_name([redirect_uri], effective_cid)
                 _save_oauth_client(effective_cid, "", client_name, [redirect_uri])
                 client_id = effective_cid
                 client_info = {"client_id": client_id, "client_name": client_name, "redirect_uris": [redirect_uri]}
@@ -2816,12 +2843,17 @@ DEFAULT_ALLOWED_ORIGINS = [
     "https://www.claude.ai",
     "https://www.claude.com",
     "https://console.anthropic.com",
+    "https://gemini.google.com",
+    "https://oauth-redirect.googleusercontent.com",
+    "https://oauth-redirect-sandbox.googleusercontent.com",
+    "https://oauth-redirect-test.googleusercontent.com",
+    "https://vertexaisearch.cloud.google.com",
     "http://localhost",
     "http://127.0.0.1",
     "http://localhost:3000",
     "http://localhost:8742"
 ]
-DEFAULT_ALLOW_ORIGIN_REGEX = r"^https://([a-zA-Z0-9.-]+\.)?(mammouth\.ai|chatgpt\.com|openai\.com|oaiusercontent\.com|claude\.ai|anthropic\.com|claude\.com)$|^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+DEFAULT_ALLOW_ORIGIN_REGEX = r"^https://(?:([a-zA-Z0-9.-]+\.)?(mammouth\.ai|chatgpt\.com|openai\.com|oaiusercontent\.com|claude\.ai|anthropic\.com|claude\.com)|gemini\.google\.com|oauth-redirect(?:-sandbox|-test)?\.googleusercontent\.com|vertexaisearch\.cloud\.google\.com)$|^http://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 
 def is_allowed_origin(
@@ -2903,7 +2935,7 @@ class SecurityAndAuthMiddleware:
                     )
                     if is_oauth_consent:
                         if b"content-security-policy" not in existing_keys:
-                            headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai https://*.mammouth.ai https://chatgpt.com https://*.chatgpt.com https://openai.com https://*.openai.com https://claude.ai https://*.claude.ai https://anthropic.com https://*.anthropic.com https://claude.com https://*.claude.com"))
+                            headers.append((b"content-security-policy", b"frame-ancestors 'self' https://mammouth.ai https://*.mammouth.ai https://chatgpt.com https://*.chatgpt.com https://openai.com https://*.openai.com https://claude.ai https://*.claude.ai https://anthropic.com https://*.anthropic.com https://claude.com https://*.claude.com https://gemini.google.com https://oauth-redirect.googleusercontent.com https://oauth-redirect-sandbox.googleusercontent.com https://oauth-redirect-test.googleusercontent.com https://vertexaisearch.cloud.google.com"))
                     else:
                         if b"x-frame-options" not in existing_keys:
                             headers.append((b"x-frame-options", b"DENY"))
@@ -3251,7 +3283,7 @@ def generate_self_signed_cert(cert_path: str, key_path: str, hostname: str = "lo
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         subject = issuer = x509.Name([
             x509.NameAttribute(NameOID.COMMON_NAME, hostname),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Mammouth Defroster 9000 Local TLS"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Defrostr Local TLS"),
         ])
         alt_names = [x509.DNSName("localhost"), x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]
         try:
@@ -3311,7 +3343,7 @@ if __name__ == "__main__":
         key_file = default_key
 
     proto = "https" if enable_tls else "http"
-    print(f"Starting Mammouth Defroster 9000 on {proto}://{host}:{port}...")
+    print(f"Starting Defrostr on {proto}://{host}:{port}...")
 
     if not enable_tls and host not in ("127.0.0.1", "localhost"):
         print("\n=======================================================")

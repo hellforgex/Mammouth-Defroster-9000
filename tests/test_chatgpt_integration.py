@@ -44,15 +44,15 @@ class TestChatGPTIntegrationV080(unittest.TestCase):
     """Comprehensive tests for v0.8.0 ChatGPT integration and parallel chat tabs."""
 
     def test_version_alignment_v080(self):
-        """Verify version strings are aligned to 0.8.1 / v0.8.1 across project files."""
-        self.assertEqual(gui.APP_VERSION, "v0.8.2")
-        self.assertIn("v0.8.2", server.mcp.instructions or "")
+        """Verify version strings are aligned across project files."""
+        self.assertEqual(gui.APP_VERSION, "v0.9.0")
+        self.assertIn("v0.9.0", server.mcp.instructions or "")
 
         pyproject = (SRC_DIR / "pyproject.toml").read_text(encoding="utf-8")
-        self.assertIn('version = "0.8.2"', pyproject)
+        self.assertIn('version = "0.9.0"', pyproject)
 
         build_bat = (SRC_DIR / "build.bat").read_text(encoding="utf-8")
-        self.assertIn("MammouthDefroster9000-v0.8.2-windows-x64.zip", build_bat)
+        self.assertIn("MammouthDefroster9000-v0.9.0-windows-x64.zip", build_bat)
 
     def test_config_defaults_include_chatgpt(self):
         """Verify DEFAULT_CONFIG defines chatgpt_browser, default_chat_tab, and ChatGPT CORS origins."""

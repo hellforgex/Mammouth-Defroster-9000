@@ -133,7 +133,7 @@ class DefrosterTrayApp:
         self.start_server_thread()
         if self.icon:
             try:
-                self.icon.notify(f"Mammouth Defroster 9000 server restarted on port {self.port}.", "Server Restarted")
+                self.icon.notify(f"Defrostr server restarted on port {self.port}.", "Server Restarted")
             except Exception:
                 pass
 
@@ -150,7 +150,7 @@ class DefrosterTrayApp:
             os.startfile(str(log_path))
         else:
             with open(log_path, "w", encoding="utf-8") as f:
-                f.write("Mammouth Defroster 9000 Log Initialized.\n")
+                f.write("Defrostr Log Initialized.\n")
             os.startfile(str(log_path))
 
     def on_open_workspace(self, icon=None, item=None):
@@ -200,7 +200,7 @@ class DefrosterTrayApp:
 
     def create_menu(self):
         return Menu(
-            item("🦣 Mammouth Defroster 9000", None, enabled=False),
+            item("❄️ Defrostr", None, enabled=False),
             item(f"🟢 Status: Online (Port {self.port})", None, enabled=False),
             Menu.SEPARATOR,
             item("🌐 Copy Public SSE URL", self.on_copy_url),
@@ -210,7 +210,7 @@ class DefrosterTrayApp:
             item("💻 Launch Mammouth Code", self.on_launch_mammouth_code),
             Menu.SEPARATOR,
             item("🔄 Restart Server", self.restart_server),
-            item("❌ Exit Defroster 9000", self.on_exit),
+            item("❌ Exit Defrostr", self.on_exit),
         )
 
     def run(self):
@@ -220,13 +220,13 @@ class DefrosterTrayApp:
         # 2. Build Tray Icon
         image = self.load_icon_image()
         menu = self.create_menu()
-        self.icon = pystray.Icon("MammouthDefroster9000", image, "Mammouth Defroster 9000 (Online)", menu)
+        self.icon = pystray.Icon("Defrostr", image, "Defrostr (Online)", menu)
 
         # 3. Notify user on startup
         try:
             self.icon.notify(
-                f"Defroster 9000 is active on port {self.port}!\nRight-click icon for management menu.",
-                "Mammouth Defroster 9000"
+                f"Defrostr is active on port {self.port}!\nRight-click icon for management menu.",
+                "Defrostr"
             )
         except Exception:
             pass

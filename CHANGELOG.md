@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.0] - 2026-11-28
+
+### ✨ Highlight: Defrostr Rebrand, Google Gemini Developer Mode, Selectable Provider Tabs & Dedicated Security Tab
+- **Rebranded to Defrostr:** Updated Cockpit UI, splash screen, system tray, and OAuth consent pages from *Mammouth Defroster 9000* to **Defrostr** to reflect multi-provider support across ChatGPT, Claude, Google Gemini, and Mammouth.ai (preserving full backward compatibility for existing tokens, configs, and updates).
+- **Dedicated `✨ Gemini Web` Cockpit Tab:** Embedded `gemini.google.com` right alongside **ChatGPT**, **Claude**, and **Mammouth.ai** with an isolated `en-US` WebView2 profile (`./data/gemini_browser_profile`, `CoreWebView2CreationProperties.Language="en-US"`), launching directly into `https://gemini.google.com/devmode?hl=en` with a toolbar **`🧪 DevMode`** shortcut so EU/DE users can access Gemini Developer Mode MCP connectors seamlessly.
+- **Selectable Provider Tabs in Settings:** Choose which AI provider web tabs (`🤖 ChatGPT`, `🟠 Claude`, `✨ Gemini`, `💬 Mammouth AI`) are visible in the Navigation Rail, Top Header, and Dashboard Quick Actions without restarting.
+- **Dedicated `🛡️ Security` Tab:** Consolidated all authentication, API token, workspace sandbox, secret-file shield, elevated shell / download policy, desktop vision consent, and LAN TLS controls out of Skills and Settings into one dedicated **Security** tab.
+- **Gemini OAuth 2.1 DCR, PKCE & Strict Callback Allowlist:** Added exact-host validation for Google Gemini OAuth callback redirects (`oauth-redirect.googleusercontent.com`, `oauth-redirect-sandbox.googleusercontent.com`, `oauth-redirect-test.googleusercontent.com`, `vertexaisearch.cloud.google.com`, `gemini.google.com`) without wildcarding untrusted `*.googleusercontent.com` domains, plus matching CORS origins, CSP `frame-ancestors`, consent dialog guidance, and a **`✨ Gemini URL`** 1-click setup button.
+- **Full Cockpit & Scheduler Parity:** Added Gemini Quill/Material input (`rich-textarea div.ql-editor`) and `button.send-button` prompt submission, `gemini_web` scheduled task target & `"auto"` default tab resolution, Zen Mode, Global Hotkeys, and Settings (`Gemini URL`, `Locale`) persistence.
+
 ## [0.8.2] - 2026-11-27
 
 ### 🛡️ Highlight: Smarter Connector Defaults & Secret Hygiene

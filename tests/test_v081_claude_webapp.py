@@ -43,16 +43,16 @@ class TestClaudeWebAppIntegrationV081(unittest.TestCase):
     """Comprehensive tests for v0.8.1 Claude WebApp embedding and OAuth connector onboarding."""
 
     def test_version_alignment_v081(self):
-        """Verify version strings across gui, server, pyproject, build script, and README match v0.8.1."""
-        self.assertEqual(gui.APP_VERSION, "v0.8.2")
-        self.assertIn("v0.8.2", server.mcp.instructions or "")
+        """Verify version strings across gui, server, pyproject, build script, and README match current version."""
+        self.assertEqual(gui.APP_VERSION, "v0.9.0")
+        self.assertIn("v0.9.0", server.mcp.instructions or "")
 
         pyproject = (SRC_DIR / "pyproject.toml").read_text(encoding="utf-8")
-        self.assertIn('version = "0.8.2"', pyproject)
+        self.assertIn('version = "0.9.0"', pyproject)
 
         build_bat = (SRC_DIR / "build.bat").read_text(encoding="utf-8")
-        self.assertIn("MammouthDefroster9000-v0.8.2-windows-x64.zip", build_bat)
-        self.assertIn("MammouthDefroster9000-v0.8.2", build_bat)
+        self.assertIn("MammouthDefroster9000-v0.9.0-windows-x64.zip", build_bat)
+        self.assertIn("MammouthDefroster9000-v0.9.0", build_bat)
         self.assertNotIn("MammouthDefroster9000-v0.8.0", build_bat)
 
     def test_config_defaults_include_claude_browser(self):

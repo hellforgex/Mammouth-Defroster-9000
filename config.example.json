@@ -45,6 +45,11 @@
       "https://claude.ai",
       "https://claude.com",
       "https://www.claude.com",
+      "https://gemini.google.com",
+      "https://oauth-redirect.googleusercontent.com",
+      "https://oauth-redirect-sandbox.googleusercontent.com",
+      "https://oauth-redirect-test.googleusercontent.com",
+      "https://vertexaisearch.cloud.google.com",
       "http://localhost",
       "http://127.0.0.1",
       "http://localhost:3000",
@@ -126,6 +131,7 @@
   },
   "embedded_browser": {
     "enabled": true,
+    "mammouth_enabled": true,
     "start_page": "https://mammouth.ai",
     "default_chat_tab": "chatgpt",
     "auto_open_on_server_start": true,
@@ -143,5 +149,11 @@
     "enabled": true,
     "start_page": "https://claude.ai",
     "user_data_dir": "./data/claude_browser_profile"
+  },
+  "gemini_browser": {
+    "enabled": true,
+    "start_page": "https://gemini.google.com/devmode?hl=en",
+    "language": "en-US",
+    "user_data_dir": "./data/gemini_browser_profile"
   }
 }

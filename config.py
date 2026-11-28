@@ -43,6 +43,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "https://claude.com",
             "https://www.claude.com",
             "https://console.anthropic.com",
+            "https://gemini.google.com",
+            "https://oauth-redirect.googleusercontent.com",
+            "https://oauth-redirect-sandbox.googleusercontent.com",
+            "https://oauth-redirect-test.googleusercontent.com",
+            "https://vertexaisearch.cloud.google.com",
             "http://localhost",
             "http://127.0.0.1"
         ],
@@ -66,7 +71,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "auto_check_updates": True,        # Automatically check for updates on startup (once a day)
         "last_update_check_time": 0.0,     # Timestamp of the last update check to limit to 1x daily        # Automatically check for updates on startup
         "start_in_web_tab": False,         # Chat-First Mode: Auto switch to Mammouth AI tab on startup
-        "global_hotkey_enabled": True,     # Global hotkey (Ctrl+Shift+M) to summon/toggle Mammouth Defroster
+        "global_hotkey_enabled": True,     # Global hotkey (Ctrl+Shift+M) to summon/toggle Defrostr
         "global_hotkey": "Ctrl+Shift+M",
         "screen_copilot_hotkey_enabled": True, # Global hotkey (Ctrl+Shift+Space) for active window multimodal capture
         "screen_copilot_hotkey": "Ctrl+Shift+Space",
@@ -181,6 +186,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "embedded_browser": {
         "enabled": True,
+        "mammouth_enabled": True,
         "start_page": "https://mammouth.ai",
         "default_chat_tab": "chatgpt",
         "auto_open_on_server_start": True,
@@ -198,6 +204,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": True,
         "start_page": "https://claude.ai",
         "user_data_dir": "./data/claude_browser_profile"
+    },
+    "gemini_browser": {
+        "enabled": True,
+        "start_page": "https://gemini.google.com/devmode?hl=en",
+        "language": "en-US",
+        "user_data_dir": "./data/gemini_browser_profile"
     }
 }
 
@@ -400,7 +412,7 @@ _config_cache: dict[str, Any] | None = None
 _config_cache_stamp: tuple | None = None
 
 # Top-level sections that are merged key-by-key from config.json over DEFAULT_CONFIG.
-_MERGED_SECTIONS = ("server", "browser_agent", "mammouth_code", "embedded_browser", "chatgpt_browser", "claude_browser")
+_MERGED_SECTIONS = ("server", "browser_agent", "mammouth_code", "embedded_browser", "chatgpt_browser", "claude_browser", "gemini_browser")
 
 
 def _config_file_stamp() -> tuple | None:

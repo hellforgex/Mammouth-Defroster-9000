@@ -22,6 +22,37 @@ import pyperclip
 HAS_WEBVIEW2 = False
 _INIT_ERROR = ""
 _DOWNLOAD_COUNT_LOCK = threading.Lock()
+_WEBVIEW2_ENV_LOCK = threading.Lock()
+
+
+def _create_edge_chrome(control: Any, window: Any, profile_dir: str, language: str | None = None):
+    """Instantiate EdgeChrome, optionally forcing an isolated WebView2 profile language (e.g. 'en-US')."""
+    lang = str(language or "").strip()
+    if not lang:
+        return EdgeChrome(control, window, profile_dir)
+    try:
+        import webview.platforms.edgechromium as _ec_mod
+        orig_props_cls = getattr(_ec_mod, "CoreWebView2CreationProperties", None)
+    except Exception:
+        _ec_mod = None
+        orig_props_cls = None
+    if _ec_mod is None or orig_props_cls is None:
+        return EdgeChrome(control, window, profile_dir)
+
+    with _WEBVIEW2_ENV_LOCK:
+        def _localized_props(*args, **kwargs):
+            props = orig_props_cls(*args, **kwargs)
+            try:
+                props.Language = lang
+            except Exception:
+                pass
+            return props
+
+        _ec_mod.CoreWebView2CreationProperties = _localized_props
+        try:
+            return EdgeChrome(control, window, profile_dir)
+        finally:
+            _ec_mod.CoreWebView2CreationProperties = orig_props_cls
 
 
 def _is_trusted_web_origin(source: Any, start_url: Any = None) -> bool:
@@ -169,8 +200,18 @@ def _native_save_file_dialog(initial_dir: str, default_name: str, title: str = "
         return None
 
 
+_EXACT_TRUSTED_BROWSER_DOMAINS = (
+    "gemini.google.com",
+    "accounts.google.com",
+    "oauth-redirect.googleusercontent.com",
+    "oauth-redirect-sandbox.googleusercontent.com",
+    "oauth-redirect-test.googleusercontent.com",
+    "vertexaisearch.cloud.google.com",
+)
+
+
 def _is_trusted_browser_origin(uri: str) -> bool:
-    """Verifies if the requested URI originates from trusted domains (Mammouth.ai, ChatGPT/OpenAI, Claude/Anthropic, localhost, 127.0.0.1)."""
+    """Verifies if the requested URI originates from trusted domains (Mammouth.ai, ChatGPT/OpenAI, Claude/Anthropic, Google Gemini, localhost, 127.0.0.1)."""
     if not uri:
         return False
     try:
@@ -179,6 +220,8 @@ def _is_trusted_browser_origin(uri: str) -> bool:
         if not domain:
             # Allow blob/data schemes if needed
             return uri.lower().startswith("blob:") or uri.lower().startswith("data:")
+        if domain in _EXACT_TRUSTED_BROWSER_DOMAINS:
+            return parsed.scheme.lower() == "https"
         trusted_domains = (
             "mammouth.ai",
             "chatgpt.com",
@@ -321,7 +364,7 @@ def parse_mammouth_quota_data(payload: Any | None) -> dict[str, Any]:
 
 
 class MammouthBrowserFrame(ctk.CTkFrame):
-    """Modern embedded browser widget hosting AI web chats (ChatGPT, Claude, Mammouth.ai) inside the Cockpit."""
+    """Modern embedded browser widget hosting AI web chats (ChatGPT, Claude, Gemini, Mammouth.ai) inside the Cockpit."""
 
     def __init__(
         self,
@@ -334,6 +377,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         zen_toggle_cb: Callable[[], None] | None = None,
         brand_name: str | None = None,
         log_cb: Callable[[str], None] | None = None,
+        language: str | None = None,
         **kwargs
     ):
         super().__init__(master, **kwargs)
@@ -345,8 +389,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             self.brand_name = "ChatGPT"
         elif "claude.ai" in self.start_url.lower() or "claude.com" in self.start_url.lower():
             self.brand_name = "Claude"
+        elif "gemini.google.com" in self.start_url.lower():
+            self.brand_name = "Gemini"
         else:
             self.brand_name = "Mammouth.ai"
+        clean_lang = str(language or "").strip()
+        self.browser_language: str | None = clean_lang or ("en-US" if self.brand_name == "Gemini" else None)
         self.screenshot_cb = screenshot_cb
         self.quota_cb = quota_cb
         self.zen_toggle_cb = zen_toggle_cb
@@ -464,6 +512,23 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         )
         self.btn_home.pack(side="left", padx=2)
 
+        if self.brand_name == "Gemini":
+            self.btn_gemini_devmode = ctk.CTkButton(
+                btn_nav_box,
+                text="🧪 DevMode",
+                width=82,
+                height=24,
+                corner_radius=4,
+                fg_color=("#EFF6FF", "#1E293B"),
+                hover_color=("#DBEAFE", "#2A3A52"),
+                text_color=("#1D4ED8", "#60A5FA"),
+                font=ctk.CTkFont(size=11, weight="bold"),
+                border_width=1,
+                border_color=("#BFDBFE", "#3B5275"),
+                command=self.open_gemini_devmode
+            )
+            self.btn_gemini_devmode.pack(side="left", padx=(4, 2))
+
         # Download status feedback label
         self.lbl_download_status = ctk.CTkLabel(
             self.toolbar,
@@ -537,6 +602,35 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         self.btn_zen.pack(side="right", padx=(0, 6))
 
         import tkinter as tk
+        if self.brand_name == "Gemini":
+            self.gemini_hint_bar = ctk.CTkFrame(
+                self,
+                height=28,
+                corner_radius=0,
+                fg_color=("#EFF6FF", "#162032"),
+                border_width=0
+            )
+            self.gemini_hint_bar.pack(fill="x", padx=0, pady=0)
+            ctk.CTkLabel(
+                self.gemini_hint_bar,
+                text="💡 Gemini hides custom MCP tools in German UI — Defrostr keeps this tab in English (?hl=en). Click 🧪 DevMode to configure MCP, or 🌐 Open in Browser if signed in there.",
+                font=ctk.CTkFont(size=11),
+                text_color=("#1E3A8A", "#93C5FD"),
+                anchor="w"
+            ).pack(side="left", padx=10, pady=3)
+            ctk.CTkButton(
+                self.gemini_hint_bar,
+                text="✕",
+                width=22,
+                height=20,
+                corner_radius=4,
+                fg_color="transparent",
+                hover_color=("#DBEAFE", "#1E293B"),
+                text_color=("#1E3A8A", "#93C5FD"),
+                font=ctk.CTkFont(size=11, weight="bold"),
+                command=lambda: self.gemini_hint_bar.pack_forget()
+            ).pack(side="right", padx=6, pady=3)
+
         # 2. Native Win32 viewport container (plain tk.Frame without an internal canvas)
         # to ensure zero Z-order collisions with the child WinForms/WebView2 HWND.
         self.viewport = tk.Frame(
@@ -627,7 +721,12 @@ class MammouthBrowserFrame(ctk.CTkFrame):
             window.localization = {
                 'windows.fileFilter.allFiles': 'All Files'
             }
-            self.edge = EdgeChrome(control, window, self.profile_dir)
+            self.edge = _create_edge_chrome(
+                control,
+                window,
+                self.profile_dir,
+                language=getattr(self, "browser_language", None),
+            )
             # Pywebview's on_download_starting is replaced with a no-op to prevent duplicate/crashed dialogs
             self.edge.on_download_starting = lambda sender, args: None
             self.edge.on_new_window_request = self._on_new_window_requested
@@ -730,10 +829,24 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 pass
 
             # Track navigation start/completion so send_chat_prompt never injects into about:blank mid-load
+            self._gemini_saw_auth = False
+
             def _on_nav_starting(sender, args):
                 try:
                     uri = str(getattr(args, "Uri", "") or "")
                     if uri and not uri.lower().startswith("about:blank"):
+                        self._maybe_mark_gemini_auth(uri)
+                        en_url = self._resolve_gemini_english_url(uri)
+                        if en_url and en_url != uri:
+                            try:
+                                args.set_Cancel(True)
+                            except Exception:
+                                pass
+                            self._safe_ui_call(
+                                lambda u=en_url: self.edge.load_url(u) if getattr(self, "edge", None) else None,
+                                force_async=True,
+                            )
+                            return
                         self._nav_completed = False
                 except Exception:
                     pass
@@ -751,6 +864,11 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                         self._nav_completed = True
                     if current_uri and hasattr(self, "lbl_url"):
                         self._safe_ui_call(lambda u=current_uri: self.lbl_url.configure(text=f"🔒 {u}") if hasattr(self, "lbl_url") else None, force_async=True)
+                    # Fallback: enforce ?hl=en (or /devmode?hl=en post-login) if Google landed on a non-English route
+                    target_en_url = self._resolve_gemini_english_url(current_uri)
+                    if target_en_url and target_en_url != current_uri:
+                        self._safe_ui_call(lambda u=target_en_url: self.after(200, lambda: self.edge.load_url(u) if getattr(self, "edge", None) else None), force_async=True)
+                        return
                     # Automatically redirect stuck Mammouth OAuth callbacks or errors back to home
                     uri_l = current_uri.lower()
                     if "/api/mcp/oauth/callback" in uri_l or "mcp_error" in uri_l or ("mammouth.ai" in uri_l and "/api/auth/callback" in uri_l):
@@ -785,6 +903,7 @@ class MammouthBrowserFrame(ctk.CTkFrame):
         try:
             uri = str(args.Uri)
             uri_lower = uri.lower()
+            self._maybe_mark_gemini_auth(uri)
 
             # Blob and data URLs are process-local and must always remain in WebView2
             is_local_protocol = uri_lower.startswith("blob:") or uri_lower.startswith("data:")
@@ -805,6 +924,11 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 or "claude.ai" in uri_lower
                 or "claude.com" in uri_lower
                 or "anthropic.com" in uri_lower
+                or "gemini.google.com" in uri_lower
+                or "oauth-redirect.googleusercontent.com" in uri_lower
+                or "oauth-redirect-sandbox.googleusercontent.com" in uri_lower
+                or "oauth-redirect-test.googleusercontent.com" in uri_lower
+                or "vertexaisearch.cloud.google.com" in uri_lower
                 or "accounts.google.com" in uri_lower
                 or "login.microsoftonline.com" in uri_lower
                 or "login.live.com" in uri_lower
@@ -984,6 +1108,61 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                 self.edge.load_url(self.start_url)
             except Exception:
                 pass
+
+    def open_gemini_devmode(self):
+        """Navigate the Gemini WebView2 tab directly to the English Developer Mode MCP panel."""
+        devmode_url = "https://gemini.google.com/devmode?hl=en"
+        if self.edge:
+            try:
+                self.edge.load_url(devmode_url)
+            except Exception:
+                pass
+        else:
+            webbrowser.open(devmode_url)
+
+    def _maybe_mark_gemini_auth(self, uri: str) -> bool:
+        """Record when the Gemini tab visits Google Sign-In so post-login /app redirects can return to DevMode."""
+        if getattr(self, "brand_name", "") != "Gemini" or not uri:
+            return False
+        try:
+            host = (urllib.parse.urlsplit(uri).hostname or "").lower()
+        except Exception:
+            host = ""
+        if host == "accounts.google.com":
+            self._gemini_saw_auth = True
+            return True
+        return False
+
+    def _resolve_gemini_english_url(self, current_uri: str) -> str | None:
+        """Keep Gemini WebApp on English UI (?hl=en / /devmode?hl=en) so custom MCP tools stay visible & active."""
+        if getattr(self, "brand_name", "") != "Gemini" or not current_uri:
+            return None
+        if not str(getattr(self, "browser_language", "en-US") or "").lower().startswith("en"):
+            return None
+        try:
+            parsed = urllib.parse.urlsplit(current_uri)
+            scheme = (parsed.scheme or "").lower()
+            host = (parsed.hostname or "").lower()
+            path = parsed.path or ""
+            path_l = path.lower()
+        except Exception:
+            return None
+        if scheme != "https" or host != "gemini.google.com":
+            return None
+        is_ui_route = path_l in ("", "/", "/app", "/devmode") or path_l.startswith(("/app/", "/devmode/", "/gem/", "/gems/"))
+        if not is_ui_route:
+            return None
+        if getattr(self, "_gemini_saw_auth", False):
+            self._gemini_saw_auth = False
+            if "/devmode" not in path_l:
+                return self.start_url if "devmode" in str(self.start_url).lower() else "https://gemini.google.com/devmode?hl=en"
+        pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        for k, v in pairs:
+            if k.lower() == "hl" and v.lower().startswith("en"):
+                return None
+        new_pairs = [(k, v) for k, v in pairs if k.lower() != "hl"]
+        new_pairs.append(("hl", "en"))
+        return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, path, urllib.parse.urlencode(new_pairs), parsed.fragment))
 
     def _unified_web_message(self, sender, args):
         """Unified message receiver handling both Mammouth quota telemetry and pywebview bridge calls without crashes."""
@@ -1254,6 +1433,9 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                                 '#prompt-textarea',
                                 'div.ProseMirror[data-testid="chat-input"]',
                                 '[data-testid="chat-input"][contenteditable="true"]',
+                                'rich-textarea div.ql-editor[contenteditable="true"]',
+                                'div.ql-editor[contenteditable="true"]',
+                                'rich-textarea [contenteditable="true"]',
                                 'fieldset div.ProseMirror[contenteditable="true"]',
                                 'div.ProseMirror[contenteditable="true"]',
                                 'textarea[data-id]',
@@ -1435,8 +1617,8 @@ class MammouthBrowserFrame(ctk.CTkFrame):
                                     return true;
                                 }}
 
-                                // Priority 1: High confidence testid, explicit Send aria-label, or submit type (ChatGPT, Claude & Mammouth)
-                                var p1List = document.querySelectorAll('button[data-testid="send-button"], button[data-testid*="send"], button[data-testid*="submit"], button[aria-label="Send message"], button[aria-label="Send Message"], button[type="submit"]');
+                                // Priority 1: High confidence testid, explicit Send aria-label, or submit type (ChatGPT, Claude, Gemini & Mammouth)
+                                var p1List = document.querySelectorAll('button[data-testid="send-button"], button[data-testid*="send"], button[data-testid*="submit"], button.send-button, button[aria-label="Send message"], button[aria-label="Send Message"], button[aria-label="Send prompt"], button[type="submit"]');
                                 for (var p = 0; p < p1List.length; p++) {{
                                     var p1 = p1List[p];
                                     if (isNotBad(p1)) return p1;

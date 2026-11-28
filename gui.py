@@ -106,7 +106,7 @@ def generate_self_signed_cert(cert_path: str, key_path: str, hostname: str = "lo
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         subject = issuer = x509.Name([
             x509.NameAttribute(NameOID.COMMON_NAME, hostname),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Mammouth Defroster 9000 Local TLS"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Defrostr Local TLS"),
         ])
         
         alt_names = [x509.DNSName(hostname), x509.DNSName("localhost"), x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]
@@ -186,7 +186,7 @@ if is_server_binary or "--server-only" in sys.argv or "--cli" in sys.argv or "--
 
     proto = "https" if enable_tls else "http"
     print("=======================================================")
-    print("  Mammouth Defroster 9000 FastMCP Server (CLI Mode)")
+    print("  Defrostr FastMCP Server (CLI Mode)")
     print(f"  Listening on: {proto}://{host}:{port}/sse")
     if token:
         print(f"  Bearer Auth: ENABLED (Token: {token[:6]}...{token[-4:]})")
@@ -250,7 +250,7 @@ THEME_TEXT_MUTED = ("#754533", "#A89F97")         # Muted warm stone text
 THEME_CONSOLE_BG = "#19191C"                      # Rich dark warm charcoal console
 
 HOSTS_FILE = BASE_DIR / "hosts.json"
-APP_VERSION = "v0.8.2"
+APP_VERSION = "v0.9.0"
 
 
 
@@ -697,7 +697,7 @@ class SplashScreen(ctk.CTkToplevel):
     """Modern dark-themed loading screen with progress feedback displayed during application startup."""
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("Mammouth Defroster 9000 Loading...")
+        self.title("Defrostr Loading...")
         self.overrideredirect(True)
         self.attributes("-topmost", True)
         
@@ -723,7 +723,7 @@ class SplashScreen(ctk.CTkToplevel):
 
         lbl_title = ctk.CTkLabel(
             container,
-            text="MAMMOUTH DEFROSTER 9000",
+            text="DEFROSTR",
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color="#FFFFFF"
         )
@@ -731,7 +731,7 @@ class SplashScreen(ctk.CTkToplevel):
 
         lbl_sub = ctk.CTkLabel(
             container,
-            text=f"Sovereign FastMCP Desktop Cockpit • {APP_VERSION}",
+            text=f"Every AI. One Local Bridge. Zero Lock-In. • {APP_VERSION}",
             font=ctk.CTkFont(size=11),
             text_color="#A0A0A5"
         )
@@ -1090,7 +1090,7 @@ class MammouthControlCenter(ctk.CTk):
         self._scheduled_after_ids: set[str] = set()
         super().__init__()
         self.withdraw()  # Hide main window during splash screen loading
-        self.title(f"Mammouth Defroster 9000 🦣❄️🔥 ({APP_VERSION})")
+        self.title(f"Defrostr ❄️🔥 ({APP_VERSION})")
         self.geometry("1160x840")
         self.minsize(1060, 740)
         self.configure(fg_color=THEME_BG)
@@ -1193,6 +1193,8 @@ class MammouthControlCenter(ctk.CTk):
                 self.active_chat_tab_key = "💬 Mammouth AI Web"
             elif default_chat == "claude":
                 self.active_chat_tab_key = "🟠 Claude Web"
+            elif default_chat == "gemini":
+                self.active_chat_tab_key = "✨ Gemini Web"
             else:
                 self.active_chat_tab_key = "🤖 ChatGPT Web"
             self.task_countdown_labels: dict[int, ctk.CTkLabel] = {}
@@ -1225,7 +1227,7 @@ class MammouthControlCenter(ctk.CTk):
                 pass
 
             if self.splash:
-                self.splash.set_progress(1.0, "Ready! Starting Mammouth Defroster 9000...")
+                self.splash.set_progress(1.0, "Ready! Starting Defrostr...")
 
                 def finish_loading():
                     if getattr(self, "splash", None) is not None:
@@ -1347,7 +1349,7 @@ class MammouthControlCenter(ctk.CTk):
         title_top_row = ctk.CTkFrame(title_text_box, fg_color="transparent")
         title_top_row.pack(anchor="w")
         
-        lbl_title = ctk.CTkLabel(title_top_row, text="Mammouth Defroster 9000", font=ctk.CTkFont(size=16, weight="bold"), text_color=THEME_TEXT_PRIMARY)
+        lbl_title = ctk.CTkLabel(title_top_row, text="Defrostr", font=ctk.CTkFont(size=16, weight="bold"), text_color=THEME_TEXT_PRIMARY)
         lbl_title.pack(side="left", padx=(0, 8))
 
         # Version Pill Badge
@@ -1357,7 +1359,7 @@ class MammouthControlCenter(ctk.CTk):
 
         lbl_subtitle = ctk.CTkLabel(
             title_text_box,
-            text="❄️ Sovereign FastMCP Desktop Cockpit & Agent Bridge",
+            text="❄️ Every AI. One Local Bridge. Zero Lock-In.",
             font=ctk.CTkFont(size=11),
             text_color=THEME_TEXT_MUTED
         )
@@ -1457,6 +1459,19 @@ class MammouthControlCenter(ctk.CTk):
         )
         self.btn_open_claude.pack(side="left", padx=(0, 5))
 
+        self.btn_open_gemini = ctk.CTkButton(
+            right_box,
+            text="✨ Gemini",
+            width=94,
+            height=32,
+            fg_color=("#2563EB", "#3B82F6"),
+            hover_color=("#1D4ED8", "#2563EB"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._switch_to_gemini_tab
+        )
+        self.btn_open_gemini.pack(side="left", padx=(0, 5))
+
         self.btn_open_mammouth = ctk.CTkButton(
             right_box,
             text="💬 Mammouth AI",
@@ -1473,10 +1488,10 @@ class MammouthControlCenter(ctk.CTk):
         self.btn_open_mammouth.pack(side="left", padx=(0, 8))
 
         # Theme Switcher
-        theme_box = ctk.CTkFrame(right_box, fg_color="transparent")
-        theme_box.pack(side="left", padx=(0, 12))
+        self.theme_box = ctk.CTkFrame(right_box, fg_color="transparent")
+        self.theme_box.pack(side="left", padx=(0, 12))
         self.theme_menu = ctk.CTkOptionMenu(
-            theme_box,
+            self.theme_box,
             values=["Dark", "System", "Light"],
             width=85,
             height=30,
@@ -1549,9 +1564,11 @@ class MammouthControlCenter(ctk.CTk):
         self.tab_prompts = self.tabview.add("📖 Prompt Catalog")
         self.tab_tasks = self.tabview.add("⏱️ Tasks & Automation")
         self.tab_hosts = self.tabview.add("🔑 SSH Fleet & PuTTY Manager")
-        self.tab_settings = self.tabview.add("⚙️ Security & Settings")
+        self.tab_security = self.tabview.add("🛡️ Security")
+        self.tab_settings = self.tabview.add("⚙️ Settings")
         self.tab_chatgpt = self.tabview.add("🤖 ChatGPT Web")
         self.tab_claude = self.tabview.add("🟠 Claude Web")
+        self.tab_gemini = self.tabview.add("✨ Gemini Web")
         self.tab_mammouth = self.tabview.add("💬 Mammouth AI Web")
 
         # Remove horizontal segmented button bar in favor of modern Left Rail (MUST be called after add)
@@ -1568,10 +1585,13 @@ class MammouthControlCenter(ctk.CTk):
         self._setup_prompts_tab()
         self._setup_tasks_tab()
         self._setup_hosts_tab()
+        self._setup_security_tab()
         self._setup_settings_tab()
         self._setup_chatgpt_tab()
         self._setup_claude_tab()
+        self._setup_gemini_tab()
         self._setup_mammouth_tab()
+        self._apply_provider_tab_visibility()
 
         self._update_nav_highlight("📊 Dashboard & Live Console")
 
@@ -1606,9 +1626,11 @@ class MammouthControlCenter(ctk.CTk):
             ("📖 Prompt Catalog", "📖 Prompt Catalog"),
             ("⏱️ Tasks & Automation", "⏱️ Scheduled Tasks"),
             ("🔑 SSH Fleet & PuTTY Manager", "🔑 SSH & PuTTY Fleet"),
-            ("⚙️ Security & Settings", "⚙️ Settings"),
+            ("🛡️ Security", "🛡️ Security"),
+            ("⚙️ Settings", "⚙️ Settings"),
             ("🤖 ChatGPT Web", "🤖 ChatGPT WebApp"),
             ("🟠 Claude Web", "🟠 Claude WebApp"),
+            ("✨ Gemini Web", "✨ Gemini WebApp"),
             ("💬 Mammouth AI Web", "💬 Mammouth WebApp"),
         ]
 
@@ -1835,6 +1857,28 @@ class MammouthControlCenter(ctk.CTk):
         self.tab_claude.configure(fg_color=THEME_BG)
         self.claude_browser.pack(fill="both", expand=True, padx=0, pady=0)
 
+    def _setup_gemini_tab(self):
+        gm_cfg = self.config_data.get("gemini_browser", {})
+        start_url = gm_cfg.get("start_page", "https://gemini.google.com/devmode?hl=en")
+        user_data_dir = gm_cfg.get("user_data_dir", "./data/gemini_browser_profile")
+        if not os.path.isabs(user_data_dir):
+            user_data_dir = str(BASE_DIR / user_data_dir)
+        language = gm_cfg.get("language", "en-US")
+
+        self.gemini_browser = MammouthBrowserFrame(
+            self.tab_gemini,
+            get_mcp_url_cb=self._calculate_active_endpoint_url,
+            start_url=start_url,
+            profile_dir=user_data_dir,
+            screenshot_cb=self._take_and_copy_screenshot,
+            zen_toggle_cb=self.toggle_zen_mode,
+            brand_name="Gemini",
+            log_cb=self._log,
+            language=language
+        )
+        self.tab_gemini.configure(fg_color=THEME_BG)
+        self.gemini_browser.pack(fill="both", expand=True, padx=0, pady=0)
+
     def _setup_mammouth_tab(self):
         browser_cfg = self.config_data.get("embedded_browser", {})
         start_url = browser_cfg.get("start_page", "https://mammouth.ai")
@@ -1855,16 +1899,155 @@ class MammouthControlCenter(ctk.CTk):
         self.tab_mammouth.configure(fg_color=THEME_BG)
         self.mammouth_browser.pack(fill="both", expand=True, padx=0, pady=0)
 
+    def _provider_specs(self) -> list[tuple[str, str, str, str, str, str]]:
+        """Canonical provider tab definitions: (key, tab_key, opt_label, browser_attr, top_btn_attr, dash_btn_attr)."""
+        return [
+            ("chatgpt", "🤖 ChatGPT Web", "ChatGPT Web", "chatgpt_browser", "btn_open_chatgpt", "btn_open_chatgpt_dash"),
+            ("claude", "🟠 Claude Web", "Claude Web", "claude_browser", "btn_open_claude", "btn_open_claude_dash"),
+            ("gemini", "✨ Gemini Web", "Gemini Web", "gemini_browser", "btn_open_gemini", "btn_open_gemini_dash"),
+            ("mammouth", "💬 Mammouth AI Web", "Mammouth AI Web", "mammouth_browser", "btn_open_mammouth", "btn_open_mammouth_dash"),
+        ]
+
+    def _is_provider_tab_enabled(self, provider_key: str) -> bool:
+        cfg = self.__dict__.get("config_data") or {}
+        if provider_key == "chatgpt":
+            return bool(cfg.get("chatgpt_browser", {}).get("enabled", True))
+        if provider_key == "claude":
+            return bool(cfg.get("claude_browser", {}).get("enabled", True))
+        if provider_key == "gemini":
+            return bool(cfg.get("gemini_browser", {}).get("enabled", True))
+        if provider_key == "mammouth":
+            return bool(cfg.get("embedded_browser", {}).get("mammouth_enabled", True))
+        return True
+
+    def _apply_provider_tab_visibility(self):
+        """Show or hide AI provider tabs across Sidebar, Header, Dashboard, and Default Chat Tab selector."""
+        specs = self._provider_specs()
+        enabled_keys = [k for k, *_ in specs if self._is_provider_tab_enabled(k)]
+
+        # 1. Sidebar navigation buttons
+        nav_btns = self.__dict__.get("_nav_buttons")
+        if isinstance(nav_btns, dict):
+            for _, tab_key, _, _, _, _ in specs:
+                btn = nav_btns.get(tab_key)
+                if btn is not None:
+                    try:
+                        btn.pack_forget()
+                    except Exception:
+                        pass
+            for p_key, tab_key, _, _, _, _ in specs:
+                if p_key in enabled_keys:
+                    btn = nav_btns.get(tab_key)
+                    if btn is not None:
+                        try:
+                            btn.pack(fill="x", padx=10, pady=2)
+                        except Exception:
+                            pass
+
+        # 2. Top header quick buttons
+        theme_box = self.__dict__.get("theme_box")
+        for _, _, _, _, top_attr, _ in specs:
+            btn = self.__dict__.get(top_attr)
+            if btn is not None:
+                try:
+                    btn.pack_forget()
+                except Exception:
+                    pass
+        for p_key, _, _, _, top_attr, _ in specs:
+            if p_key in enabled_keys:
+                btn = self.__dict__.get(top_attr)
+                if btn is not None:
+                    try:
+                        pad = (0, 8) if p_key == "mammouth" else (0, 5)
+                        if theme_box is not None:
+                            btn.pack(side="left", padx=pad, before=theme_box)
+                        else:
+                            btn.pack(side="left", padx=pad)
+                    except Exception:
+                        pass
+
+        # 3. Dashboard quick launch buttons
+        dash_anchor = self.__dict__.get("btn_dash_screen")
+        for _, _, _, _, _, dash_attr in specs:
+            btn = self.__dict__.get(dash_attr)
+            if btn is not None:
+                try:
+                    btn.pack_forget()
+                except Exception:
+                    pass
+        for p_key, _, _, _, _, dash_attr in specs:
+            if p_key in enabled_keys:
+                btn = self.__dict__.get(dash_attr)
+                if btn is not None:
+                    try:
+                        pad = (0, 8) if p_key == "mammouth" else (0, 6)
+                        if dash_anchor is not None:
+                            btn.pack(side="left", padx=pad, before=dash_anchor)
+                        else:
+                            btn.pack(side="left", padx=pad)
+                    except Exception:
+                        pass
+
+        # 4. Dashboard Hero connector URL copy buttons
+        url_btn_map = {
+            "chatgpt": self.__dict__.get("btn_copy_chatgpt_url"),
+            "claude": self.__dict__.get("btn_copy_claude_url"),
+            "gemini": self.__dict__.get("btn_copy_gemini_url"),
+        }
+        for btn in url_btn_map.values():
+            if btn is not None:
+                try:
+                    btn.pack_forget()
+                except Exception:
+                    pass
+        for p_key in ("chatgpt", "claude", "gemini"):
+            if p_key in enabled_keys and url_btn_map.get(p_key) is not None:
+                try:
+                    url_btn_map[p_key].pack(side="left", padx=3)
+                except Exception:
+                    pass
+
+        # 5. Update Default Chat Tab dropdown options & active tab fallback
+        enabled_opt_labels = [opt for p_key, _, opt, _, _, _ in specs if p_key in enabled_keys]
+        opt_menu = self.__dict__.get("opt_default_chat_tab")
+        if opt_menu is not None and enabled_opt_labels:
+            try:
+                opt_menu.configure(values=enabled_opt_labels)
+                if opt_menu.get() not in enabled_opt_labels:
+                    opt_menu.set(enabled_opt_labels[0])
+            except Exception:
+                pass
+
+        enabled_tab_keys = [tab_k for p_key, tab_k, _, _, _, _ in specs if p_key in enabled_keys]
+        if enabled_tab_keys and self.__dict__.get("active_chat_tab_key") not in enabled_tab_keys:
+            self.active_chat_tab_key = enabled_tab_keys[0]
+
+        tabview = self.__dict__.get("tabview")
+        if tabview is not None:
+            try:
+                cur_tab = tabview.get()
+                all_chat_tabs = {tab_k for _, tab_k, _, _, _, _ in specs}
+                if cur_tab in all_chat_tabs and cur_tab not in enabled_tab_keys:
+                    self._select_nav_tab("📊 Dashboard & Live Console")
+            except Exception:
+                pass
+
     def _get_active_chat_tab_key(self) -> str:
         key = self.__dict__.get("active_chat_tab_key")
         tab_browser_map = {
-            "🤖 ChatGPT Web": "chatgpt_browser",
-            "🟠 Claude Web": "claude_browser",
-            "💬 Mammouth AI Web": "mammouth_browser",
+            "🤖 ChatGPT Web": ("chatgpt", "chatgpt_browser"),
+            "🟠 Claude Web": ("claude", "claude_browser"),
+            "✨ Gemini Web": ("gemini", "gemini_browser"),
+            "💬 Mammouth AI Web": ("mammouth", "mammouth_browser"),
         }
-        if key in tab_browser_map and tab_browser_map[key] in self.__dict__:
-            return key
-        for tab_k, attr_name in tab_browser_map.items():
+        if key in tab_browser_map:
+            p_key, attr_name = tab_browser_map[key]
+            if attr_name in self.__dict__ and self._is_provider_tab_enabled(p_key):
+                return key
+        for tab_k, (p_key, attr_name) in tab_browser_map.items():
+            if attr_name in self.__dict__ and self._is_provider_tab_enabled(p_key):
+                return tab_k
+        for tab_k, (_, attr_name) in tab_browser_map.items():
             if attr_name in self.__dict__:
                 return tab_k
         return "💬 Mammouth AI Web"
@@ -1875,6 +2058,8 @@ class MammouthControlCenter(ctk.CTk):
             return self.__dict__.get("chatgpt_browser")
         if tab_key == "🟠 Claude Web" and "claude_browser" in self.__dict__:
             return self.__dict__.get("claude_browser")
+        if tab_key == "✨ Gemini Web" and "gemini_browser" in self.__dict__:
+            return self.__dict__.get("gemini_browser")
         return self.__dict__.get("mammouth_browser")
 
     def toggle_zen_mode(self, enable: bool | None = None):
@@ -1921,7 +2106,7 @@ class MammouthControlCenter(ctk.CTk):
                     text_color=THEME_TEXT_PRIMARY,
                     border_color=THEME_BTN_SEC_BORDER
                 )
-            for br in (self.__dict__.get("chatgpt_browser"), self.__dict__.get("claude_browser"), self.__dict__.get("mammouth_browser")):
+            for br in (self.__dict__.get("chatgpt_browser"), self.__dict__.get("claude_browser"), self.__dict__.get("gemini_browser"), self.__dict__.get("mammouth_browser")):
                 if br and hasattr(br, "set_zen_state"):
                     br.set_zen_state(False)
             self._log("[ZEN MODE] Deactivated Zen Mode (Standard Cockpit layout restored).")
@@ -2440,6 +2625,9 @@ class MammouthControlCenter(ctk.CTk):
     def _switch_to_claude_tab(self):
         self._switch_to_chat_tab("🟠 Claude Web")
 
+    def _switch_to_gemini_tab(self):
+        self._switch_to_chat_tab("✨ Gemini Web")
+
     def _switch_to_mammouth_tab(self):
         self._switch_to_chat_tab("💬 Mammouth AI Web")
 
@@ -2449,6 +2637,8 @@ class MammouthControlCenter(ctk.CTk):
             self._switch_to_chatgpt_tab()
         elif active_key == "🟠 Claude Web" and "claude_browser" in self.__dict__:
             self._switch_to_claude_tab()
+        elif active_key == "✨ Gemini Web" and "gemini_browser" in self.__dict__:
+            self._switch_to_gemini_tab()
         else:
             self._switch_to_mammouth_tab()
 
@@ -2459,11 +2649,12 @@ class MammouthControlCenter(ctk.CTk):
             self._refresh_task_cards()
         elif current == "🧠 Memory Vault" and hasattr(self, "_refresh_memory_list"):
             self._refresh_memory_list()
-        if current in ("🤖 ChatGPT Web", "🟠 Claude Web", "💬 Mammouth AI Web"):
+        if current in ("🤖 ChatGPT Web", "🟠 Claude Web", "✨ Gemini Web", "💬 Mammouth AI Web"):
             self.active_chat_tab_key = current
         for tab_name, attr_name in (
             ("🤖 ChatGPT Web", "chatgpt_browser"),
             ("🟠 Claude Web", "claude_browser"),
+            ("✨ Gemini Web", "gemini_browser"),
             ("💬 Mammouth AI Web", "mammouth_browser"),
         ):
             if hasattr(self, attr_name):
@@ -2500,7 +2691,7 @@ class MammouthControlCenter(ctk.CTk):
                     if manual:
                         self.after(0, self._show_update_dialog)
                 elif manual:
-                    self.after(0, lambda: messagebox.showinfo("Up to Date", f"Mammouth Defroster 9000 is up to date ({APP_VERSION})!", parent=self))
+                    self.after(0, lambda: messagebox.showinfo("Up to Date", f"Defrostr is up to date ({APP_VERSION})!", parent=self))
                 else:
                     self._log(f"[UPDATER] Daily startup check completed: Defroster is up to date ({APP_VERSION}).")
             except Exception as e:
@@ -2858,7 +3049,7 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_copy_json.pack(side="left", padx=3)
 
-        btn_copy_chatgpt = ctk.CTkButton(
+        self.btn_copy_chatgpt_url = ctk.CTkButton(
             btn_box1,
             text="🤖 ChatGPT URL",
             width=112,
@@ -2871,9 +3062,9 @@ class MammouthControlCenter(ctk.CTk):
             border_color=("#A7F3D0", "#244E38"),
             command=self._copy_chatgpt_connector_url
         )
-        btn_copy_chatgpt.pack(side="left", padx=3)
+        self.btn_copy_chatgpt_url.pack(side="left", padx=3)
 
-        btn_copy_claude = ctk.CTkButton(
+        self.btn_copy_claude_url = ctk.CTkButton(
             btn_box1,
             text="🟠 Claude URL",
             width=105,
@@ -2886,7 +3077,22 @@ class MammouthControlCenter(ctk.CTk):
             border_color=("#FDBA74", "#5C3A2E"),
             command=self._copy_claude_connector_url
         )
-        btn_copy_claude.pack(side="left", padx=3)
+        self.btn_copy_claude_url.pack(side="left", padx=3)
+
+        self.btn_copy_gemini_url = ctk.CTkButton(
+            btn_box1,
+            text="✨ Gemini URL",
+            width=108,
+            height=28,
+            fg_color=("#EFF6FF", "#162033"),
+            hover_color=("#DBEAFE", "#1E2D47"),
+            text_color=("#1D4ED8", "#60A5FA"),
+            font=ctk.CTkFont(weight="bold"),
+            border_width=1,
+            border_color=("#BFDBFE", "#2E466E"),
+            command=self._copy_gemini_connector_url
+        )
+        self.btn_copy_gemini_url.pack(side="left", padx=3)
 
         # Localhost Endpoint Row
         row2 = ctk.CTkFrame(card, fg_color="transparent")
@@ -3004,7 +3210,7 @@ class MammouthControlCenter(ctk.CTk):
         actions_bar = ctk.CTkFrame(self.tab_dashboard, fg_color="transparent")
         actions_bar.pack(fill="x", padx=15, pady=(0, 8))
 
-        btn_open_chatgpt_dash = ctk.CTkButton(
+        self.btn_open_chatgpt_dash = ctk.CTkButton(
             actions_bar,
             text="🤖 ChatGPT",
             width=105,
@@ -3015,9 +3221,9 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(weight="bold"),
             command=self._switch_to_chatgpt_tab
         )
-        btn_open_chatgpt_dash.pack(side="left", padx=(0, 6))
+        self.btn_open_chatgpt_dash.pack(side="left", padx=(0, 6))
 
-        btn_open_claude_dash = ctk.CTkButton(
+        self.btn_open_claude_dash = ctk.CTkButton(
             actions_bar,
             text="🟠 Claude",
             width=100,
@@ -3028,9 +3234,22 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(weight="bold"),
             command=self._switch_to_claude_tab
         )
-        btn_open_claude_dash.pack(side="left", padx=(0, 6))
+        self.btn_open_claude_dash.pack(side="left", padx=(0, 6))
 
-        btn_open_mammouth_dash = ctk.CTkButton(
+        self.btn_open_gemini_dash = ctk.CTkButton(
+            actions_bar,
+            text="✨ Gemini",
+            width=100,
+            height=30,
+            fg_color=("#2563EB", "#3B82F6"),
+            hover_color=("#1D4ED8", "#2563EB"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._switch_to_gemini_tab
+        )
+        self.btn_open_gemini_dash.pack(side="left", padx=(0, 6))
+
+        self.btn_open_mammouth_dash = ctk.CTkButton(
             actions_bar,
             text="💬 Mammouth AI",
             width=130,
@@ -3041,9 +3260,9 @@ class MammouthControlCenter(ctk.CTk):
             font=ctk.CTkFont(weight="bold"),
             command=self._switch_to_mammouth_tab
         )
-        btn_open_mammouth_dash.pack(side="left", padx=(0, 8))
+        self.btn_open_mammouth_dash.pack(side="left", padx=(0, 8))
 
-        btn_screen = ctk.CTkButton(
+        self.btn_dash_screen = ctk.CTkButton(
             actions_bar,
             text="📸 Capture Desktop",
             width=140,
@@ -3056,7 +3275,7 @@ class MammouthControlCenter(ctk.CTk):
             border_color=THEME_BTN_SEC_BORDER,
             command=self._test_screenshot
         )
-        btn_screen.pack(side="left", padx=(0, 8))
+        self.btn_dash_screen.pack(side="left", padx=(0, 8))
 
         btn_mc = ctk.CTkButton(
             actions_bar,
@@ -3175,7 +3394,7 @@ class MammouthControlCenter(ctk.CTk):
             corner_radius=8
         )
         self.log_textbox.pack(fill="both", expand=True, padx=15, pady=(0, 15))
-        self._log(f"Mammouth Defroster 9000 {APP_VERSION} initialized. Sovereign Cockpit Ready.")
+        self._log(f"Defrostr {APP_VERSION} initialized. Multi-AI MCP Cockpit ready.")
 
     def _setup_memory_tab(self):
         self._all_memories = []
@@ -3701,6 +3920,7 @@ class MammouthControlCenter(ctk.CTk):
             self.scheduler_engine.register_handler("mammouth_web", self._on_trigger_mammouth_web_task)
             self.scheduler_engine.register_handler("chatgpt_web", self._on_trigger_chatgpt_web_task)
             self.scheduler_engine.register_handler("claude_web", self._on_trigger_claude_web_task)
+            self.scheduler_engine.register_handler("gemini_web", self._on_trigger_gemini_web_task)
             self.scheduler_engine.register_handler("mammouth_code", self._on_trigger_mammouth_code_task)
             self.scheduler_engine.register_handler("powershell", self._on_trigger_powershell_task)
             self.scheduler_engine.register_handler("notification", self._on_trigger_notification_task)
@@ -3786,6 +4006,10 @@ class MammouthControlCenter(ctk.CTk):
     def _on_trigger_claude_web_task(self, task: dict[str, Any]) -> str:
         """Trigger handler: Injects prompt into the embedded Claude Web chat."""
         return self._dispatch_web_chat_task(task, "claude_browser", self._switch_to_claude_tab, "Claude Web")
+
+    def _on_trigger_gemini_web_task(self, task: dict[str, Any]) -> str:
+        """Trigger handler: Injects prompt into the embedded Gemini Web chat."""
+        return self._dispatch_web_chat_task(task, "gemini_browser", self._switch_to_gemini_tab, "Gemini Web")
 
     def _on_trigger_mammouth_code_task(self, task: dict[str, Any]) -> str:
         """Trigger handler: Runs Mammouth Code CLI headlessly."""
@@ -4104,6 +4328,7 @@ class MammouthControlCenter(ctk.CTk):
             target_labels = {
                 "chatgpt_web": ("🤖 ChatGPT Web", ("#ECFDF5", "#122B24"), ("#059669", "#10B981")),
                 "claude_web": ("🟠 Claude Web", ("#FFF7ED", "#2D1E18"), ("#C2410C", "#E07A5F")),
+                "gemini_web": ("✨ Gemini Web", ("#EFF6FF", "#162033"), ("#1D4ED8", "#60A5FA")),
                 "mammouth_web": ("💬 Mammouth AI Web", ("#F2EBE1", "#2F241D"), ("#754533", "#C8A37C")),
                 "mammouth_code": ("💻 Mammouth Code", ("#EDE3D4", "#3D2B1F"), ("#9F6C45", "#B88557")),
                 "powershell": ("⚡ PowerShell", ("#EFF6FF", "#1E293B"), ("#2563EB", "#60A5FA")),
@@ -4369,6 +4594,7 @@ class MammouthControlCenter(ctk.CTk):
         target_web = {
             "🤖 ChatGPT Web": "chatgpt_web",
             "🟠 Claude Web": "claude_web",
+            "✨ Gemini Web": "gemini_web",
             "💬 Mammouth AI Web": "mammouth_web",
         }.get(active_tab, "mammouth_web")
         task = scheduler_create_task(
@@ -4446,6 +4672,7 @@ class MammouthControlCenter(ctk.CTk):
                     tgt_labels_rev = {
                         "chatgpt_web": "🤖 ChatGPT Web Chat",
                         "claude_web": "🟠 Claude Web Chat",
+                        "gemini_web": "✨ Gemini Web Chat",
                         "mammouth_web": "💬 Mammouth AI Web Chat",
                         "mammouth_code": "💻 Mammouth Code CLI",
                         "powershell": "⚡ PowerShell",
@@ -4454,6 +4681,7 @@ class MammouthControlCenter(ctk.CTk):
                     default_web_label = {
                         "🤖 ChatGPT Web": "🤖 ChatGPT Web Chat",
                         "🟠 Claude Web": "🟠 Claude Web Chat",
+                        "✨ Gemini Web": "✨ Gemini Web Chat",
                     }.get(self._get_active_chat_tab_key(), "💬 Mammouth AI Web Chat")
                     raw_tgt = p.get("target", "mammouth_web")
                     menu_target.set(default_web_label if raw_tgt == "mammouth_web" else tgt_labels_rev.get(raw_tgt, default_web_label))
@@ -4499,6 +4727,7 @@ class MammouthControlCenter(ctk.CTk):
         target_options = [
             "🤖 ChatGPT Web Chat",
             "🟠 Claude Web Chat",
+            "✨ Gemini Web Chat",
             "💬 Mammouth AI Web Chat",
             "💻 Mammouth Code CLI",
             "⚡ PowerShell",
@@ -4508,6 +4737,7 @@ class MammouthControlCenter(ctk.CTk):
         menu_target.set({
             "🤖 ChatGPT Web": "🤖 ChatGPT Web Chat",
             "🟠 Claude Web": "🟠 Claude Web Chat",
+            "✨ Gemini Web": "✨ Gemini Web Chat",
         }.get(self._get_active_chat_tab_key(), "💬 Mammouth AI Web Chat"))
         menu_target.pack(fill="x", pady=(2, 0))
 
@@ -4561,6 +4791,7 @@ class MammouthControlCenter(ctk.CTk):
             tgt_map = {
                 "🤖 ChatGPT Web Chat": "chatgpt_web",
                 "🟠 Claude Web Chat": "claude_web",
+                "✨ Gemini Web Chat": "gemini_web",
                 "💬 Mammouth AI Web Chat": "mammouth_web",
                 "💻 Mammouth Code CLI": "mammouth_code",
                 "⚡ PowerShell": "powershell",
@@ -5404,7 +5635,7 @@ class MammouthControlCenter(ctk.CTk):
         c5_inner.pack(fill="x", padx=15, pady=12)
 
         ctk.CTkLabel(c5_inner, text="☁️ CLAUDE CODE & CLOUD SESSIONS (.mcp.json)", font=ctk.CTkFont(size=12, weight="bold"), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 4))
-        ctk.CTkLabel(c5_inner, text="Make Mammouth Defroster 9000 available inside Claude Code Cloud Sessions ('claude --cloud') via public exposure tunnel.", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 8))
+        ctk.CTkLabel(c5_inner, text="Make Defrostr available inside Claude Code Cloud Sessions ('claude --cloud') via public exposure tunnel.", font=ctk.CTkFont(size=11), text_color=THEME_TEXT_MUTED).pack(anchor="w", pady=(0, 8))
 
         claude_stat_row = ctk.CTkFrame(c5_inner, fg_color="transparent")
         claude_stat_row.pack(fill="x", pady=(0, 4))
@@ -5632,7 +5863,7 @@ class MammouthControlCenter(ctk.CTk):
             self._log(f"[MAMMOUTH CODE] MCP Bridge synced with: {url}")
             messagebox.showinfo(
                 "MCP Bridge Synced",
-                f"Mammouth Defroster 9000 was successfully registered as an MCP server for Mammouth Code!\n\nUpdated configurations:\n{cfgs}\n\nMammouth Code now has access to all Defroster capabilities (Vision, System Diagnostics, Memory, etc.)!",
+                f"Defrostr was successfully registered as an MCP server for Mammouth Code!\n\nUpdated configurations:\n{cfgs}\n\nMammouth Code now has access to all Defrostr capabilities (Vision, System Diagnostics, Memory, etc.)!",
                 parent=self
             )
             self._refresh_mammouth_code_status()
@@ -5734,7 +5965,7 @@ class MammouthControlCenter(ctk.CTk):
             self._log(f"[CLAUDE CODE] .mcp.json synced for {target_desc} -> {res.get('server_url')}")
             
             msg = (
-                f"Mammouth Defroster 9000 registered for Claude Code ({target_desc})!\n\n"
+                f"Defrostr registered for Claude Code ({target_desc})!\n\n"
                 f"Server URL: {res.get('server_url')}\n"
                 f"Updated files:\n{cfgs}\n\n"
             )
@@ -5819,6 +6050,28 @@ class MammouthControlCenter(ctk.CTk):
             "1. Open Settings -> Apps & Connectors -> Advanced settings -> Enable Developer mode\n"
             "2. Click Create / Add MCP Connector and paste this URL\n"
             "3. Choose OAuth authentication — when Defroster's OAuth screen opens, paste your Bearer API Key (from the Dashboard) and click Allow Access.",
+            parent=self
+        )
+
+    def _copy_gemini_connector_url(self):
+        url, tunnel_is_live = self._resolve_connector_mcp_url()
+        self.clipboard_clear()
+        self.clipboard_append(url)
+        self._log(f"[GEMINI] Copied Gemini Developer Mode Connector URL to clipboard: {url}")
+        warn = self._connector_tunnel_warning("Google Gemini", url, tunnel_is_live)
+        messagebox.showinfo(
+            "Gemini Developer Mode Connector URL Copied",
+            f"Copied MCP Endpoint URL to clipboard:\n\n{url}{warn}\n\n"
+            "How to connect in Google Gemini (EU / DE & Global):\n"
+            "• Gemini hides custom MCP servers in German/localized UIs — they only appear & run in English (?hl=en):\n"
+            "  https://gemini.google.com/devmode?hl=en\n"
+            "• Tip: Defrostr's ✨ Gemini Web tab keeps ?hl=en active automatically across page loads & Google sign-in.\n"
+            "  Click 🧪 DevMode to configure MCP inside Defrostr, or 🌐 Open in Browser if signed into Google externally.\n\n"
+            "Steps:\n"
+            "1. Open Developer Mode: https://gemini.google.com/devmode?hl=en (via 🧪 DevMode or 🌐 Open in Browser)\n"
+            "2. In 'Choose an app' click '+ Create new'\n"
+            "3. Paste this /mcp URL (leave OAuth Client ID & Secret blank — Defrostr uses automatic DCR + PKCE S256)\n"
+            "4. Click Connect — when Defrostr's OAuth screen opens, paste your Bearer API Key (from Dashboard -> Copy Key) and click Allow Access.",
             parent=self
         )
 
@@ -6034,86 +6287,48 @@ class MammouthControlCenter(ctk.CTk):
             if key == "screen_capture":
                 sub_opts = ctk.CTkFrame(left, fg_color=THEME_INPUT_BG, corner_radius=6)
                 sub_opts.pack(fill="x", pady=(8, 0))
-
-                self.var_screen_req_consent = ctk.BooleanVar(value=mod.get("require_consent", True))
-                sw_consent = ctk.CTkSwitch(
+                ctk.CTkLabel(
                     sub_opts,
-                    text="🔒 Require Consent",
-                    variable=self.var_screen_req_consent,
-                    font=ctk.CTkFont(size=12, weight="bold"),
-                    text_color=("#0F172A", "#E5E7EB"),
-                    progress_color="#F59E0B",
-                    command=self._on_screen_consent_toggled
-                )
-                sw_consent.pack(side="left", padx=10, pady=6)
-
-                self.btn_ui_grant_consent = ctk.CTkButton(
+                    text="🛡️ Screen capture consent & privacy gate are managed centrally in the Security tab.",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    text_color=THEME_TEXT_MUTED
+                ).pack(side="left", padx=10, pady=6)
+                ctk.CTkButton(
                     sub_opts,
-                    text="🔓 Grant Session Consent",
-                    width=175,
+                    text="🛡️ Open Security Tab",
+                    width=155,
                     height=26,
-                    fg_color=("#059669", "#10B981"),
-                    hover_color=("#047857", "#059669"),
-                    text_color="#FFFFFF",
+                    fg_color=THEME_BTN_SEC_BG,
+                    hover_color=THEME_BTN_SEC_HOVER,
+                    text_color=THEME_TEXT_PRIMARY,
+                    border_width=1,
+                    border_color=THEME_BTN_SEC_BORDER,
                     font=ctk.CTkFont(size=11, weight="bold"),
-                    command=self._on_ui_grant_session_consent
-                )
-                self.btn_ui_grant_consent.pack(side="left", padx=10, pady=6)
-
-                self.lbl_consent_badge = ctk.CTkLabel(
-                    sub_opts,
-                    text="● Status: Pending Consent" if self.var_screen_req_consent.get() else "● Status: Always Allowed",
-                    font=ctk.CTkFont(size=11, weight="bold"),
-                    text_color="#F59E0B" if self.var_screen_req_consent.get() else "#10B981"
-                )
-                self.lbl_consent_badge.pack(side="left", padx=10, pady=6)
+                    command=lambda: self._select_nav_tab("🛡️ Security")
+                ).pack(side="right", padx=10, pady=6)
 
             elif key == "shell_processes":
                 sub_opts = ctk.CTkFrame(left, fg_color=THEME_INPUT_BG, corner_radius=6)
                 sub_opts.pack(fill="x", pady=(8, 0))
-                row_admin = ctk.CTkFrame(sub_opts, fg_color="transparent")
-                row_admin.pack(fill="x")
-                self.var_admin_shell = ctk.BooleanVar(value=self.config_data.get("server", {}).get("allow_admin_shell", False))
-                sw_admin_shell = ctk.CTkSwitch(
-                    row_admin,
-                    text="⚡ Admin / Modifying (Full Access)" if self.var_admin_shell.get() else "🔒 Diagnostics & Read-Only",
-                    variable=self.var_admin_shell,
-                    font=ctk.CTkFont(size=12, weight="bold"),
-                    text_color=("#0F172A", "#E5E7EB"),
-                    progress_color="#EF4444",
-                    command=self._on_admin_shell_toggle
-                )
-                sw_admin_shell.pack(side="left", padx=10, pady=6)
-                self.sw_admin_shell = sw_admin_shell
-                self.lbl_admin_shell_hint = ctk.CTkLabel(
-                    row_admin,
-                    text="Get-*/ipconfig only  vs  Set-*/Remove-*/sc/schtasks",
-                    font=ctk.CTkFont(size=11),
+                ctk.CTkLabel(
+                    sub_opts,
+                    text="🛡️ Admin shell & HTTP download policies are managed centrally in the Security tab.",
+                    font=ctk.CTkFont(size=11, weight="bold"),
                     text_color=THEME_TEXT_MUTED
-                )
-                self.lbl_admin_shell_hint.pack(side="left", padx=10, pady=6)
-
-                row_downloads = ctk.CTkFrame(sub_opts, fg_color="transparent")
-                row_downloads.pack(fill="x")
-                self.var_shell_downloads = ctk.BooleanVar(value=self.config_data.get("server", {}).get("allow_shell_downloads", False))
-                sw_shell_downloads = ctk.CTkSwitch(
-                    row_downloads,
-                    text="🌐 HTTP / Downloads Allowed (irm, iwr, curl, wget)" if self.var_shell_downloads.get() else "🛡️ HTTP / Downloads Blocked",
-                    variable=self.var_shell_downloads,
-                    font=ctk.CTkFont(size=12, weight="bold"),
-                    text_color=("#0F172A", "#E5E7EB"),
-                    progress_color="#F59E0B",
-                    command=self._on_shell_downloads_toggle
-                )
-                sw_shell_downloads.pack(side="left", padx=10, pady=(0, 6))
-                self.sw_shell_downloads = sw_shell_downloads
-                self.lbl_shell_downloads_hint = ctk.CTkLabel(
-                    row_downloads,
-                    text="Opt-in for Invoke-RestMethod / curl / wget (requires Admin mode; iex stays blocked)",
-                    font=ctk.CTkFont(size=11),
-                    text_color=THEME_TEXT_MUTED
-                )
-                self.lbl_shell_downloads_hint.pack(side="left", padx=10, pady=(0, 6))
+                ).pack(side="left", padx=10, pady=6)
+                ctk.CTkButton(
+                    sub_opts,
+                    text="🛡️ Open Security Tab",
+                    width=155,
+                    height=26,
+                    fg_color=THEME_BTN_SEC_BG,
+                    hover_color=THEME_BTN_SEC_HOVER,
+                    text_color=THEME_TEXT_PRIMARY,
+                    border_width=1,
+                    border_color=THEME_BTN_SEC_BORDER,
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    command=lambda: self._select_nav_tab("🛡️ Security")
+                ).pack(side="right", padx=10, pady=6)
 
             elif key == "google_drive":
                 sub_opts = ctk.CTkFrame(left, fg_color=THEME_INPUT_BG, corner_radius=6)
@@ -6339,7 +6554,7 @@ class MammouthControlCenter(ctk.CTk):
                     self.after(0, lambda: messagebox.showerror("Browser Error", f"Browser launch warning:\n\n{err}", parent=self))
                     return
                 self._log(f"[BROWSER AGENT] Automated browser window ({ch}, headless={hl}) launched successfully.")
-                self.after(0, lambda: messagebox.showinfo("Browser Agent", f"Automated browser ({ch}) started successfully!\n\nControlled by Mammouth Defroster MCP.", parent=self))
+                self.after(0, lambda: messagebox.showinfo("Browser Agent", f"Automated browser ({ch}) started successfully!\n\nControlled by Defrostr MCP.", parent=self))
             except Exception as e:
                 self._log(f"[BROWSER AGENT ERROR] {e}")
                 self.after(0, lambda e=e: messagebox.showerror("Browser Error", f"Failed to launch browser: {e}", parent=self))
@@ -6499,14 +6714,7 @@ class MammouthControlCenter(ctk.CTk):
             if key in self.config_data["modules"]:
                 self.config_data["modules"][key]["enabled"] = var.get()
 
-        if hasattr(self, "var_screen_req_consent"):
-            self.config_data.setdefault("modules", {}).setdefault("screen_capture", {})["require_consent"] = self.var_screen_req_consent.get()
-
-        if hasattr(self, "var_admin_shell"):
-            self.config_data.setdefault("server", {})["allow_admin_shell"] = self.var_admin_shell.get()
-
-        if hasattr(self, "var_shell_downloads"):
-            self.config_data.setdefault("server", {})["allow_shell_downloads"] = self.var_shell_downloads.get()
+        self._persist_security_fields()
 
         save_config(self.config_data)
         self._log("Updated module configuration in config.json.")
@@ -6827,7 +7035,299 @@ class MammouthControlCenter(ctk.CTk):
                 self._log(f"Deleted SSH Host alias: {alias}")
 
     # ---------------------------------------------------------
-    # TAB 4: SECURITY & SETTINGS
+    # TAB: DEDICATED SECURITY CENTER
+    # ---------------------------------------------------------
+    def _setup_security_tab(self):
+        scroll = ctk.CTkScrollableFrame(self.tab_security, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=15, pady=10)
+
+        hdr = ctk.CTkFrame(scroll, fg_color="transparent")
+        hdr.pack(fill="x", pady=(4, 8))
+        ctk.CTkLabel(
+            hdr,
+            text="🛡️ Security, Auth, Sandboxing & Privacy Controls",
+            font=ctk.CTkFont(size=17, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            hdr,
+            text="All Defrostr security policies consolidated in one place (Authentication, Workspace & Secret Shield, Shell Elevation, Vision Consent, TLS).",
+            font=ctk.CTkFont(size=12),
+            text_color=THEME_TEXT_MUTED
+        ).pack(anchor="w")
+
+        # 1. Authentication & API Tokens Group (Secure by Default)
+        auth_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
+        auth_group.pack(fill="x", pady=6)
+
+        ctk.CTkLabel(auth_group, text="🔒 Authentication & API Tokens (Secure by Default)", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
+
+        f5 = ctk.CTkFrame(auth_group, fg_color="transparent")
+        f5.pack(fill="x", padx=15, pady=5)
+        self.var_enforce_auth = ctk.BooleanVar(value=self.config_data.get("server", {}).get("enforce_auth", True))
+        sw_auth = ctk.CTkSwitch(f5, text="Require Bearer Token Authentication (Authorization Header)", variable=self.var_enforce_auth, font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY, progress_color="#10B981")
+        sw_auth.pack(side="left")
+
+        f6 = ctk.CTkFrame(auth_group, fg_color="transparent")
+        f6.pack(fill="x", padx=15, pady=5)
+        ctk.CTkLabel(f6, text="Active Bearer Token:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        self.entry_token = ctk.CTkEntry(f6, width=280, show="*", fg_color=THEME_INPUT_BG, border_color=THEME_CARD_BORDER, text_color=THEME_TEXT_PRIMARY)
+        tok_val = self.config_data.get("server", {}).get("api_token", "")
+
+        self.entry_token.insert(0, tok_val)
+        self.entry_token.pack(side="left", padx=(0, 5))
+
+        self.btn_show_token = ctk.CTkButton(
+            f6,
+            text="👁️",
+            width=36,
+            height=28,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            command=self._toggle_token_visibility
+        )
+        self.btn_show_token.pack(side="left", padx=(0, 5))
+
+        self.btn_copy_tok = ctk.CTkButton(
+            f6,
+            text="📋 Copy Key",
+            width=95,
+            height=28,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            command=lambda: self._copy_to_clipboard(self.entry_token.get(), "Bearer Key")
+        )
+        self.btn_copy_tok.pack(side="left", padx=(0, 5))
+
+        btn_gen_tok = ctk.CTkButton(
+            f6,
+            text="🎲 Generate",
+            width=95,
+            height=28,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            command=self._generate_new_token
+        )
+        btn_gen_tok.pack(side="left")
+
+        f_qtok = ctk.CTkFrame(auth_group, fg_color="transparent")
+        f_qtok.pack(fill="x", padx=15, pady=(4, 15))
+        self.var_allow_query_token = ctk.BooleanVar(value=bool(self.config_data.get("server", {}).get("allow_query_token", False)))
+        ctk.CTkSwitch(
+            f_qtok,
+            text="Allow URL query-string tokens (?token=...) for legacy web clients (disabled by default)",
+            variable=self.var_allow_query_token,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#F59E0B"
+        ).pack(side="left")
+
+        # 2. Workspace & Secret-File Shield Group
+        ws_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
+        ws_group.pack(fill="x", pady=6)
+
+        ctk.CTkLabel(ws_group, text="📁 Workspace & Secret-File Sandboxing", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
+
+        f_ws1 = ctk.CTkFrame(ws_group, fg_color="transparent")
+        f_ws1.pack(fill="x", padx=15, pady=5)
+        self.var_sandbox = ctk.BooleanVar(value=self.config_data.get("server", {}).get("enforce_workspace_sandbox", True))
+        sw_sandbox = ctk.CTkSwitch(f_ws1, text="Enforce Workspace Sandbox (Restricts file access to ./workspace)", variable=self.var_sandbox, font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY, progress_color="#10B981")
+        sw_sandbox.pack(side="left")
+
+        f_ws_sec = ctk.CTkFrame(ws_group, fg_color="transparent")
+        f_ws_sec.pack(fill="x", padx=15, pady=5)
+        self.var_protect_secret_files = ctk.BooleanVar(value=bool(self.config_data.get("server", {}).get("protect_secret_files", True)))
+        ctk.CTkSwitch(
+            f_ws_sec,
+            text="Secret-File Shield (Block file_read / file_search_text on .env, keys, oauth.db, config.json)",
+            variable=self.var_protect_secret_files,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#10B981"
+        ).pack(side="left")
+
+        f_ws2 = ctk.CTkFrame(ws_group, fg_color="transparent")
+        f_ws2.pack(fill="x", padx=15, pady=(5, 15))
+        ctk.CTkLabel(f_ws2, text="Workspace Path:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        self.entry_workspace = ctk.CTkEntry(f_ws2, width=280, fg_color=THEME_INPUT_BG, border_color=THEME_CARD_BORDER, text_color=THEME_TEXT_PRIMARY)
+        self.entry_workspace.insert(0, str(self.config_data.get("server", {}).get("workspace_root", "./workspace")))
+        self.entry_workspace.pack(side="left", padx=(0, 5))
+
+        btn_browse_ws = ctk.CTkButton(
+            f_ws2,
+            text="📂 Browse",
+            width=85,
+            height=28,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            command=self._browse_workspace
+        )
+        btn_browse_ws.pack(side="left")
+
+        # 3. Elevated Shell & Download Security Group
+        shell_sec_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
+        shell_sec_group.pack(fill="x", pady=6)
+
+        ctk.CTkLabel(shell_sec_group, text="⚡ PowerShell & Elevated Execution Policy", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
+
+        row_admin = ctk.CTkFrame(shell_sec_group, fg_color="transparent")
+        row_admin.pack(fill="x", padx=15, pady=4)
+        self.var_admin_shell = ctk.BooleanVar(value=self.config_data.get("server", {}).get("allow_admin_shell", False))
+        self.sw_admin_shell = ctk.CTkSwitch(
+            row_admin,
+            text="⚡ Admin / Modifying (Full Access)" if self.var_admin_shell.get() else "🔒 Diagnostics & Read-Only",
+            variable=self.var_admin_shell,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#EF4444",
+            command=self._on_admin_shell_toggle
+        )
+        self.sw_admin_shell.pack(side="left")
+        self.lbl_admin_shell_hint = ctk.CTkLabel(
+            row_admin,
+            text="Get-*/ipconfig only  vs  Set-*/Remove-*/sc/schtasks",
+            font=ctk.CTkFont(size=11),
+            text_color=THEME_TEXT_MUTED
+        )
+        self.lbl_admin_shell_hint.pack(side="left", padx=12)
+
+        row_downloads = ctk.CTkFrame(shell_sec_group, fg_color="transparent")
+        row_downloads.pack(fill="x", padx=15, pady=(4, 15))
+        self.var_shell_downloads = ctk.BooleanVar(value=self.config_data.get("server", {}).get("allow_shell_downloads", False))
+        self.sw_shell_downloads = ctk.CTkSwitch(
+            row_downloads,
+            text="🌐 HTTP / Downloads Allowed (irm, iwr, curl, wget)" if self.var_shell_downloads.get() else "🛡️ HTTP / Downloads Blocked",
+            variable=self.var_shell_downloads,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#F59E0B",
+            command=self._on_shell_downloads_toggle
+        )
+        self.sw_shell_downloads.pack(side="left")
+        self.lbl_shell_downloads_hint = ctk.CTkLabel(
+            row_downloads,
+            text="Opt-in for Invoke-RestMethod / curl / wget (requires Admin mode; iex stays blocked)",
+            font=ctk.CTkFont(size=11),
+            text_color=THEME_TEXT_MUTED
+        )
+        self.lbl_shell_downloads_hint.pack(side="left", padx=12)
+
+        # 4. Vision & Desktop Screen Capture Privacy Gate
+        vis_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
+        vis_group.pack(fill="x", pady=6)
+
+        ctk.CTkLabel(vis_group, text="👁️ Vision & Desktop Screen Capture Privacy Gate", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
+
+        f_vis1 = ctk.CTkFrame(vis_group, fg_color="transparent")
+        f_vis1.pack(fill="x", padx=15, pady=5)
+        self.var_screen_req_consent = ctk.BooleanVar(value=self.config_data.get("modules", {}).get("screen_capture", {}).get("require_consent", True))
+        self.var_settings_screen_consent = self.var_screen_req_consent
+        sw_vis = ctk.CTkSwitch(
+            f_vis1,
+            text="Require User Consent before capturing screenshots (Privacy Shield)",
+            variable=self.var_screen_req_consent,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#F59E0B",
+            command=self._on_screen_consent_toggled
+        )
+        sw_vis.pack(side="left")
+
+        self.lbl_consent_badge = ctk.CTkLabel(
+            f_vis1,
+            text="● Status: Pending Consent" if self.var_screen_req_consent.get() else "● Status: Always Allowed",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#F59E0B" if self.var_screen_req_consent.get() else "#10B981"
+        )
+        self.lbl_consent_badge.pack(side="left", padx=14)
+
+        f_vis2 = ctk.CTkFrame(vis_group, fg_color="transparent")
+        f_vis2.pack(fill="x", padx=15, pady=(5, 15))
+        self.btn_ui_grant_consent = ctk.CTkButton(
+            f_vis2,
+            text="🔓 Grant Screen Capture Consent for this Session",
+            width=320,
+            height=30,
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._on_ui_grant_session_consent
+        )
+        self.btn_ui_grant_consent.pack(side="left", padx=(0, 12))
+
+        btn_pick_target = ctk.CTkButton(
+            f_vis2,
+            text="🎯 Select Target App / Window...",
+            width=250,
+            height=30,
+            fg_color=THEME_BTN_SEC_BG,
+            hover_color=THEME_BTN_SEC_HOVER,
+            text_color=THEME_TEXT_PRIMARY,
+            font=ctk.CTkFont(weight="bold"),
+            border_width=1,
+            border_color=THEME_BTN_SEC_BORDER,
+            command=self._show_screen_target_menu
+        )
+        btn_pick_target.pack(side="left")
+
+        # 5. LAN TLS Encryption & Protocol Metadata Group
+        tls_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
+        tls_group.pack(fill="x", pady=6)
+
+        ctk.CTkLabel(tls_group, text="🛡️ LAN HTTPS / TLS & MCP Protocol Safety", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
+
+        f_tls1 = ctk.CTkFrame(tls_group, fg_color="transparent")
+        f_tls1.pack(fill="x", padx=15, pady=5)
+        self.var_enable_tls = ctk.BooleanVar(value=self.config_data.get("server", {}).get("enable_tls", False))
+        sw_tls = ctk.CTkSwitch(
+            f_tls1,
+            text="Enable Local HTTPS TLS (Uses auto-generated cert.pem if missing)",
+            variable=self.var_enable_tls,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#10B981"
+        )
+        sw_tls.pack(side="left")
+
+        f_ann1 = ctk.CTkFrame(tls_group, fg_color="transparent")
+        f_ann1.pack(fill="x", padx=15, pady=(5, 15))
+        self.var_expose_tool_annotations = ctk.BooleanVar(value=bool(self.config_data.get("server", {}).get("expose_tool_annotations", False)))
+        ctk.CTkSwitch(
+            f_ann1,
+            text="Expose MCP Tool Annotations (readOnlyHint / destructiveHint for Claude & Gemini)",
+            variable=self.var_expose_tool_annotations,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=THEME_TEXT_PRIMARY,
+            progress_color="#10B981"
+        ).pack(side="left")
+
+        btn_save_sec = ctk.CTkButton(
+            scroll,
+            text="🛡️ Save Security Settings",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color=("#059669", "#10B981"),
+            hover_color=("#047857", "#059669"),
+            text_color="#FFFFFF",
+            height=40,
+            command=self._save_security
+        )
+        btn_save_sec.pack(fill="x", pady=15)
+
+    # ---------------------------------------------------------
+    # TAB: SETTINGS (Network, Providers, Hotkeys & Updates)
     # ---------------------------------------------------------
     def _setup_settings_tab(self):
         scroll = ctk.CTkScrollableFrame(self.tab_settings, fg_color="transparent")
@@ -6963,172 +7463,7 @@ class MammouthControlCenter(ctk.CTk):
         )
         btn_detect_cf.pack(side="left")
 
-        # 2. Authentication & Tokens Group (Secure by Default)
-        auth_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
-        auth_group.pack(fill="x", pady=6)
-
-        ctk.CTkLabel(auth_group, text="🔒 Authentication & API Tokens (Secure by Default)", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
-
-        f5 = ctk.CTkFrame(auth_group, fg_color="transparent")
-        f5.pack(fill="x", padx=15, pady=5)
-        self.var_enforce_auth = ctk.BooleanVar(value=self.config_data.get("server", {}).get("enforce_auth", True))
-        sw_auth = ctk.CTkSwitch(f5, text="Require Bearer Token Authentication (Authorization Header)", variable=self.var_enforce_auth, font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY, progress_color="#10B981")
-        sw_auth.pack(side="left")
-
-        f6 = ctk.CTkFrame(auth_group, fg_color="transparent")
-        f6.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f6, text="Active Bearer Token:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
-        self.entry_token = ctk.CTkEntry(f6, width=280, show="*", fg_color=THEME_INPUT_BG, border_color=THEME_CARD_BORDER, text_color=THEME_TEXT_PRIMARY)
-        tok_val = self.config_data.get("server", {}).get("api_token", "")
-
-        self.entry_token.insert(0, tok_val)
-        self.entry_token.pack(side="left", padx=(0, 5))
-
-        self.btn_show_token = ctk.CTkButton(
-            f6,
-            text="👁️",
-            width=36,
-            height=28,
-            fg_color=THEME_BTN_SEC_BG,
-            hover_color=THEME_BTN_SEC_HOVER,
-            text_color=THEME_TEXT_PRIMARY,
-            border_width=1,
-            border_color=THEME_BTN_SEC_BORDER,
-            command=self._toggle_token_visibility
-        )
-        self.btn_show_token.pack(side="left", padx=(0, 5))
-
-        self.btn_copy_tok = ctk.CTkButton(
-            f6,
-            text="📋 Copy Key",
-            width=95,
-            height=28,
-            fg_color=THEME_BTN_SEC_BG,
-            hover_color=THEME_BTN_SEC_HOVER,
-            text_color=THEME_TEXT_PRIMARY,
-            border_width=1,
-            border_color=THEME_BTN_SEC_BORDER,
-            command=lambda: self._copy_to_clipboard(self.entry_token.get(), "Bearer Key")
-        )
-        self.btn_copy_tok.pack(side="left", padx=(0, 5))
-
-        btn_gen_tok = ctk.CTkButton(
-            f6,
-            text="🎲 Generate",
-            width=95,
-            height=28,
-            fg_color=THEME_BTN_SEC_BG,
-            hover_color=THEME_BTN_SEC_HOVER,
-            text_color=THEME_TEXT_PRIMARY,
-            border_width=1,
-            border_color=THEME_BTN_SEC_BORDER,
-            command=self._generate_new_token
-        )
-        btn_gen_tok.pack(side="left")
-
-        # 4. Workspace & Sandbox Security Group
-        ws_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
-        ws_group.pack(fill="x", pady=6)
-
-        ctk.CTkLabel(ws_group, text="📁 Workspace & Sandboxing Security", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
-
-        f_ws1 = ctk.CTkFrame(ws_group, fg_color="transparent")
-        f_ws1.pack(fill="x", padx=15, pady=5)
-        self.var_sandbox = ctk.BooleanVar(value=self.config_data.get("server", {}).get("enforce_workspace_sandbox", True))
-        sw_sandbox = ctk.CTkSwitch(f_ws1, text="Enforce Workspace Sandbox (Restricts file access to ./workspace)", variable=self.var_sandbox, font=ctk.CTkFont(size=13, weight="bold"), text_color=THEME_TEXT_PRIMARY, progress_color="#10B981")
-        sw_sandbox.pack(side="left")
-
-        f_ws2 = ctk.CTkFrame(ws_group, fg_color="transparent")
-        f_ws2.pack(fill="x", padx=15, pady=(5, 15))
-        ctk.CTkLabel(f_ws2, text="Workspace Path:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
-        self.entry_workspace = ctk.CTkEntry(f_ws2, width=280, fg_color=THEME_INPUT_BG, border_color=THEME_CARD_BORDER, text_color=THEME_TEXT_PRIMARY)
-        self.entry_workspace.insert(0, str(self.config_data.get("server", {}).get("workspace_root", "./workspace")))
-        self.entry_workspace.pack(side="left", padx=(0, 5))
-
-        btn_browse_ws = ctk.CTkButton(
-            f_ws2,
-            text="📂 Browse",
-            width=85,
-            height=28,
-            fg_color=THEME_BTN_SEC_BG,
-            hover_color=THEME_BTN_SEC_HOVER,
-            text_color=THEME_TEXT_PRIMARY,
-            border_width=1,
-            border_color=THEME_BTN_SEC_BORDER,
-            command=self._browse_workspace
-        )
-        btn_browse_ws.pack(side="left")
-
-        # 5. LAN TLS Encryption Group
-        tls_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
-        tls_group.pack(fill="x", pady=6)
-
-        ctk.CTkLabel(tls_group, text="🛡️ LAN HTTPS / TLS Encryption", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
-
-        f_tls1 = ctk.CTkFrame(tls_group, fg_color="transparent")
-        f_tls1.pack(fill="x", padx=15, pady=(5, 15))
-        self.var_enable_tls = ctk.BooleanVar(value=self.config_data.get("server", {}).get("enable_tls", False))
-        sw_tls = ctk.CTkSwitch(
-            f_tls1,
-            text="Enable Local HTTPS TLS (Uses auto-generated cert.pem if missing)",
-            variable=self.var_enable_tls,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=THEME_TEXT_PRIMARY,
-            progress_color="#10B981"
-        )
-        sw_tls.pack(side="left")
-
-        # 6. Screen Capture & Vision Privacy Gate
-        vis_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
-        vis_group.pack(fill="x", pady=6)
-
-        ctk.CTkLabel(vis_group, text="👁️ Vision & Desktop Screen Capture Privacy Gate", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
-
-        f_vis1 = ctk.CTkFrame(vis_group, fg_color="transparent")
-        f_vis1.pack(fill="x", padx=15, pady=5)
-        self.var_settings_screen_consent = ctk.BooleanVar(value=self.config_data.get("modules", {}).get("screen_capture", {}).get("require_consent", True))
-        sw_vis = ctk.CTkSwitch(
-            f_vis1,
-            text="Require User Consent before capturing screenshots (Privacy Shield)",
-            variable=self.var_settings_screen_consent,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=THEME_TEXT_PRIMARY,
-            progress_color="#F59E0B",
-            command=self._on_settings_screen_consent_changed
-        )
-        sw_vis.pack(side="left")
-
-        f_vis2 = ctk.CTkFrame(vis_group, fg_color="transparent")
-        f_vis2.pack(fill="x", padx=15, pady=(5, 15))
-        btn_grant_session = ctk.CTkButton(
-            f_vis2,
-            text="🔓 Grant Screen Capture Consent for this Session",
-            width=320,
-            height=30,
-            fg_color=("#059669", "#10B981"),
-            hover_color=("#047857", "#059669"),
-            text_color="#FFFFFF",
-            font=ctk.CTkFont(weight="bold"),
-            command=self._on_ui_grant_session_consent
-        )
-        btn_grant_session.pack(side="left", padx=(0, 12))
-
-        btn_pick_target = ctk.CTkButton(
-            f_vis2,
-            text="🎯 Select Target App / Window...",
-            width=250,
-            height=30,
-            fg_color=THEME_BTN_SEC_BG,
-            hover_color=THEME_BTN_SEC_HOVER,
-            text_color=THEME_TEXT_PRIMARY,
-            font=ctk.CTkFont(weight="bold"),
-            border_width=1,
-            border_color=THEME_BTN_SEC_BORDER,
-            command=self._show_screen_target_menu
-        )
-        btn_pick_target.pack(side="left")
-
-        # 7. Google Drive Cloud Integration & Browser Login
+        # 2. Google Drive Cloud Integration & Browser Login
         gdrive_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
         gdrive_group.pack(fill="x", pady=6)
 
@@ -7234,11 +7569,33 @@ class MammouthControlCenter(ctk.CTk):
             self.entry_gdrive_client_secret.insert(0, saved_csec)
         self.entry_gdrive_client_secret.pack(side="left", padx=(0, 8))
 
-        # 8. In-App Browsers (ChatGPT, Claude & Mammouth.ai)
+        # 8. In-App Browsers (ChatGPT, Claude, Gemini & Mammouth.ai)
         browser_group = ctk.CTkFrame(scroll, fg_color=THEME_CARD_BG, border_width=1, border_color=THEME_CARD_BORDER, corner_radius=10)
         browser_group.pack(fill="x", pady=6)
 
-        ctk.CTkLabel(browser_group, text="💬 In-App Browsers (ChatGPT, Claude & Mammouth.ai)", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
+        ctk.CTkLabel(browser_group, text="💬 In-App Browsers (ChatGPT, Claude, Gemini & Mammouth.ai)", font=ctk.CTkFont(size=15, weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(15, 10))
+
+        f_br_vis = ctk.CTkFrame(browser_group, fg_color="transparent")
+        f_br_vis.pack(fill="x", padx=15, pady=5)
+        ctk.CTkLabel(f_br_vis, text="Visible Provider Tabs:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        self.var_show_chatgpt_tab = ctk.BooleanVar(value=bool(self.config_data.get("chatgpt_browser", {}).get("enabled", True)))
+        self.var_show_claude_tab = ctk.BooleanVar(value=bool(self.config_data.get("claude_browser", {}).get("enabled", True)))
+        self.var_show_gemini_tab = ctk.BooleanVar(value=bool(self.config_data.get("gemini_browser", {}).get("enabled", True)))
+        self.var_show_mammouth_tab = ctk.BooleanVar(value=bool(self.config_data.get("embedded_browser", {}).get("mammouth_enabled", True)))
+        for p_label, p_var, p_color in (
+            ("🤖 ChatGPT", self.var_show_chatgpt_tab, "#10B981"),
+            ("🟠 Claude", self.var_show_claude_tab, "#E07A5F"),
+            ("✨ Gemini", self.var_show_gemini_tab, "#3B82F6"),
+            ("💬 Mammouth AI", self.var_show_mammouth_tab, "#B88557"),
+        ):
+            ctk.CTkSwitch(
+                f_br_vis,
+                text=p_label,
+                variable=p_var,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=THEME_TEXT_PRIMARY,
+                progress_color=p_color
+            ).pack(side="left", padx=(0, 14))
 
         f_br1 = ctk.CTkFrame(browser_group, fg_color="transparent")
         f_br1.pack(fill="x", padx=15, pady=5)
@@ -7272,7 +7629,7 @@ class MammouthControlCenter(ctk.CTk):
         def_chat_val = str(self.config_data.get("embedded_browser", {}).get("default_chat_tab", "chatgpt")).strip().lower()
         self.opt_default_chat_tab = ctk.CTkOptionMenu(
             f_br_def,
-            values=["ChatGPT Web", "Claude Web", "Mammouth AI Web"],
+            values=["ChatGPT Web", "Claude Web", "Gemini Web", "Mammouth AI Web"],
             width=190,
             fg_color=THEME_BTN_SEC_BG,
             button_color=THEME_BTN_SEC_HOVER,
@@ -7282,14 +7639,14 @@ class MammouthControlCenter(ctk.CTk):
             dropdown_text_color=THEME_TEXT_PRIMARY,
             dropdown_hover_color=THEME_BTN_SEC_BG
         )
-        default_opt_label = {"mammouth": "Mammouth AI Web", "claude": "Claude Web"}.get(def_chat_val, "ChatGPT Web")
+        default_opt_label = {"mammouth": "Mammouth AI Web", "claude": "Claude Web", "gemini": "Gemini Web"}.get(def_chat_val, "ChatGPT Web")
         self.opt_default_chat_tab.set(default_opt_label)
         self.opt_default_chat_tab.pack(side="left", padx=(0, 8))
 
         ctk.CTkButton(
             f_br_def,
             text="🤖 ChatGPT MCP URL",
-            width=165,
+            width=155,
             height=28,
             fg_color=("#059669", "#10B981"),
             hover_color=("#047857", "#059669"),
@@ -7301,13 +7658,25 @@ class MammouthControlCenter(ctk.CTk):
         ctk.CTkButton(
             f_br_def,
             text="🟠 Claude MCP URL",
-            width=155,
+            width=145,
             height=28,
             fg_color=("#D97757", "#E07A5F"),
             hover_color=("#C25E3F", "#D97757"),
             text_color="#FFFFFF",
             font=ctk.CTkFont(weight="bold"),
             command=self._copy_claude_connector_url
+        ).pack(side="left", padx=(0, 6))
+
+        ctk.CTkButton(
+            f_br_def,
+            text="✨ Gemini MCP URL",
+            width=150,
+            height=28,
+            fg_color=("#2563EB", "#3B82F6"),
+            hover_color=("#1D4ED8", "#2563EB"),
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._copy_gemini_connector_url
         ).pack(side="left")
 
         f_br_cg = ctk.CTkFrame(browser_group, fg_color="transparent")
@@ -7337,6 +7706,38 @@ class MammouthControlCenter(ctk.CTk):
         cl_start_val = self.config_data.get("claude_browser", {}).get("start_page", "https://claude.ai")
         self.entry_claude_start_url.insert(0, cl_start_val)
         self.entry_claude_start_url.pack(side="left", padx=(0, 8))
+
+        f_br_gm = ctk.CTkFrame(browser_group, fg_color="transparent")
+        f_br_gm.pack(fill="x", padx=15, pady=5)
+        ctk.CTkLabel(f_br_gm, text="Gemini URL:", width=160, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        self.entry_gemini_start_url = ctk.CTkEntry(
+            f_br_gm,
+            width=320,
+            fg_color=THEME_INPUT_BG,
+            border_color=THEME_CARD_BORDER,
+            text_color=THEME_TEXT_PRIMARY
+        )
+        gm_start_val = self.config_data.get("gemini_browser", {}).get("start_page", "https://gemini.google.com/devmode?hl=en")
+        self.entry_gemini_start_url.insert(0, gm_start_val)
+        self.entry_gemini_start_url.pack(side="left", padx=(0, 8))
+
+        ctk.CTkLabel(f_br_gm, text="Locale:", width=55, anchor="w", font=ctk.CTkFont(weight="bold"), text_color=THEME_TEXT_PRIMARY).pack(side="left")
+        self.entry_gemini_language = ctk.CTkEntry(
+            f_br_gm,
+            width=80,
+            fg_color=THEME_INPUT_BG,
+            border_color=THEME_CARD_BORDER,
+            text_color=THEME_TEXT_PRIMARY
+        )
+        gm_lang_val = self.config_data.get("gemini_browser", {}).get("language", "en-US")
+        self.entry_gemini_language.insert(0, gm_lang_val)
+        self.entry_gemini_language.pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(
+            f_br_gm,
+            text="EU/DE tip: keep ?hl=en + en-US for Developer Mode MCP",
+            font=ctk.CTkFont(size=11),
+            text_color=THEME_TEXT_MUTED
+        ).pack(side="left")
 
         f_br2 = ctk.CTkFrame(browser_group, fg_color="transparent")
         f_br2.pack(fill="x", padx=15, pady=(5, 15))
@@ -7561,6 +7962,58 @@ class MammouthControlCenter(ctk.CTk):
                 self.lbl_consent_badge.configure(text="● Status: Always Allowed", text_color="#10B981")
         self._log(f"[SECURITY] Screen capture 'require_consent' updated to {val} from Settings.")
 
+    def _persist_security_fields(self):
+        """Persist security settings from whichever Security/Skills/Settings controls exist (GUI or test mocks)."""
+        srv = self.config_data.setdefault("server", {})
+        if hasattr(self, "var_enforce_auth"):
+            srv["enforce_auth"] = self.var_enforce_auth.get()
+        if hasattr(self, "entry_token"):
+            raw_tok = self.entry_token.get().strip()
+            if raw_tok.startswith("dpapi:"):
+                try:
+                    decrypted = _decrypt_dpapi(raw_tok)
+                    if decrypted and not decrypted.startswith("dpapi:"):
+                        raw_tok = decrypted
+                except Exception:
+                    pass
+            srv["api_token"] = raw_tok
+        if hasattr(self, "var_allow_query_token"):
+            srv["allow_query_token"] = self.var_allow_query_token.get()
+        if hasattr(self, "var_admin_shell"):
+            srv["allow_admin_shell"] = self.var_admin_shell.get()
+        if hasattr(self, "var_shell_downloads"):
+            srv["allow_shell_downloads"] = self.var_shell_downloads.get()
+        if hasattr(self, "var_enable_tls"):
+            srv["enable_tls"] = self.var_enable_tls.get()
+        if hasattr(self, "var_expose_tool_annotations"):
+            srv["expose_tool_annotations"] = self.var_expose_tool_annotations.get()
+        if hasattr(self, "var_sandbox"):
+            srv["enforce_workspace_sandbox"] = self.var_sandbox.get()
+        if hasattr(self, "var_protect_secret_files"):
+            srv["protect_secret_files"] = self.var_protect_secret_files.get()
+        if hasattr(self, "entry_workspace"):
+            srv["workspace_root"] = self.entry_workspace.get().strip() or "./workspace"
+        if hasattr(self, "var_screen_req_consent"):
+            self.config_data.setdefault("modules", {}).setdefault("screen_capture", {})["require_consent"] = self.var_screen_req_consent.get()
+        elif hasattr(self, "var_settings_screen_consent"):
+            self.config_data.setdefault("modules", {}).setdefault("screen_capture", {})["require_consent"] = self.var_settings_screen_consent.get()
+
+    def _save_security(self):
+        self._persist_security_fields()
+        save_config(self.config_data)
+        self._refresh_all_endpoint_labels()
+        if hasattr(self, "_update_workspace_button_labels"):
+            self._update_workspace_button_labels()
+        self._log("[SECURITY] Security & sandboxing policy saved to config.json.")
+        if self.is_server_running:
+            messagebox.showinfo(
+                "Security Saved",
+                "Security settings saved!\n\nNote: Authentication, TLS, or token changes apply after restarting the server.",
+                parent=self
+            )
+        else:
+            messagebox.showinfo("Security Saved", "Security settings saved successfully!", parent=self)
+
     def _save_settings(self):
         try:
             port = int(self.entry_port.get().strip())
@@ -7573,30 +8026,18 @@ class MammouthControlCenter(ctk.CTk):
         self.config_data["server"]["endpoint_path"] = self.opt_endpoint_path.get()
         if hasattr(self, "var_auto_tunnel"):
             self.config_data["server"]["auto_tunnel"] = self.var_auto_tunnel.get()
-        self.config_data["server"]["enforce_auth"] = self.var_enforce_auth.get()
-        raw_tok = self.entry_token.get().strip()
-        if raw_tok.startswith("dpapi:"):
-            try:
-                decrypted = _decrypt_dpapi(raw_tok)
-                if decrypted and not decrypted.startswith("dpapi:"):
-                    raw_tok = decrypted
-            except Exception:
-                pass
-        self.config_data["server"]["api_token"] = raw_tok
-        if hasattr(self, "var_admin_shell"):
-            self.config_data["server"]["allow_admin_shell"] = self.var_admin_shell.get()
-        if hasattr(self, "var_shell_downloads"):
-            self.config_data["server"]["allow_shell_downloads"] = self.var_shell_downloads.get()
-        self.config_data["server"]["enable_tls"] = self.var_enable_tls.get()
-        self.config_data["server"]["enforce_workspace_sandbox"] = self.var_sandbox.get()
-        self.config_data["server"]["workspace_root"] = self.entry_workspace.get().strip() or "./workspace"
+        self._persist_security_fields()
         if hasattr(self, "entry_cf_bin"):
             self.config_data["server"]["cloudflared_path"] = self.entry_cf_bin.get().strip()
 
-        if hasattr(self, "var_settings_screen_consent"):
-            self.config_data.setdefault("modules", {}).setdefault("screen_capture", {})["require_consent"] = self.var_settings_screen_consent.get()
-            if hasattr(self, "var_screen_req_consent"):
-                self.var_screen_req_consent.set(self.var_settings_screen_consent.get())
+        if hasattr(self, "var_show_chatgpt_tab"):
+            self.config_data.setdefault("chatgpt_browser", {})["enabled"] = self.var_show_chatgpt_tab.get()
+        if hasattr(self, "var_show_claude_tab"):
+            self.config_data.setdefault("claude_browser", {})["enabled"] = self.var_show_claude_tab.get()
+        if hasattr(self, "var_show_gemini_tab"):
+            self.config_data.setdefault("gemini_browser", {})["enabled"] = self.var_show_gemini_tab.get()
+        if hasattr(self, "var_show_mammouth_tab"):
+            self.config_data.setdefault("embedded_browser", {})["mammouth_enabled"] = self.var_show_mammouth_tab.get()
 
         if hasattr(self, "entry_gdrive_client_id"):
             gd_cid = self.entry_gdrive_client_id.get().strip()
@@ -7617,6 +8058,9 @@ class MammouthControlCenter(ctk.CTk):
             elif "Claude" in sel_chat:
                 def_chat = "claude"
                 self.active_chat_tab_key = "🟠 Claude Web"
+            elif "Gemini" in sel_chat:
+                def_chat = "gemini"
+                self.active_chat_tab_key = "✨ Gemini Web"
             else:
                 def_chat = "chatgpt"
                 self.active_chat_tab_key = "🤖 ChatGPT Web"
@@ -7631,6 +8075,16 @@ class MammouthControlCenter(ctk.CTk):
             self.config_data.setdefault("claude_browser", {})["start_page"] = new_cl_url
             if hasattr(self, "claude_browser"):
                 self.claude_browser.start_url = new_cl_url
+        if hasattr(self, "entry_gemini_start_url"):
+            new_gm_url = self.entry_gemini_start_url.get().strip() or "https://gemini.google.com/devmode?hl=en"
+            self.config_data.setdefault("gemini_browser", {})["start_page"] = new_gm_url
+            if hasattr(self, "gemini_browser"):
+                self.gemini_browser.start_url = new_gm_url
+        if hasattr(self, "entry_gemini_language"):
+            new_gm_lang = self.entry_gemini_language.get().strip() or "en-US"
+            self.config_data.setdefault("gemini_browser", {})["language"] = new_gm_lang
+            if hasattr(self, "gemini_browser"):
+                self.gemini_browser.browser_language = new_gm_lang
         if hasattr(self, "entry_browser_start_url"):
             new_url = self.entry_browser_start_url.get().strip() or "https://mammouth.ai"
             self.config_data.setdefault("embedded_browser", {})["start_page"] = new_url
@@ -7661,6 +8115,8 @@ class MammouthControlCenter(ctk.CTk):
         if hasattr(self, "var_browser_agent_headless"):
             self.config_data.setdefault("browser_agent", {})["headless"] = self.var_browser_agent_headless.get()
 
+        if hasattr(self, "_apply_provider_tab_visibility"):
+            self._apply_provider_tab_visibility()
         save_config(self.config_data)
         self.dash_mode_menu.set(self.opt_tunnel_mode.get())
         self.dash_path_menu.set(self.opt_endpoint_path.get())
@@ -7825,10 +8281,11 @@ class MammouthControlCenter(ctk.CTk):
             self._log(f"Server is LIVE! Active Endpoint: {self._calculate_active_endpoint_url()}")
             if self.config_data.get("embedded_browser", {}).get("auto_open_on_server_start", True):
                 def_tab = str(self.config_data.get("embedded_browser", {}).get("default_chat_tab", "")).strip().lower()
-                if any(k in self.__dict__ for k in ("chatgpt_browser", "claude_browser")) or def_tab in ("chatgpt", "claude"):
-                    self.after(500, self._switch_to_active_chat_tab)
-                else:
-                    self.after(500, self._switch_to_mammouth_tab)
+                if any(self._is_provider_tab_enabled(k) for k in ("chatgpt", "claude", "gemini", "mammouth")):
+                    if any(k in self.__dict__ for k in ("chatgpt_browser", "claude_browser", "gemini_browser")) or def_tab in ("chatgpt", "claude", "gemini"):
+                        self.after(500, self._switch_to_active_chat_tab)
+                    else:
+                        self.after(500, self._switch_to_mammouth_tab)
         except Exception as e:
 
             self._log(f"[ERROR] Failed to start server: {e}")
@@ -8371,14 +8828,14 @@ def main():
             err_root.withdraw()
             err_root.attributes("-topmost", True)
             messagebox.showerror(
-                "Mammouth Defroster Error",
+                "Defrostr Error",
                 f"An unexpected error occurred during startup:\n\n{e}\n\nCrash log written to:\n{crash_log}",
                 parent=err_root
             )
             err_root.destroy()
         except Exception:
             try:
-                messagebox.showerror("Mammouth Defroster Error", f"An unexpected error occurred:\n{e}\n\nDetails: {crash_log}")
+                messagebox.showerror("Defrostr Error", f"An unexpected error occurred:\n{e}\n\nDetails: {crash_log}")
             except Exception:
                 pass
     finally:
